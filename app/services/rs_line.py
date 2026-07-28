@@ -100,7 +100,7 @@ def calculate_rs_line(
     ma2_type:     str = "SMA",
     ma2_period:   int = 50,
     lookback:     int = 50,
-    scale_factor: int = 100,
+    scale_factor: int = 3000,
 ) -> pd.DataFrame:
     """
     يحسب RS Line كاملة من بيانات الـ DB:
@@ -111,7 +111,6 @@ def calculate_rs_line(
       RS New High Before Price (RSNHBP)
     
     scale_factor:
-      - 100   → RS MA Crossover (LevelUp) — القيم ~0.25
       - 3000  → TraderLion RS Line — القيم ~7.61 (تطابق TradingView)
     """
     end = end_date or datetime.today().strftime("%Y-%m-%d")

@@ -106,6 +106,21 @@ def update_financial_indicators():
         logger.error(traceback.format_exc())
         return False
 
+def update_aporia_analytics():
+    """
+    تشغيل سكريبت Aporia Saudi Analytics لسحب جدول التحليلات وتحديثه في DB
+    """
+    try:
+        logger.info("📊 Starting Aporia Analytics Scraper...")
+        from scripts.Scrape_aporia_saudi import main as run_aporia_scraper
+        run_aporia_scraper()
+        logger.info("✅ Aporia Analytics completed successfully!")
+        return True
+    except Exception as e:
+        logger.error(f"⚠️ Aporia Analytics encountered an error: {e}")
+        logger.error(traceback.format_exc())
+        return False
+
 def update_daily(target_date_str=None):
     """
     1. Scrape Daily Data
@@ -137,6 +152,9 @@ def update_daily(target_date_str=None):
         
         # 0.3 Run Daily Financial Indicators
         update_financial_indicators()
+
+        # 0.4 Run Aporia Saudi Analytics Scraper
+        update_aporia_analytics()
         
         # 0.5 Load Mappings
         hierarchy_map = load_full_hierarchy_mapping()

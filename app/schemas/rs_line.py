@@ -18,7 +18,7 @@ class RSLineRequest(BaseModel):
     ma2_type:   Literal["EMA", "SMA"] = "SMA"
     ma2_period: int = Field(50, ge=2, le=200)
     lookback:   int = Field(50, ge=5,  le=250)
-    scale_factor: int = Field(100, ge=1, le=10000)
+    scale_factor: int = Field(3000, ge=1, le=10000)
 
 
 class RSPoint(BaseModel):
