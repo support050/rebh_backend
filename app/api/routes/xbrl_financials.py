@@ -58,7 +58,8 @@ def get_kpis(symbol: str, section: str = Query("income_statement")):
     items_raw = [i.model_dump() for i in sec.items]
 
     kpis = []
-    for kdef in KPI_DEFS.get(section, []):
+    kpi_key = section.replace("standardized_", "")
+    for kdef in KPI_DEFS.get(kpi_key, []):
         item = find_item(items_raw, kdef["frags"])
         curr_val = item["values"].get(latest) if item else None
         prev_val = item["values"].get(prev) if item and prev else None

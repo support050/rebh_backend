@@ -1,11 +1,11 @@
 ticker	name	sector	market_cap	val_avg_3mo	trailingPE	last	mtd_rtn	mo3_rtn	year_rtn	daily_trend	weekly_trend	monthly_trend	trend_rank	pfh_250	days_since_high_250	breakout	longest_consolidation_window	position	price_extreme	vol_5_day_chng	vol_20_day_chng
-1831	Maharah Human Resources Co.	Commercial & Professional Svc	107	68	20.3	5.51	9.1%	11.3%	44.2%	up:4,*	up:117,*	up:4,*	1	0.0%	0	1-Year High	-	-	-	+58%	+3%
-1321	East Pipes Integrated Company for Industry	Materials	87	24	9.6	223.0	1.4%	19.4%	87.1%	up:75,5	up:143,5	up:98,5	2	1.8%	5	-	-	-	-	-46%	-41%
-4347	Bonyan REIT Fund	REITs	143	236	17.8	10.08	0.9%	4.5%	10.5%	up:46,7	up:78,7	up:22,7	3	0.9%	7	-	-	-	-	-71%	-35%
-1304	Al Yamamah Steel Industries Co.	Materials	139	65	38.7	39.9	-5.0%	2.3%	15.9%	up:22,9	up:119,9	up:547,9	4	7.8%	9	-	608	79%	-	-36%	+52%
-7200	Al Moammar Information Systems Co.	Software & Services	86	83	51.0	232.6	-0.1%	30.0%	77.0%	up:63,10	up:136,10	up:145,10	5	1.0%	10	-	-	-	green,green	-29%	0%
-2190	Sustained Infrastructure Holding Co.	Transportation	111	71	33.3	36.2	7.3%	12.1%	3.2%	up:4,3	up:41,30	up:70,30	6	4.3%	30	-	648	74%	-	+27%	-48%
-2230	Saudi Chemical Co.	Health Care Equipment & Svc	68	25	18.6	8.46	3.4%	0.5%	13.4%	up:1,*	up:39,34	up:63,34	7	4.7%	34	-	-	-	-	+52%	-47%
-4300	Dar Alarkan Real Estate Development Co.	Real Estate Mgmt & Dev't	25	91	17.5	18.7	3.8%	2.7%	-5.6%	up:11,1	up:10,1	up:464,308	8	8.8%	308	-	273	69%	-	-22%	-30%
-8010	The Company for Cooperative Insurance	Insurance	27	28	17.5	137.3	-6.7%	4.4%	-6.1%	flat	up:28,20	up:28,20	9	16.8%	20	-	581	43%	-	-16%	-44%
-4280	Kingdom Holding Co.	Financial Services	20	48	22.0	11.84	1.9%	13.0%	42.5%	flat	up:80,32	up:49,32	10	29.9%	32	-	-	-	-	-35%	-76%
+7200	Al Moammar Information Systems Co.	Software & Services	86	66	51.0	241.2	3.6%	34.8%	86.2%	up:73,*	up:146,*	up:155,*	1	0.0%	0	All-Time High	-	-	-	+134%	-41%
+2300	Saudi Paper Manufacturing Co.	Materials	134	113	46.9	69.0	22.6%	18.9%	22.3%	up:18,*	up:7,*	up:74,*	2	0.0%	0	1-Year High	-	-	green,green	+100%	+172%
+1831	Maharah Human Resources Co.	Commercial & Professional Svc	107	62	20.3	5.26	4.2%	9.8%	41.4%	up:14,10	up:127,10	up:14,10	3	4.8%	10	-	-	-	-	-12%	+50%
+4347	Bonyan REIT Fund	REITs	143	236	17.8	10.15	1.6%	6.8%	10.8%	up:56,17	up:88,17	up:32,17	4	0.2%	17	-	-	-	-	+25%	+21%
+2190	Sustained Infrastructure Holding Co.	Transportation	111	80	33.3	35.8	6.1%	3.6%	6.9%	up:14,3	up:51,40	up:80,40	5	5.5%	40	-	658	71%	-	+55%	-14%
+4280	Kingdom Holding Co.	Financial Services	20	50	22.0	12.15	4.6%	10.4%	51.7%	up:4,3	up:90,42	up:59,42	6	26.6%	42	-	-	-	-	+51%	-59%
+4300	Dar Alarkan Real Estate Development Co.	Real Estate Mgmt & Dev't	25	83	17.5	18.39	2.1%	3.9%	-4.8%	up:21,6	up:20,6	up:474,318	7	10.6%	318	-	283	64%	-	-39%	-32%
+1321	East Pipes Integrated Company for Industry	Materials	87	20	9.6	184.0	-16.4%	-7.1%	67.6%	flat	up:153,15	up:108,15	8	23.4%	15	-	-	-	-	-34%	-9%
+2230	Saudi Chemical Co.	Health Care Equipment & Svc	68	27	18.6	8.11	-0.9%	-3.2%	6.7%	flat	up:49,44	up:73,44	9	9.2%	44	-	-	-	-	+21%	-18%
+1833	Al Mawarid Manpower Co.	Commercial & Professional Svc	141	65	12.5	105.7	3.6%	23.5%	11.8%	up:55,7	up:16,7	flat	10	5.0%	7	-	-	-	-	+10%	-34%

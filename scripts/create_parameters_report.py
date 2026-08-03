@@ -23,8 +23,7 @@ output_csv_path = data_dir / "companies_parameters_comparison.csv"
 # Collect all unique columns
 all_columns = set()
 for company_code, company_data in companies_data.items():
-    for sheet_name, sheet_data in company_data["data_structure"].items():
-        all_columns.update(sheet_data["columns"])
+    all_columns.update(company_data.get("combined_parameters", []))
 
 all_columns = sorted(list(all_columns))
 
@@ -33,66 +32,81 @@ with open(output_csv_path, 'w', newline='', encoding='utf-8') as f:
     writer = csv.writer(f)
     
     # Header
-    header = ["Company_Code", "File_Name", "Column_Count"] + all_columns
+    header = ["Company_Code", "Oldest_File", "Newest_File", "Oldest_Param_Count", "Newest_Param_Count", "Combined_Param_Count"] + all_columns
     writer.writerow(header)
     
     # Data rows
     for company_code in sorted(companies_data.keys()):
         company_data = companies_data[company_code]
-        sheet_data = company_data["data_structure"].get("Sheet0", {})
+        oldest_cols = set(company_data.get("oldest_parameters", []))
+        newest_cols = set(company_data.get("newest_parameters", []))
+        combined_cols = set(company_data.get("combined_parameters", []))
         
         row = [
             company_code,
-            company_data["file_name"],
-            len(sheet_data.get("columns", []))
+            company_data.get("oldest_file_name", ""),
+            company_data.get("newest_file_name", ""),
+            len(oldest_cols),
+            len(newest_cols),
+            len(combined_cols)
         ]
         
-        # Add presence of each column (X for present, empty for missing)
-        company_columns = set(sheet_data.get("columns", []))
+        # Add presence of each column (X for present in newest, O for oldest, B for both)
         for col in all_columns:
-            row.append("X" if col in company_columns else "")
+            in_old = col in oldest_cols
+            in_new = col in newest_cols
+            if in_old and in_new:
+                row.append("B") # Both
+            elif in_new:
+                row.append("N") # Newest only
+            elif in_old:
+                row.append("O") # Oldest only
+            else:
+                row.append("")
         
         writer.writerow(row)
 
 print(f"Saved parameters comparison CSV: {output_csv_path}")
 
-# Report 2: Group companies by column count pattern
-group_by_column_count = defaultdict(list)
-for company_code, company_data in companies_data.items():
-    sheet_data = company_data["data_structure"].get("Sheet0", {})
-    col_count = len(sheet_data.get("columns", []))
-    group_by_column_count[col_count].append({
-        "company_code": company_code,
-        "file_name": company_data["file_name"],
-        "columns": sheet_data.get("columns", [])
-    })
+# Save companies_parameters_only.json for simple exporters
+params_only_path = data_dir / "companies_parameters_only.json"
+params_only_data = {}
+for company_code in sorted(companies_data.keys()):
+    company_data = companies_data[company_code]
+    oldest_p = set(company_data.get("oldest_parameters", []))
+    newest_p = set(company_data.get("newest_parameters", []))
+    
+    params_only_data[company_code] = {
+        "oldest_file_name": company_data.get("oldest_file_name", ""),
+        "newest_file_name": company_data.get("newest_file_name", ""),
+        "oldest_parameters": company_data.get("oldest_parameters", []),
+        "newest_parameters": company_data.get("newest_parameters", []),
+        "combined_parameters": company_data.get("combined_parameters", []),
+        "new_parameters": sorted(list(newest_p - oldest_p)),
+        "removed_parameters": sorted(list(oldest_p - newest_p)),
+        "file_name": company_data.get("newest_file_name", ""),
+        "parameters": company_data.get("combined_parameters", []),
+        "count": len(company_data.get("combined_parameters", []))
+    }
 
-# Save grouping report
-grouping_report_path = data_dir / "companies_grouped_by_column_count.json"
-with open(grouping_report_path, 'w', encoding='utf-8') as f:
-    output_data = {}
-    for col_count in sorted(group_by_column_count.keys()):
-        companies = group_by_column_count[col_count]
-        output_data[f"Column_Count_{col_count}"] = {
-            "total_companies": len(companies),
-            "companies": [c["company_code"] for c in companies]
-        }
-    json.dump(output_data, f, ensure_ascii=False, indent=2)
+with open(params_only_path, 'w', encoding='utf-8') as f:
+    json.dump(params_only_data, f, ensure_ascii=False, indent=2)
 
-print(f"Saved grouping report: {grouping_report_path}")
+print(f"Saved parameters only JSON: {params_only_path}")
 
 # Report 3: Detailed parameters list by company
 detailed_report_path = data_dir / "companies_parameters_detailed.json"
 detailed_output = {}
 for company_code in sorted(companies_data.keys()):
     company_data = companies_data[company_code]
-    sheet_data = company_data["data_structure"].get("Sheet0", {})
     
     detailed_output[company_code] = {
-        "file_name": company_data["file_name"],
-        "columns": sheet_data.get("columns", []),
-        "column_count": len(sheet_data.get("columns", [])),
-        "data_types": sheet_data.get("dtypes", {})
+        "oldest_file_name": company_data.get("oldest_file_name", ""),
+        "newest_file_name": company_data.get("newest_file_name", ""),
+        "oldest_parameters": company_data.get("oldest_parameters", []),
+        "newest_parameters": company_data.get("newest_parameters", []),
+        "combined_parameters": company_data.get("combined_parameters", []),
+        "file_count": company_data.get("file_count", 1)
     }
 
 with open(detailed_report_path, 'w', encoding='utf-8') as f:
@@ -104,14 +118,12 @@ print(f"Saved detailed parameters report: {detailed_report_path}")
 stats_report_path = data_dir / "parameters_statistics.json"
 column_frequency = defaultdict(int)
 for company_code, company_data in companies_data.items():
-    sheet_data = company_data["data_structure"].get("Sheet0", {})
-    for col in sheet_data.get("columns", []):
+    for col in company_data.get("combined_parameters", []):
         column_frequency[col] += 1
 
 stats_output = {
     "total_companies_analyzed": len(companies_data),
     "total_unique_parameters": len(all_columns),
-    "column_count_distribution": dict(sorted(group_by_column_count.items(), key=lambda x: x[0])),
     "parameter_frequency": {
         "most_common": sorted(column_frequency.items(), key=lambda x: x[1], reverse=True)[:20],
         "least_common": sorted(column_frequency.items(), key=lambda x: x[1])[:20]

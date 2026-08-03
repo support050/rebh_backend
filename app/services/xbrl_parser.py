@@ -10,6 +10,14 @@ import argparse, json, os, re, sys
 from pathlib import Path
 import pandas as pd
 
+try:
+    from app.services.xbrl_mapping import STANDARD_TEMPLATE, resolve_mapping
+except ImportError:
+    from xbrl_mapping import STANDARD_TEMPLATE, resolve_mapping
+
+UNMAPPED_HEADER_EN = "Other / Unmapped"
+UNMAPPED_HEADER_AR = "أخرى / غير موحدة"
+
 CANONICAL = {
     "100010": "filing_info",
     "200100": "auditors_report",
@@ -116,8 +124,10 @@ def parse_section(df, start_row, end_row, canonical_key):
             else:
                 txt = str(row[ci]).replace("\xa0", "").strip()
                 if txt and txt not in ("nan", ""): values[pinfo["label"]] = txt
-        if values or is_header_row(raw):
-            items.append({"label": label, "is_header": is_header_row(raw), "values": values})
+        has_num = any(isinstance(v, (int, float)) for v in values.values())
+        is_hdr = is_header_row(raw) and not has_num
+        if values or is_hdr:
+            items.append({"label": label, "is_header": is_hdr, "values": values})
     return {"period_meta": period_meta, "periods": [p["key"] for p in period_meta], "items": items}
 
 # ── Equity Changes matrix parser ──────────────────────────────────────────
@@ -158,12 +168,22 @@ def parse_equity_changes(df, start_row, end_row):
     # build col_map: {ci: {member, period_key}}
     period_meta_map = {}
     col_map = {}
+    last_start, last_end = "", ""
     for ci in range(1, n_cols):
         end_str = str(r_end[ci]).strip() if ci < n_cols else ""
-        if end_str in ("nan", "", " "): continue
-        try: pd.Timestamp(end_str)
-        except: continue
         start_str = str(r_start[ci]).strip() if r_start is not None and ci < n_cols else ""
+        
+        # Forward-fill merged cells
+        if end_str in ("nan", "", " ") and last_end:
+            end_str = last_end
+            start_str = last_start
+        else:
+            try: 
+                pd.Timestamp(end_str)
+                last_end, last_start = end_str, start_str
+            except: 
+                continue
+
         period_key = make_period_key(start_str, end_str, is_snapshot=False)
         if period_key not in period_meta_map:
             period_meta_map[period_key] = {"key": period_key, "start": start_str, "end": end_str, "period_type": classify_period(period_key)}
@@ -293,19 +313,28 @@ def merge_files(file_results):
                 lbl = item["label"]
                 if lbl not in item_reg:
                     item_reg[lbl] = {"is_header": item["is_header"], "values": {}}
-                # deep merge values
+                if not item["is_header"]:
+                    item_reg[lbl]["is_header"] = False
                 for pk, pv in item["values"].items():
                     existing = item_reg[lbl]["values"].get(pk)
                     if isinstance(pv, dict):
                         if isinstance(existing, dict):
                             existing.update(pv)
                         else:
-                            # replace flat value with richer dict
                             item_reg[lbl]["values"][pk] = dict(pv)
                     else:
-                        # only overwrite if no richer dict already exists
                         if not isinstance(existing, dict):
                             item_reg[lbl]["values"][pk] = pv
+
+        for _lbl, v in item_reg.items():
+            vals = v["values"]
+            has_num = any(isinstance(x, (int, float)) for x in vals.values()) or any(
+                isinstance(x, (int, float))
+                for d in vals.values() if isinstance(d, dict)
+                for x in d.values()
+            )
+            if has_num:
+                v["is_header"] = False
 
         sorted_keys = sorted(pm_reg.keys(), key=period_sort_key)
         sec_out = {
@@ -317,14 +346,104 @@ def merge_files(file_results):
             sec_out["section_type"] = "equity_matrix"
             sec_out["components"] = comp_set
         merged_sections[sec_key] = sec_out
+
+    # --- NORMALIZATION: template + Other/Unmapped ---
+    std_sections = {
+        "income_statement": "standardized_income_statement",
+        "balance_sheet": "standardized_balance_sheet",
+        "cash_flow": "standardized_cash_flow",
+    }
+    for raw_key, std_key in std_sections.items():
+        raw_sec = merged_sections.get(raw_key)
+        if not raw_sec:
+            continue
+        periods = raw_sec["periods"]
+        period_meta = raw_sec["period_meta"]
+        std_items_map = {}
+        for code, info in STANDARD_TEMPLATE.items():
+            if info["statement"] == raw_key:
+                std_items_map[code] = {
+                    "label": info["line_en"],
+                    "label_ar": info["line_ar"],
+                    "is_header": info["is_subtotal"],
+                    "values": {p: None for p in periods},
+                }
+        unmapped_items = []
+        mapped_any = False
+        for item in raw_sec["items"]:
+            has_numeric = any(isinstance(v, (int, float)) for v in item["values"].values())
+            if item.get("is_header") and not has_numeric:
+                continue
+            mapping = resolve_mapping(item["label"])
+            if mapping:
+                code, direction = mapping
+                if code in std_items_map:
+                    mapped_any = True
+                    for p in periods:
+                        raw_val = item["values"].get(p)
+                        if isinstance(raw_val, (int, float)):
+                            cur = std_items_map[code]["values"][p]
+                            std_items_map[code]["values"][p] = (0.0 if cur is None else cur) + raw_val * direction
+                else:
+                    unmapped_items.append(_make_unmapped_item(item, periods))
+            elif has_numeric or item["values"]:
+                unmapped_items.append(_make_unmapped_item(item, periods))
+
+        items_out = [
+            {
+                "label": it["label"],
+                "label_ar": it["label_ar"],
+                "is_header": it["is_header"],
+                "values": it["values"],
+            }
+            for it in std_items_map.values()
+        ]
+        if unmapped_items:
+            items_out.append({
+                "label": UNMAPPED_HEADER_EN,
+                "label_ar": UNMAPPED_HEADER_AR,
+                "is_header": True,
+                "is_unmapped": True,
+                "values": {p: None for p in periods},
+            })
+            items_out.extend(unmapped_items)
+        if mapped_any or unmapped_items:
+            merged_sections[std_key] = {
+                "period_meta": period_meta,
+                "periods": periods,
+                "items": items_out,
+            }
+
     return {"meta": merged_meta, "sections": merged_sections}
+
+
+def _make_unmapped_item(item, periods):
+    values = {}
+    for p in periods:
+        v = item["values"].get(p)
+        if isinstance(v, (int, float)):
+            values[p] = v
+        elif v is not None and not isinstance(v, dict):
+            values[p] = v
+        else:
+            values[p] = None
+    return {
+        "label": item["label"],
+        "label_ar": item.get("label_ar"),
+        "is_header": False,
+        "is_unmapped": True,
+        "values": values,
+    }
+
 
 def parse_and_merge_xbrl_files(filepaths):
     return merge_files([parse_xbrl_file(str(p)) for p in filepaths])
 
+
 # ── CLI ───────────────────────────────────────────────────────────────────
 
-def main():
+def main_PLACEHOLDER():
+    pass
     parser = argparse.ArgumentParser()
     g = parser.add_mutually_exclusive_group(required=True)
     g.add_argument("--folder"); g.add_argument("--files", nargs="+")

@@ -19,16 +19,22 @@ with open(JSON_PATH, 'r', encoding='utf-8') as f:
 rows = []
 for code in sorted(companies.keys()):
     entry = companies[code]
-    params = entry.get('parameters', [])
+    params = entry.get('combined_parameters', entry.get('parameters', []))
+    oldest_file = entry.get('oldest_file_name', '')
+    newest_file = entry.get('newest_file_name', entry.get('file_name', ''))
     params_text = "\n".join(params)
     rows.append({
         'Company_Code': code,
-        'file_name': entry.get('file_name', ''),
-        'parameters': params_text,
-        'count': len(params)
+        'Oldest_File': oldest_file,
+        'Newest_File': newest_file,
+        'Oldest_Count': len(entry.get('oldest_parameters', [])),
+        'Newest_Count': len(entry.get('newest_parameters', [])),
+        'Combined_Count': len(params),
+        'New_Parameters': ", ".join(entry.get('new_parameters', [])),
+        'Parameters': params_text
     })
 
-df = pd.DataFrame(rows, columns=['Company_Code', 'file_name', 'parameters', 'count'])
+df = pd.DataFrame(rows, columns=['Company_Code', 'Oldest_File', 'Newest_File', 'Oldest_Count', 'Newest_Count', 'Combined_Count', 'New_Parameters', 'Parameters'])
 
 # Save to Excel
 with pd.ExcelWriter(EXCEL_PATH, engine='openpyxl') as writer:

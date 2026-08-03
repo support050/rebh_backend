@@ -15,12 +15,13 @@ with open(JSON_PATH, 'r', encoding='utf-8') as f:
 
 with open(CSV_PATH, 'w', newline='', encoding='utf-8') as csvfile:
     writer = csv.writer(csvfile)
-    writer.writerow(['Company_Code', 'File_Name', 'Parameter_Number', 'Parameter_Name'])
+    writer.writerow(['Company_Code', 'Oldest_File', 'Newest_File', 'Parameter_Number', 'Parameter_Name'])
     for code in sorted(companies.keys()):
         entry = companies[code]
-        params = entry.get('parameters', [])
-        file_name = entry.get('file_name', '')
+        params = entry.get('combined_parameters', entry.get('parameters', []))
+        oldest_file = entry.get('oldest_file_name', '')
+        newest_file = entry.get('newest_file_name', entry.get('file_name', ''))
         for i, p in enumerate(params, 1):
-            writer.writerow([code, file_name, i, p])
+            writer.writerow([code, oldest_file, newest_file, i, p])
 
 print(f"Created: {CSV_PATH}")

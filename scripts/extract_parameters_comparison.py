@@ -52,36 +52,62 @@ def main():
     for idx, company_dir in enumerate(company_dirs, 1):
         company_code = company_dir.name
         
-        # Search for first XBRL file
-        xls_files = list(company_dir.glob("*.xls")) + list(company_dir.glob("*.xlsx"))
+        # Search for XBRL files
+        xls_files = sorted(list(company_dir.glob("*.xls")) + list(company_dir.glob("*.xlsx")), key=lambda p: p.name)
         
         if not xls_files:
             print(f"[{idx:3d}] {company_code}: No XBRL files")
             continue
         
-        # Take first file
-        first_file = sorted(xls_files)[0]
+        oldest_file = None
+        oldest_struct = None
+        for f in xls_files:
+            struct = extract_data_sample_from_xls(f)
+            if struct:
+                oldest_file = f
+                oldest_struct = struct
+                break
+                
+        newest_file = None
+        newest_struct = None
+        for f in reversed(xls_files):
+            struct = extract_data_sample_from_xls(f)
+            if struct:
+                newest_file = f
+                newest_struct = struct
+                break
+                
+        if not oldest_file or not newest_file:
+            print(f"[{idx:3d}] {company_code}: Unable to read any XBRL files")
+            continue
         
-        print(f"[{idx:3d}] {company_code}: {first_file.name}")
+        print(f"[{idx:3d}] {company_code}: Oldest={oldest_file.name} | Newest={newest_file.name}")
         
-        # Extract data
-        data_structure = extract_data_sample_from_xls(first_file)
+        oldest_cols = oldest_struct.get("Sheet0", {}).get("columns", []) if oldest_struct else []
+        newest_cols = newest_struct.get("Sheet0", {}).get("columns", []) if newest_struct else []
         
-        if data_structure:
-            companies_data[company_code] = {
-                "file_name": first_file.name,
-                "file_path": str(first_file),
-                "data_structure": data_structure
-            }
-            
-            # Store file information
-            company_files_info.append({
-                "company_code": company_code,
-                "file_name": first_file.name,
-                "file_path": str(first_file),
-                "sheets": list(data_structure.keys()),
-                "total_sheets": len(list(DATA_DIR.glob(f"{company_code}/*.xls*")))
-            })
+        combined_cols = sorted(list(set(oldest_cols).union(set(newest_cols))))
+        
+        companies_data[company_code] = {
+            "oldest_file_name": oldest_file.name,
+            "oldest_file_path": str(oldest_file),
+            "oldest_data_structure": oldest_struct,
+            "oldest_parameters": oldest_cols,
+            "newest_file_name": newest_file.name,
+            "newest_file_path": str(newest_file),
+            "newest_data_structure": newest_struct,
+            "newest_parameters": newest_cols,
+            "combined_parameters": combined_cols,
+            "file_count": len(xls_files)
+        }
+        
+        # Store file information
+        company_files_info.append({
+            "company_code": company_code,
+            "oldest_file": oldest_file.name,
+            "newest_file": newest_file.name,
+            "total_files": len(xls_files)
+        })
         
         # Print progress every 50 companies
         if idx % 50 == 0:
@@ -111,7 +137,7 @@ def main():
     sheet_column_consistency = defaultdict(list)
     
     for company_code, company_data in companies_data.items():
-        for sheet_name, sheet_data in company_data["data_structure"].items():
+        for sheet_name, sheet_data in company_data["newest_data_structure"].items():
             all_sheets.add(sheet_name)
             columns = set(sheet_data["columns"])
             all_columns_by_sheet[sheet_name].update(columns)

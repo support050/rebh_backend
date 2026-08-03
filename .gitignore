@@ -22,3 +22,10 @@ htmlcov/
 
 # Ignore all markdown files
 *.md
+# Ignore output directory
+backend/output/
+output/
+
+# Ignore scrap/temporary files
+scratch_*.py
+_map_dump.json
