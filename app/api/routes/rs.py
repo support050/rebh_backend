@@ -4,9 +4,13 @@ from sqlalchemy import desc
 from typing import List, Optional
 from datetime import date
 import logging
+import os
+import json
+from pathlib import Path
 
 from app.core.database import get_db
 from app.models.rs_daily import RSDaily
+from app.models.user_prefs import UserPreference
 from app.schemas.rs import RSResponse, RSLatestResponse
 from app.core.limiter import limiter
 from fastapi import Request
@@ -18,6 +22,9 @@ from app.core.cache_helpers import (
     normalize_string
 )
 from app.core.cache_config import CACHE_TTL_SCREENERS, CACHE_TTL_RS_HISTORY
+from app.core.config import settings
+from app.api.deps import get_current_user
+from app.models.user import User
 
 logger = logging.getLogger(__name__)
 
@@ -88,6 +95,21 @@ async def get_latest_rs(
         fetch_rs_latest
     )
     return result
+
+@router.get("/latest_hub")
+@router.get("/latest_hub/")
+async def get_latest_hub():
+    """
+    Returns the unified rs_data.json cached file for the RS Rating Hub.
+    """
+    json_path = Path(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))) / "static" / "rs_data.json"
+    if json_path.exists():
+        with open(json_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            return JSONResponse(content=data)
+    else:
+        logger.error(f"❌ latest_hub: rs_data.json not found at {json_path}")
+        return JSONResponse(content={"stocks": [], "error": f"File not found: {json_path}"}, status_code=200)
 
 @router.get("/{symbol}", response_model=List[RSResponse])
 @limiter.limit("20/minute")
@@ -190,3 +212,29 @@ async def advanced_screener(
         fetch_advanced
     )
     return result
+
+from pydantic import BaseModel
+from fastapi.responses import JSONResponse
+
+class UserPrefsUpdate(BaseModel):
+    preferences: dict
+
+
+
+@router.get("/user_preferences")
+def get_user_preferences(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    pref = db.query(UserPreference).filter(UserPreference.user_id == current_user.id).first()
+    if pref:
+        return {"preferences": pref.preferences}
+    return {"preferences": {}}
+
+@router.post("/user_preferences")
+def update_user_preferences(prefs: UserPrefsUpdate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    pref = db.query(UserPreference).filter(UserPreference.user_id == current_user.id).first()
+    if not pref:
+        pref = UserPreference(user_id=current_user.id, preferences=prefs.preferences)
+        db.add(pref)
+    else:
+        pref.preferences = prefs.preferences
+    db.commit()
+    return {"status": "success", "preferences": pref.preferences}

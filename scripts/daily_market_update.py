@@ -434,6 +434,16 @@ def update_daily(target_date_str=None):
         except Exception as rs_err:
             logger.error(f"⚠️ RS Line Metrics calculation failed: {rs_err}")
 
+        # 8.7 Export RS Hub cached JSON data
+        # -------------------------------------------------------------------
+        try:
+            logger.info("📦 Exporting unified RS Hub data to JSON...")
+            from scripts.export_rs_hub_data import export_rs_hub_data
+            export_rs_hub_data(market_date)
+            logger.info("✅ Unified RS Hub data exported successfully.")
+        except Exception as exp_err:
+            logger.error(f"⚠️ RS Hub data export failed: {exp_err}")
+
         # 9. Finalize Update Status (Atomic Switch)
         # -------------------------------------------------------------------
         db.execute(text("""

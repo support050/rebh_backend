@@ -31,6 +31,7 @@ from app.models.market_pulse import MarketPulse
 from app.models.tasi_settings import TasiSettings
 from app.models.wallet import WalletPosition, WalletTrade, WalletSetting, WalletWeeklyStudy
 from app.models.screener_daily_trend import ScreenerDailyTrend
+from app.models.user_prefs import UserPreference
 
 # ── Valuation System Models ──
 from app.models.eps_estimates import EpsEstimate
