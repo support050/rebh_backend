@@ -31,8 +31,9 @@ class Settings:
                 "Never deploy with DEBUG=True."
             )
         else:
-            self.ALLOWED_ORIGINS = [origin.strip() for origin in allowed_origins_str.split(",")]
-            self.ALLOWED_ORIGINS.extend(["https://lumivst-backend-v2.onrender.com", "https://lumivst.onrender.com"])
+            # CORS origins = frontend domains that call the API (not the backend URL itself).
+            # Set ALLOWED_ORIGINS env on Render, e.g. https://rebh.ai,https://www.rebh.ai,<vercel-url>
+            self.ALLOWED_ORIGINS = [origin.strip() for origin in allowed_origins_str.split(",") if origin.strip()]
 
         # Email Settings
         self.SMTP_SERVER = os.getenv("SMTP_SERVER", "smtp.gmail.com")

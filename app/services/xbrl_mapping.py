@@ -116,12 +116,10 @@ PARAM_MAPPING = {
     'adjustments for valuation gains on investment property': ('CF-030', -1),
     'administrative expenses': ('IS-050', -1),
     'advances from customers': ('BS-125', 1),
-    'asset revaluation reserve': ('BS-182', 1),
     'assets subject to finance lease': ('BS-050', 1),
-    'available-for-sale reserve': ('BS-182', 1),
     'bank balances and cash': ('BS-010', 1),
     'bank overdraft': ('BS-110', 1),
-    'basic earnings (loss) per share from continuing operations': ('IS-160', 1),
+    # IS-160: prefer "total basic" (and plain basic). Component/diluted lines are blocklisted.
     'basic earnings per share': ('IS-160', 1),
     'board of directors\' remunerations': ('IS-060', -1),
     'business acquisition, net of cash and cash equivalents': ('BS-010', 1),
@@ -133,16 +131,16 @@ PARAM_MAPPING = {
     'cash and balances with saudi arabian monetary authority': ('BS-010', 1),
     'cash and bank balances': ('BS-010', 1),
     'cash and cash equivalents': ('BS-010', 1),
-    'cash and cash equivalents at begining of period': ('BS-010', 1),
-    'cash and cash equivalents at beginning of period': ('BS-010', 1),
+    'cash and cash equivalents at begining of period': ('CF-150', 1),
+    'cash and cash equivalents at beginning of period': ('CF-150', 1),
     'cash and cash equivalents at beginning of the period': ('CF-150', 1),
-    'cash and cash equivalents at end of period': ('BS-010', 1),
+    'cash and cash equivalents at end of period': ('CF-160', 1),
     'cash and cash equivalents at end of the period': ('CF-160', 1),
-    'cash and cash equivalents at the beginning of the period': ('BS-010', 1),
-    'cash and cash equivalents at the beginning of the period attributable to discounted operations': ('BS-010', 1),
-    'cash and cash equivalents at the beginning of the year': ('BS-010', 1),
-    'cash and cash equivalents at the end of the period': ('BS-010', 1),
-    'cash and cash equivalents at the end of the year': ('BS-010', 1),
+    'cash and cash equivalents at the beginning of the period': ('CF-150', 1),
+    'cash and cash equivalents at the beginning of the period attributable to discounted operations': ('CF-150', 1),
+    'cash and cash equivalents at the beginning of the year': ('CF-150', 1),
+    'cash and cash equivalents at the end of the period': ('CF-160', 1),
+    'cash and cash equivalents at the end of the year': ('CF-160', 1),
     'cash and cash equivalents disposed off related to a subsidiary': ('BS-010', 1),
     'cash and cash equivalents in relation to assets classified as held for sale': ('BS-010', 1),
     'cash and cash equivalents of disposal group classified': ('BS-010', 1),
@@ -158,7 +156,6 @@ PARAM_MAPPING = {
     'cash and cash equivalents.2': ('BS-010', 1),
     'cash at banks and on hand': ('BS-010', 1),
     'cash flows from investing activities': ('CF-090', 1),
-    'cash flows from operating activities': ('CF-060', 1),
     'cost of goods sold': ('IS-020', -1),
     'cost of raising share capital': ('CF-120', -1),
     'cost of revenue': ('IS-020', -1),
@@ -188,8 +185,6 @@ PARAM_MAPPING = {
     'derivatives assets': ('BS-035', 1),
     'derivatives liabilities': ('BS-125', 1),
     'description of accounting policy for cost of revenue': ('IS-020', -1),
-    'diluted earnings (loss) per share from continuing operations': ('IS-160', 1),
-    'diluted earnings (loss) per share from discontinued operations': ('IS-160', 1),
     'disclosure of cash and cash equivalents': ('BS-010', 1),
     'disclosure of cost of revenue': ('IS-020', -1),
     'disclousre of cash and cash equivalents': ('BS-010', 1),
@@ -198,7 +193,7 @@ PARAM_MAPPING = {
     'dividend income': ('IS-090', 1),
     'dividends paid': ('CF-100', -1),
     'dividends paid (other than to non-controlling interest), classified as financing activities': ('CF-100', -1),
-    'dividends paid to non-controlling interest, classified as financing activities': ('CF-100', -1),
+    # NCI dividends blocklisted — do not double CF-100
     'dividends payable': ('BS-125', 1),
     'dividends received, classified as investing activities': ('CF-080', 1),
     'dividends received, classified as operating activities': ('CF-080', 1),
@@ -208,14 +203,12 @@ PARAM_MAPPING = {
     'due from related parties -non-current portion': ('BS-080', 1),
     'due to banks and other financial institutions': ('BS-100', 1),
     'due to related parties': ('BS-125', 1),
-    'earnings per share': ('IS-160', 1),
     'effect of exchange rate changes on cash and cash equivalents': ('BS-010', 1),
     'effect of exchange rate changes on cash and cash equivalents, net': ('BS-010', 1),
     'employee end-of-service benefits': ('BS-150', 1),
-    'employee share based plan reserve': ('BS-182', 1),
     'employees end of service benefits': ('BS-150', 1),
     'employees\' terminal benefits': ('BS-150', 1),
-    'equity attributable to owners of parent': ('BS-185', 1),
+    # BS-185 filled via "total equity attributable..." only
     'exchange income, net': ('IS-010', 1),
     'expenditure on other intangible assets': ('CF-070', -1),
     'fee and commission income': ('IS-010', 1),
@@ -225,7 +218,7 @@ PARAM_MAPPING = {
     'finance income': ('IS-090', 1),
     'finance income from investing activities': ('CF-080', 1),
     'finance lease, current': ('BS-125', 1),
-    'finance leases, non-current': ('BS-155', 1),
+    # finance leases, non-current → blocklisted (was doubling BS-155 with Other NCL)
     'financial assets, current': ('BS-015', 1),
     'financial assets, non-current': ('BS-060', 1),
     'financing charges': ('IS-080', -1),
@@ -239,7 +232,7 @@ PARAM_MAPPING = {
     'general and administrative expenses, insurance/ takaful operations': ('IS-050', -1),
     'general and administrative expenses, shareholder\'s operations': ('IS-050', -1),
     'general and administrative expenses, shareholders operations': ('IS-050', -1),
-    'general reserve': ('BS-175', 1),
+    # general reserve → blocklisted (not Statutory Reserve BS-175)
     'goodwill': ('BS-070', 1),
     'government grants': ('BS-155', 1),
     'gross income': ('IS-030', 1),
@@ -268,7 +261,6 @@ PARAM_MAPPING = {
     'intangible assets, net': ('BS-070', 1),
     'interest expense': ('IS-080', -1),
     'interest income': ('IS-090', 1),
-    'interest paid, classified as operating activities': ('CF-050', -1),
     'interest received, classified as investing activities': ('CF-080', 1),
     'interest received, classified as operating activities': ('CF-080', 1),
     'inventories': ('BS-030', 1),
@@ -291,7 +283,6 @@ PARAM_MAPPING = {
     'long-term borrowings': ('BS-140', 1),
     'long-term debt': ('BS-140', 1),
     'marketing expenses': ('IS-040', -1),
-    'miscellaneous other reserves': ('BS-182', 1),
     'net amount transferred to retained earnings on disposal of equity investments held at fair value through other comprehensive income': ('BS-180', 1),
     'net cash flows from (used in) financing activities': ('CF-130', 1),
     'net cash flows from (used in) financing activities, insurance operations': ('CF-130', 1),
@@ -302,7 +293,6 @@ PARAM_MAPPING = {
     'net cash flows from (used in) operating activities': ('CF-060', 1),
     'net cash flows from (used in) operating activities, insurance operations': ('CF-060', 1),
     'net cash flows from (used in) operating activities, insurance/ takaful operations': ('CF-060', 1),
-    'net cash flows from (used in) operations': ('CF-060', 1),
     'net cash flows from financing activities': ('CF-130', 1),
     'net cash flows from investing activities': ('CF-090', 1),
     'net cash flows from operating activities': ('CF-060', 1),
@@ -310,14 +300,14 @@ PARAM_MAPPING = {
     'net cash from investing activities': ('CF-090', 1),
     'net cash from operating activities': ('CF-060', 1),
     'net cash from operating activities before changes in working capital': ('CF-030', 1),
-    'net change in cash and cash equivalents': ('BS-010', 1),
+    'net change in cash and cash equivalents': ('CF-140', 1),
     'net change in working capital': ('CF-040', 1),
     'net financing and investment income': ('IS-010', 1),
     'net income': ('IS-140', 1),
     'net income (loss)': ('IS-140', 1),
     'net increase (decrease) due to working capital changes': ('CF-040', 1),
-    'net increase (decrease) in cash and cash equivalents': ('BS-010', 1),
-    'net increase (decrease) in cash and cash equivalents, insurance operations cash flow': ('BS-010', 1),
+    'net increase (decrease) in cash and cash equivalents': ('CF-140', 1),
+    'net increase (decrease) in cash and cash equivalents, insurance operations cash flow': ('CF-140', 1),
     'net interest income': ('IS-010', 1),
     'net premiums earned': ('IS-010', 1),
     'net profit': ('IS-140', 1),
@@ -339,7 +329,6 @@ PARAM_MAPPING = {
     'other assets': ('BS-035', 1),
     'other current assets': ('BS-035', 1),
     'other current liabilities': ('BS-125', 1),
-    'other equity interest': ('BS-182', 1),
     'other expenses': ('IS-060', -1),
     'other general and administrative expenses': ('IS-050', -1),
     'other income': ('IS-060', 1),
@@ -374,10 +363,9 @@ PARAM_MAPPING = {
     'proceeds from sale of financial assets': ('CF-080', 1),
     'proceeds from sale of property and equipment': ('CF-080', 1),
     'profit (loss) attributable to owners of parent': ('IS-150', 1),
-    'profit (loss) before zakat and income tax': ('CF-010', 1),
+    # CF-010: keep the continuing-operations opening line only (synonyms are blocklisted)
     'profit (loss) before zakat and income tax from continuing operations': ('CF-010', 1),
     'profit (loss) for period': ('IS-140', 1),
-    'profit (loss) for period before zakat and income tax': ('CF-010', 1),
     'profit (loss) for period from continuing operations': ('IS-130', 1),
     'profit (loss) for period from discontinued operations': ('IS-135', 1),
     'profit (loss) for the period': ('IS-140', 1),
@@ -386,10 +374,10 @@ PARAM_MAPPING = {
     'profit (loss) from discontinued operations': ('IS-135', 1),
     'profit (loss) from operating activities': ('IS-070', 1),
     'profit (loss) from operations': ('IS-070', 1),
-    'profit (loss), attributable to equity holders of parent company': ('IS-140', 1),
+    # Parent share → IS-150 (was wrongly IS-140 and doubled Net Profit)
+    'profit (loss), attributable to equity holders of parent company': ('IS-150', 1),
     'profit attributable to shareholders of parent': ('IS-150', 1),
     'profit before zakat': ('IS-110', 1),
-    'profit before zakat and income tax': ('CF-010', 1),
     'profit for period': ('IS-140', 1),
     'profit for the period': ('IS-140', 1),
     'profit from operations': ('IS-070', 1),
@@ -413,7 +401,6 @@ PARAM_MAPPING = {
     'repayment of debt securities, term loans, borrowings, sukuks and murabahas': ('CF-110', -1),
     'repayment of long-term borrowings': ('CF-110', -1),
     'repayments of finance lease liabilities': ('CF-110', -1),
-    'reserve of exchange differences on translation': ('BS-182', 1),
     'retained earnings': ('BS-180', 1),
     'retained earnings (accumulated losses)': ('BS-180', 1),
     'retained earnings - appropriated': ('BS-180', 1),
@@ -437,14 +424,11 @@ PARAM_MAPPING = {
     'share of profit (loss) of joint ventures and associates': ('IS-100', 1),
     'share of profit of associates': ('IS-100', 1),
     'share of results of associates and joint ventures': ('IS-100', 1),
-    'share premium': ('BS-182', 1),
     'short term borrowings': ('BS-110', 1),
     'short-term borrowings': ('BS-110', 1),
     'short-term deposits': ('BS-015', 1),
     'short-term investments': ('BS-015', 1),
     'special commission expenses / return on deposits': ('IS-020', -1),
-    'special commission income (expense)/ financing and investment income (expense), net': ('IS-010', 1),
-    'special commission income, net': ('IS-010', 1),
     'special commission income/ gross financing and investment income': ('IS-010', 1),
     'statutory reserve': ('BS-175', 1),
     'the general and administrative expenses': ('IS-050', -1),
@@ -456,23 +440,20 @@ PARAM_MAPPING = {
     'total basic earnings (loss) per share': ('IS-160', 1),
     'total current assets': ('BS-040', 1),
     'total current liabilities': ('BS-130', 1),
-    'total diluted earnings (loss) per share': ('IS-160', 1),
     'total equity': ('BS-190', 1),
-    'total equity attributable to equity holders of bank': ('BS-185', 1),
-    'total equity attributable to equity holders of company': ('BS-185', 1),
-    'total equity attributable to equity holders of parent company': ('BS-185', 1),
+    # BS-185: keep a single preferred total (synonyms blocklisted)
     'total equity attributable to owners of parent': ('BS-185', 1),
     'total equity attributable to shareholders of parent': ('BS-185', 1),
-    'total income from operations': ('IS-010', 1),
+    # Banks use "of bank" as their sole BS-185 caption (no "of parent" variant exists
+    # in bank taxonomy) — confirmed via Saudi Investment Bank (1030) raw balance sheet,
+    # which has ONLY this label and no other. Previously blocklisted, which silently
+    # zeroed out BS-185 for every bank. Restored here.
+    'total equity attributable to equity holders of bank': ('BS-185', 1),
     'total liabilities': ('BS-160', 1),
     'total liabilities and equity': ('BS-200', 1),
     'total non-current assets': ('BS-090', 1),
     'total non-current liabilities': ('BS-160', 1),
-    'total operating expenses': ('IS-020', -1),
-    'total operating income': ('IS-010', 1),
-    'total operating income, net': ('IS-010', 1),
     'total operating revenue': ('IS-010', 1),
-    'total other inflows (outflows) of cash, classified as operating activities': ('CF-050', 1),
     'total other reserves': ('BS-182', 1),
     'total revenue': ('IS-010', 1),
     'total shareholders liabilities and equity': ('BS-200', 1),
@@ -494,7 +475,6 @@ PARAM_MAPPING = {
     'transfer to retained earnings': ('BS-180', 1),
     'transferred to retained earnings': ('BS-180', 1),
     'transfers to retained earnings on disposal of fvoci equity investments': ('BS-180', 1),
-    'treasury shares': ('BS-182', -1),
     'weighted average number of equity shares outstanding': ('IS-170', 1),
     'weighted average number of ordinary shares outstanding': ('IS-170', 1),
     'weighted average number of shares': ('IS-170', 1),
@@ -508,6 +488,54 @@ PARAM_MAPPING = {
     'zakat paid': ('CF-050', -1),
     'zakat paid, classified as operating activities': ('CF-050', -1),
     'zakat payable': ('BS-120', 1),
+}
+
+# Labels that must NOT map to any std_code (prevents synonym double-counting via fuzzy match).
+# They remain visible under Raw / Other-Unmapped.
+MAPPING_BLOCKLIST = {
+    # EPS: keep only total basic / plain basic in PARAM_MAPPING
+    'basic earnings (loss) per share from continuing operations',
+    'basic earnings (loss) per share from discontinued operations',
+    'diluted earnings (loss) per share from continuing operations',
+    'diluted earnings (loss) per share from discontinued operations',
+    'diluted earnings per share',
+    'earnings per share',
+    'total diluted earnings (loss) per share',
+    # CF-010 synonyms (prefer continuing-operations line)
+    'profit (loss) before zakat and income tax',
+    'profit (loss) before zakat and income tax from discontinued operations',
+    'profit (loss) for period before zakat and income tax',
+    'profit before zakat and income tax',
+    # CF-060 synonym / section header
+    'cash flows from operating activities',
+    'net cash flows from (used in) operations',
+    # CF-050: not zakat/tax paid; often duplicates zakat line
+    'interest paid, classified as operating activities',
+    'other inflows (outflows) of cash, classified as operating activities',
+    'total other inflows (outflows) of cash, classified as operating activities',
+    # BS-182 components (prefer total other reserves / other reserves)
+    'asset revaluation reserve',
+    'available-for-sale reserve',
+    'employee share based plan reserve',
+    'miscellaneous other reserves',
+    'other equity interest',
+    'reserve of exchange differences on translation',
+    'share premium',
+    'treasury shares',
+    # zakat discontinued
+    'zakat expenses on discontinued operations for period',
+    # BS-185 synonyms (prefer owners/shareholders of parent)
+    # NOTE: 'total equity attributable to equity holders of bank' moved OUT of this
+    # blocklist and into PARAM_MAPPING above — see comment there. It is the sole
+    # BS-185 caption for banks, not a duplicate of the "of parent" phrasing.
+    'equity attributable to owners of parent',
+    'total equity attributable to equity holders of company',
+    'total equity attributable to equity holders of parent company',
+    # CF-100 NCI dividends
+    'dividends paid to non-controlling interest, classified as financing activities',
+    # BS-175 / BS-155 hygiene
+    'general reserve',
+    'finance leases, non-current',
 }
 
 FUZZY_THRESHOLD = 0.92
@@ -536,11 +564,37 @@ def _token_key(label: str) -> str:
     return " ".join(tokens)
 
 
+def _build_blocklist_keys():
+    keys = set()
+    for label in MAPPING_BLOCKLIST:
+        raw = label.lower().strip()
+        keys.add(raw)
+        keys.add(normalize_label(label))
+        keys.add(_token_key(label))
+    return keys
+
+
+_BLOCKLIST_KEYS = _build_blocklist_keys()
+
+
+def _is_blocklisted(label: str) -> bool:
+    raw = str(label).lower().strip()
+    if raw in _BLOCKLIST_KEYS:
+        return True
+    norm = normalize_label(label)
+    if norm in _BLOCKLIST_KEYS:
+        return True
+    tk = _token_key(label)
+    return bool(tk and tk in _BLOCKLIST_KEYS)
+
+
 def _build_lookup_indexes():
     norm_map = {}
     token_map = {}
     ambiguous = set()
     for key, mapping in PARAM_MAPPING.items():
+        if _is_blocklisted(key):
+            continue
         nk = normalize_label(key)
         if nk and nk not in norm_map:
             norm_map[nk] = mapping
@@ -561,6 +615,8 @@ _NORM_MAP, _TOKEN_MAP = _build_lookup_indexes()
 
 def resolve_mapping(label: str):
     if not label:
+        return None
+    if _is_blocklisted(label):
         return None
     raw = str(label).lower().strip()
     if raw in PARAM_MAPPING:

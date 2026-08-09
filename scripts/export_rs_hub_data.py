@@ -84,7 +84,8 @@ def export_rs_hub_data(target_date: date = None):
         indicator_rows = conn.execute(text("""
             SELECT 
                 symbol, sma_50, sma_150, sma_200, fifty_two_week_high, fifty_two_week_low,
-                percent_off_52w_high, percent_off_52w_low, vol_diff_50_percent
+                percent_off_52w_high, percent_off_52w_low, vol_diff_50_percent,
+                sma200_gt_sma200_1m_ago
             FROM stock_indicators
             WHERE date = :d
         """), {"d": target_date}).fetchall()
@@ -96,6 +97,7 @@ def export_rs_hub_data(target_date: date = None):
                 "offh": float(r[6]) if r[6] is not None else 0.0,
                 "offl": float(r[7]) if r[7] is not None else 0.0,
                 "vold": float(r[8]) if r[8] is not None else 0.0,
+                "sma200_rising": bool(r[9]) if r[9] is not None else False,
             } for r in indicator_rows
         }
         
@@ -118,18 +120,49 @@ def export_rs_hub_data(target_date: date = None):
         # 7b. Distribution: نعتمد على A/D Rating (موجود في rs_daily_v2) لتحديد التصريف
         # الأسهم القيادية ذات A/D ضعيف (D, D+, D-, E) تعتبر تحت تصريف مؤسسي
         
-        # 8. حساب التواريخ التاريخية للـ Rotation Trails (مثال: 1Y, 6M, 3M, 4W, 1W)
-        # لحساب الـ Trails سنقوم بجلب بيانات الـ RS لتاريخ اليوم وتواريخ قديمة لعمل الـ Rotation
-        # نحدد تواريخ المعاينة للـ Trails
+        # 8. حساب التواريخ التاريخية للـ Rotation Trails (1Y, 6M, 3M, 4W, 1W)
+        # لكل نقطة: RS + velocity (Δ RS خلال ~4 أسابيع من ذلك التاريخ)
         trail_days = {"1Y": 260, "6M": 130, "3M": 65, "4W": 20, "1W": 5}
-        trail_data = {}
+        VELOCITY_LOOKBACK_DAYS = 28  # ~4 calendar weeks
+        trail_data = {}       # period -> {symbol: rs}
+        trail_mom_data = {}   # period -> {symbol: mom}
         for period_name, offset in trail_days.items():
             trail_date = conn.execute(text("""
                 SELECT MAX(date) FROM rs_daily_v2 WHERE date <= :d
             """), {"d": target_date - timedelta(days=offset)}).scalar()
-            if trail_date:
-                t_rows = conn.execute(text("SELECT symbol, rs_rating FROM rs_daily_v2 WHERE date = :d"), {"d": trail_date}).fetchall()
-                trail_data[period_name] = {r[0]: r[1] for r in t_rows}
+            if not trail_date:
+                continue
+            t_rows = conn.execute(text(
+                "SELECT symbol, rs_rating FROM rs_daily_v2 WHERE date = :d"
+            ), {"d": trail_date}).fetchall()
+            trail_data[period_name] = {r[0]: r[1] for r in t_rows}
+
+            mom_ref_date = conn.execute(text("""
+                SELECT MAX(date) FROM rs_daily_v2 WHERE date <= :d
+            """), {"d": trail_date - timedelta(days=VELOCITY_LOOKBACK_DAYS)}).scalar()
+            if mom_ref_date:
+                m_rows = conn.execute(text(
+                    "SELECT symbol, rs_rating FROM rs_daily_v2 WHERE date = :d"
+                ), {"d": mom_ref_date}).fetchall()
+                mom_ref_map = {r[0]: r[1] for r in m_rows}
+                trail_mom_data[period_name] = {
+                    sym: (float(rs) - float(mom_ref_map[sym]))
+                    if rs is not None and mom_ref_map.get(sym) is not None else 0.0
+                    for sym, rs in trail_data[period_name].items()
+                }
+            else:
+                trail_mom_data[period_name] = {sym: 0.0 for sym in trail_data[period_name]}
+
+        # Velocity at "now": RS today vs ~4W ago
+        now_mom_ref_date = conn.execute(text("""
+            SELECT MAX(date) FROM rs_daily_v2 WHERE date <= :d
+        """), {"d": target_date - timedelta(days=VELOCITY_LOOKBACK_DAYS)}).scalar()
+        now_mom_ref_map = {}
+        if now_mom_ref_date:
+            nm_rows = conn.execute(text(
+                "SELECT symbol, rs_rating FROM rs_daily_v2 WHERE date = :d"
+            ), {"d": now_mom_ref_date}).fetchall()
+            now_mom_ref_map = {r[0]: r[1] for r in nm_rows}
                 
         # 9. تجميع البيانات النهائية
         stocks_data = []
@@ -162,32 +195,27 @@ def export_rs_hub_data(target_date: date = None):
             # اتجاه السهم (category transition)
             cat = get_category(rs_val)
             prev_cat = get_category(prev_rs)
-            if rs_val > prev_rs:
-                dirn = "up"
-                if cat != prev_cat:
-                    signals.append("up")  # ⬆ Upgraded Category
-            elif rs_val < prev_rs:
-                dirn = "down"
-                if cat != prev_cat:
-                    signals.append("dn")  # ⬇ Downgraded Category
+            if rs_val is not None and prev_rs is not None:
+                if rs_val > prev_rs:
+                    dirn = "up"
+                    if cat != prev_cat:
+                        signals.append("up")  # ⬆ Upgraded Category
+                elif rs_val < prev_rs:
+                    dirn = "down"
+                    if cat != prev_cat:
+                        signals.append("dn")  # ⬇ Downgraded Category
+                else:
+                    dirn = "flat"
             else:
-                dirn = "down"  # افتراضي
+                dirn = "flat"
                 
-            # 🎯 Focus List signal (RS >= 95)
-            if rs_val is not None and rs_val >= 95:
-                signals.append("focus")
-                
+            # Signals that need market-wide context (focus/dist/res) applied in pass 2
+            ad_rating = rs_row[9] or "C"
+
             # 🔥 Burst signal (Kullamagi style: short-term movers, rank_1m >= 95)
             if rs_row[4] is not None and rs_row[4] >= 95:
                 signals.append("burst")
-            
-            # 🔻 Leaders under distribution
-            # أسهم قيادية (RS >= 70) تعاني من تصريف مؤسسي (A/D ضعيف: D, D+, D-, E)
-            ad_rating = rs_row[9] or "C"
-            if rs_val is not None and rs_val >= 70:
-                if ad_rating in ("D", "D+", "D-", "E"):
-                    signals.append("dist")
-            
+
             # 🐂 Bull / 🐻 Bear crosses from RS line
             signal_today = rlm.get("signal_today")
             if signal_today == "bullish_cross":
@@ -202,11 +230,12 @@ def export_rs_hub_data(target_date: date = None):
             sma200 = im.get("sma200", 0.0)
             offh = im.get("offh", 0.0)
             offl = im.get("offl", 0.0)
+            sma200_rising = 1 if im.get("sma200_rising") else 0
             
             tt = [
                 ["P > 150MA & 200MA", 1 if (close_val > sma150 and close_val > sma200) else 0],
                 ["150MA > 200MA", 1 if sma150 > sma200 else 0],
-                ["200MA rising (1M)", 1],  # مؤشر اتجاه الـ 200MA
+                ["200MA rising (1M)", sma200_rising],
                 ["50MA > 150MA > 200MA", 1 if (sma50 > sma150 and sma150 > sma200) else 0],
                 ["P > 50MA", 1 if close_val > sma50 else 0],
                 ["≥30% above 52W low", 1 if offl >= 30.0 else 0],
@@ -216,25 +245,57 @@ def export_rs_hub_data(target_date: date = None):
             tts = sum(check[1] for check in tt)
             
             # بناء الـ Trailing array لـ Rotation chart
+            # mom = Δ RS خلال ~4 أسابيع عند كل نقطة زمنية
+            def _safe_rs(val, fallback=0.0):
+                return float(val) if val is not None else fallback
+
             trail_list = []
             for period_name in ["1Y", "6M", "3M", "4W", "1W"]:
-                t_val = trail_data.get(period_name, {}).get(sym, rs_val)
-                trail_list.append([period_name, float(t_val) if t_val is not None else 0.0, 0.0])
-            trail_list.append(["now", float(rs_val) if rs_val is not None else 0.0, float(rs_val - prev_rs) if rs_val and prev_rs else 0.0])
+                t_val = trail_data.get(period_name, {}).get(sym)
+                if t_val is None:
+                    t_val = rs_val
+                t_mom = trail_mom_data.get(period_name, {}).get(sym, 0.0)
+                trail_list.append([period_name, _safe_rs(t_val), float(t_mom) if t_mom is not None else 0.0])
+
+            now_rs = _safe_rs(rs_val)
+            now_ref = now_mom_ref_map.get(sym)
+            if rs_val is not None and now_ref is not None:
+                now_mom = float(rs_val) - float(now_ref)
+            elif rs_val is not None and prev_rs is not None:
+                now_mom = float(rs_val) - float(prev_rs)
+            else:
+                now_mom = 0.0
+            trail_list.append(["now", now_rs, now_mom])
+
+            # mom field = weekly change (rs - rs1w) for Map / Matrix; trail uses 4W velocity
+            if rs_val is not None and prev_rs is not None:
+                weekly_mom = float(rs_val) - float(prev_rs)
+            else:
+                weekly_mom = 0.0
+
+            m1 = rs_row[4] if rs_row[4] is not None else 50
+            m12 = rs_row[8] if rs_row[8] is not None else 50
+            age = int(m1) - int(m12)
+            if age >= 15:
+                age_tag = "YOUNG"
+            elif age <= -15:
+                age_tag = "MATURE"
+            else:
+                age_tag = "STEADY"
 
             stocks_data.append({
                 "s": sym,
                 "c": rs_row[2] or sym,
                 "grp": rs_row[3] or pm.get("sec", "Other"),
-                "rs": rs_val or 1,
-                "rs1w": prev_rs or 1,
+                "rs": rs_val if rs_val is not None else 1,
+                "rs1w": prev_rs if prev_rs is not None else (rs_val if rs_val is not None else 1),
                 "cat": cat,
-                "sig": list(set(signals)),  # منع التكرار
-                "m1": rs_row[4] or 50,
-                "m3": rs_row[5] or 50,
-                "m6": rs_row[6] or 50,
-                "m9": rs_row[7] or 50,
-                "m12": rs_row[8] or 50,
+                "sig": list(set(signals)),
+                "m1": m1,
+                "m3": rs_row[5] if rs_row[5] is not None else 50,
+                "m6": rs_row[6] if rs_row[6] is not None else 50,
+                "m9": rs_row[7] if rs_row[7] is not None else 50,
+                "m12": m12,
                 "ad": ad_rating,
                 "price": close_val,
                 "chg": pm.get("chg", 0.0),
@@ -248,18 +309,118 @@ def export_rs_hub_data(target_date: date = None):
                 "tt": tt,
                 "tts": tts,
                 "trail": trail_list,
-                "mom": float(rs_val - prev_rs) if rs_val and prev_rs else 0.0,
+                "mom": weekly_mom,
                 "dirn": dirn,
                 "pos": "above_ma" if close_val > sma50 else "below_ma",
-                "shariah": pm.get("shariah", "متوافقة مع الضوابط"),
+                "shariah": pm.get("shariah") or "غير متوافقة",
                 "sec": pm.get("sec", "Other"),
                 "ind": pm.get("ind", "Other"),
-                "sub": pm.get("sub", "Other")
+                "sub": pm.get("sub", "Other"),
+                "age": age,
+                "ageTag": age_tag,
             })
+
+        # ── Pass 2: REBH reference championship rules (same as REBH-RS-Rating-MOBILE.html) ──
+        # Group ranks: prefer industry_group_history.rank, else rank by avg RS
+        group_rank_map = {}
+        ig_date = conn.execute(text(
+            "SELECT MAX(date) FROM industry_group_history WHERE date <= :d"
+        ), {"d": target_date}).scalar()
+        if ig_date:
+            ig_rows = conn.execute(text("""
+                SELECT industry_group, rank FROM industry_group_history WHERE date = :d
+            """), {"d": ig_date}).fetchall()
+            group_rank_map = {r[0]: r[1] for r in ig_rows if r[0] and r[1] is not None}
+
+        if not group_rank_map:
+            grp_avg = {}
+            for st in stocks_data:
+                g = st["grp"]
+                grp_avg.setdefault(g, []).append(st["rs"])
+            ranked = sorted(
+                ((g, sum(v) / len(v)) for g, v in grp_avg.items()),
+                key=lambda x: x[1], reverse=True
+            )
+            group_rank_map = {g: i + 1 for i, (g, _) in enumerate(ranked)}
+
+        # Market weekly RS median (MED_D1W)
+        deltas = sorted(st["mom"] for st in stocks_data if st.get("rs1w") is not None)
+        med_d1w = deltas[len(deltas) // 2] if deltas else 0.0
+
+        focus_candidates = []
+        for st in stocks_data:
+            g_rank = group_rank_map.get(st["grp"])
+            st["gRank"] = g_rank
+            gconf = g_rank is not None and g_rank <= 5
+            st["gconf"] = gconf
+
+            trail_vals = [p[1] for p in st.get("trail") or [] if isinstance(p[1], (int, float))]
+            # Ryan: RS ≥ 70 and at/above every trail checkpoint (1Y high)
+            rsnh = (
+                st["rs"] >= 70
+                and len(trail_vals) >= 4
+                and st["rs"] >= max(trail_vals)
+            )
+            st["rsnh"] = rsnh
+
+            d = st["mom"]  # weekly ΔRS
+            # Minervini: gaining RS while market median week is negative
+            res = med_d1w < 0 and d is not None and d >= 3 and st["rs"] >= 70
+            st["res"] = res
+
+            # Ritchie: was 80+ a week ago and bleeding fast (Δ ≤ -4)
+            dist = st.get("rs1w") is not None and st["rs1w"] >= 80 and d <= -4
+            st["dist"] = dist
+
+            # Zanger focus raw: elite + not mature + top-5 group
+            focus_raw = st["rs"] >= 90 and st["ageTag"] != "MATURE" and gconf
+            st["_focusRaw"] = focus_raw
+            if focus_raw:
+                focus_candidates.append(st)
+
+            # Sync sig flags (remove old focus/dist if any, re-apply reference rules)
+            sig = set(st.get("sig") or [])
+            sig.discard("focus")
+            sig.discard("dist")
+            # Keep rsnh in sync with Ryan rule (may already be set in pass 1)
+            if rsnh:
+                sig.add("rsnh")
+            else:
+                sig.discard("rsnh")
+            if res:
+                sig.add("res")
+            if dist:
+                sig.add("dist")
+            # burst kept from pass 1 if present
+            st["sig"] = list(sig)
+
+        # Zanger cap: focus list is a hand — top 10 by RS
+        focus_candidates.sort(key=lambda x: x["rs"], reverse=True)
+        focus_syms = {st["s"] for st in focus_candidates[:10]}
+        for st in stocks_data:
+            is_focus = st["s"] in focus_syms
+            st["focus"] = is_focus
+            st.pop("_focusRaw", None)
+            if is_focus:
+                if "focus" not in st["sig"]:
+                    st["sig"].append("focus")
+            elif "focus" in st["sig"]:
+                st["sig"] = [s for s in st["sig"] if s != "focus"]
+
+        # groups payload (like DATA.groups in reference)
+        groups_out = [
+            {"name": name, "rank": rank}
+            for name, rank in sorted(group_rank_map.items(), key=lambda x: x[1] or 999)
+        ]
             
         # 10. إعداد هيكل البيانات النهائي
         output_json = {
-            "stocks": stocks_data
+            "stocks": stocks_data,
+            "groups": groups_out,
+            "meta": {
+                "date": str(target_date),
+                "med_d1w": med_d1w,
+            },
         }
         
         # حفظ الملف في مجلد static بالفرونتيند ومجلد الكاش

@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.api.routes import stocks, cache, auth, contact, rs, rs_v2, admin, scraper, official_filings, financial_details, prices, technical_screener, financial_metrics, screeners, market_breadth, market_reports, economic_indicators, xbrl_companies, xbrl_financials, xbrl_upload, weekly_market_update
+from app.api.routes import stocks, cache, auth, contact, rs, rs_v2, admin, scraper, official_filings, prices, technical_screener, screeners, market_breadth, market_reports, economic_indicators, xbrl_companies, xbrl_financials, xbrl_upload, weekly_market_update
 from app.api.routes import naaim as naaim_router
 from app.api.routes import market_pulse as market_pulse_router
 from app.api.routes import rs_line as rs_line_router
@@ -125,13 +125,13 @@ app.include_router(rs_v2.router, prefix="/api", dependencies=protected_dependenc
 app.include_router(admin.router, prefix="/api", dependencies=admin_dependencies) # /api/admin/*
 app.include_router(scraper.router)  # /api/scraper/*
 app.include_router(official_filings.router, prefix="/api") # /api/ingest/official-reports & /api/reports/{symbol}
-app.include_router(financial_details.router, prefix="/api/financial-details", tags=["Financial Details"])
+
 app.include_router(prices.router, prefix="/api") # /api/prices/latest
 from app.api.routes import industry_groups
 app.include_router(industry_groups.router, prefix="/api/industry-groups", tags=["Industry Groups"])
 app.include_router(technical_screener.router, prefix="/api", dependencies=protected_dependencies)  # Technical Screener
 app.include_router(screeners.router, prefix="/api")  # Stock Screeners (PUBLIC)
-app.include_router(financial_metrics.router, prefix="/api/financial-metrics", tags=["Financial Metrics"])  # /api/financial-metrics/*
+
 app.include_router(market_breadth.router, prefix="/api")  # /api/market-breadth/*
 app.include_router(market_reports.router, prefix="/api/market-reports", tags=["Market Reports"])
 app.include_router(weekly_market_update.router, prefix="/api", tags=["Weekly Market Update"])

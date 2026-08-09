@@ -17,7 +17,9 @@ class CompanyMeta(BaseModel):
 
 class FinancialItem(BaseModel):
     label: str
+    label_ar: str | None = None
     is_header: bool
+    is_unmapped: bool | None = None
     values: dict[str, Any]
 
 

@@ -19,8 +19,8 @@ UNMAPPED_HEADER_EN = "Other / Unmapped"
 UNMAPPED_HEADER_AR = "أخرى / غير موحدة"
 
 CANONICAL = {
-    "100010": "filing_info",
-    "200100": "auditors_report",
+    # "100010": "filing_info",
+    # "200100": "auditors_report",
     "300100": "balance_sheet",
     "300200": "balance_sheet",
     "300300": "other_comprehensive_income",
@@ -32,6 +32,11 @@ CANONICAL = {
 }
 
 SNAPSHOT_SECTIONS = {"balance_sheet", "filing_info", "auditors_report"}
+
+# Date labels in both English and Arabic variants
+START_DATE_LABELS = {"Start Date", "بداية الفترة", "تاريخ بداية الفترة للتقرير"}
+END_DATE_LABELS = {"End Date", "نهاية الفترة", "تاريخ نهاية الفترة للتقرير"}
+DATE_LABELS = START_DATE_LABELS | END_DATE_LABELS
 
 # ── Helpers ───────────────────────────────────────────────────────────────
 
@@ -90,8 +95,8 @@ def get_periods(df, start_row, end_row, is_snapshot):
             if not v or v in ("nan", "", "Note No.", "Note no."): continue
             try: pd.Timestamp(v)
             except: continue
-            if lbl == "Start Date": starts[ci] = v
-            elif lbl == "End Date": ends[ci] = v
+            if lbl in START_DATE_LABELS: starts[ci] = v
+            elif lbl in END_DATE_LABELS: ends[ci] = v
     periods = {}
     for ci in sorted(set(list(starts) + list(ends))):
         start = starts.get(ci, ""); end = ends.get(ci, "")
@@ -102,17 +107,45 @@ def get_periods(df, start_row, end_row, is_snapshot):
 
 # ── Generic section parser ────────────────────────────────────────────────
 
+def parse_kv_section(df, start_row, end_row):
+    items = []
+    for ri in range(start_row + 1, end_row):
+        row = df.iloc[ri]; raw = str(row[0])
+        label = clean_label(raw)
+        if not label or label == "nan": continue
+        if re.search(r"\[\d{6}\]", raw): break
+        
+        # Take the first non-empty value in the row
+        val = None
+        for ci in range(1, len(row)):
+            txt = str(row[ci]).replace("\xa0", "").strip()
+            if txt and txt not in ("nan", "", "None"):
+                val = txt
+                break
+                
+        if val is not None or is_header_row(raw):
+            items.append({"label": label, "is_header": is_header_row(raw) and val is None, "values": {"current": val}})
+        
+    if not items: return None
+    return {
+        "period_meta": [{"key": "current", "start": "", "end": "", "period_type": "snapshot"}],
+        "periods": ["current"],
+        "items": items,
+        "section_type": "kv_section"
+    }
+
 def parse_section(df, start_row, end_row, canonical_key):
     is_snap = canonical_key in SNAPSHOT_SECTIONS
     periods = get_periods(df, start_row, end_row, is_snap)
-    if not periods: return None
+    if not periods: 
+        return parse_kv_section(df, start_row, end_row)
     period_meta = [{"key": p["label"], "start": p["start"], "end": p["end"], "period_type": p["period_type"]} for p in periods.values()]
     items = []
     for ri in range(start_row + 1, end_row):
         row = df.iloc[ri]; raw = str(row[0])
         if not raw or raw.strip() == "nan": continue
         if re.search(r"\[\d{6}\]", raw): break
-        if clean_label(raw) in ("Start Date", "End Date"): continue
+        if clean_label(raw) in DATE_LABELS: continue
         if "[member]" in raw.lower(): continue
         label = clean_label(raw)
         if not label: continue
@@ -158,8 +191,8 @@ def parse_equity_changes(df, start_row, end_row):
     r_start = r_end = None
     for ri in range(member_row_idx + 1, min(member_row_idx + 5, end_row)):
         row = df.iloc[ri]; lbl = clean_label(str(row[0]))
-        if lbl == "Start Date": r_start = row
-        elif lbl == "End Date": r_end = row
+        if lbl in START_DATE_LABELS: r_start = row
+        elif lbl in END_DATE_LABELS: r_end = row
     if r_end is None:
         return parse_section(df, start_row, end_row, "equity_changes")
 
@@ -217,7 +250,7 @@ def parse_equity_changes(df, start_row, end_row):
         row = df.iloc[ri]; raw = str(row[0])
         if not raw or raw.strip() == "nan": continue
         if re.search(r"\[\d{6}\]", raw): break
-        if clean_label(raw) in ("Start Date", "End Date"): continue
+        if clean_label(raw) in DATE_LABELS: continue
         if "[member]" in raw.lower(): continue
         label = clean_label(raw)
         if not label: continue
@@ -272,8 +305,9 @@ def parse_xbrl_file(filepath):
         next_row = boundaries[i + 1][0]
         canonical = CANONICAL.get(code)
         if not canonical: continue
-        if code == "300200": canonical = "income_statement" if "income" in title.lower() else "balance_sheet"
-        elif code == "300400": canonical = "cash_flow" if "cash" in title.lower() else "income_statement"
+        tl = title.lower()
+        if code == "300200": canonical = "income_statement" if ("income" in tl or "الدخل" in tl) else "balance_sheet"
+        elif code == "300400": canonical = "cash_flow" if ("cash" in tl or "النقد" in tl or "التدفقات" in tl) else "income_statement"
 
         # use dedicated equity parser
         if canonical == "equity_changes":
@@ -370,6 +404,8 @@ def merge_files(file_results):
                 }
         unmapped_items = []
         mapped_any = False
+        # Collect signed contributions first so identical-value synonyms are not double-counted
+        pending: dict[str, dict[str, list[float]]] = {code: {p: [] for p in periods} for code in std_items_map}
         for item in raw_sec["items"]:
             has_numeric = any(isinstance(v, (int, float)) for v in item["values"].values())
             if item.get("is_header") and not has_numeric:
@@ -382,12 +418,22 @@ def merge_files(file_results):
                     for p in periods:
                         raw_val = item["values"].get(p)
                         if isinstance(raw_val, (int, float)):
-                            cur = std_items_map[code]["values"][p]
-                            std_items_map[code]["values"][p] = (0.0 if cur is None else cur) + raw_val * direction
+                            pending[code][p].append(raw_val * direction)
                 else:
                     unmapped_items.append(_make_unmapped_item(item, periods))
             elif has_numeric or item["values"]:
                 unmapped_items.append(_make_unmapped_item(item, periods))
+
+        for code, by_period in pending.items():
+            for p, vals in by_period.items():
+                if not vals:
+                    continue
+                # Synonym overlap: multiple raw lines, same absolute amount → take one
+                abs_set = {abs(v) for v in vals}
+                if len(vals) > 1 and len(abs_set) == 1:
+                    std_items_map[code]["values"][p] = vals[0]
+                else:
+                    std_items_map[code]["values"][p] = sum(vals)
 
         items_out = [
             {

@@ -1,11 +1,11 @@
 ticker	name	sector	market_cap	val_avg_3mo	trailingPE	last	mtd_rtn	mo3_rtn	year_rtn	daily_trend	weekly_trend	monthly_trend	trend_rank	pfh_250	days_since_high_250	breakout	longest_consolidation_window	position	price_extreme	vol_5_day_chng	vol_20_day_chng
-2222	Saudi Arabian Oil Co.	Energy	1	2	18.8	26.48	1.4%	-4.6%	9.2%	down:3,1	up:73,47	down:465,218	99	5.6%	47	-	-	-	-	-24%	-31%
-1120	Al Rajhi Bank	Banks	2	1	17.8	62.55	-5.1%	-8.8%	-0.7%	down:56,1	flat	up:634,185	36	17.2%	185	-	-	-	red,red	+17%	-27%
-1180	The Saudi National Bank	Banks	3	3	10.5	39.2	1.4%	-0.2%	6.1%	down:2,1	flat	up:87,72	34	14.8%	120	-	-	-	-	-8%	-10%
-1211	Saudi Arabian Mining Co.	Materials	4	5	28.8	56.6	-4.7%	-13.7%	9.1%	down:64,10	flat	up:1323,122	35	40.5%	122	-	-	-	-	+7%	-46%
-7010	Saudi Telecom Co.	Telecommunication Services	5	9	14.2	43.14	-0.2%	-0.9%	2.0%	down:8,1	up:44,31	up:384,313	19	4.7%	313	-	212	48%	-	+139%	-17%
-2010	Saudi Basic Industries Corp.	Materials	6	8	-	49.6	-3.8%	-19.0%	-10.3%	down:41,*	down:31,*	down:895,*	259	26.6%	1092	17-Year Low	-	-	-	+50%	-25%
-2082	ACWA POWER Co.	Utilities	7	4	67.6	187.6	-3.3%	11.5%	-16.1%	flat	flat	flat	49	32.6%	451	-	-	-	-	-25%	-55%
-4013	Dr. Sulaiman Al Habib Medical Services Group	Health Care Equipment & Svc	8	22	36.4	235.0	10.8%	-3.0%	-9.7%	flat	down:173,23	flat	98	19.2%	603	-	-	-	-	+305%	-13%
-1010	Riyad Bank	Banks	9	13	8.8	20.34	2.2%	-2.0%	-3.7%	down:1,*	down:20,1	flat	129	9.9%	330	-	748	33%	-	+32%	-12%
-1060	Saudi Awwal Bank	Banks	10	14	9.5	33.84	4.6%	-0.6%	5.0%	flat	down:9,7	down:219,161	171	11.9%	70	-	541	41%	-	+17%	+20%
+2222	Saudi Arabian Oil Co.	Energy	1	2	17.2	26.5	0.1%	-1.8%	8.9%	flat	up:83,57	down:475,228	67	5.5%	57	-	40	39%	-	+95%	-13%
+1120	Al Rajhi Bank	Banks	2	1	15.0	64.55	3.2%	-2.9%	1.5%	down:66,61	flat	up:644,195	44	13.6%	195	-	214	21%	-	+19%	+12%
+1180	The Saudi National Bank	Banks	3	3	9.4	40.86	4.2%	6.0%	12.3%	flat	flat	up:97,82	23	10.1%	130	-	-	-	-	-9%	+23%
+1211	Saudi Arabian Mining Co.	Materials	4	5	24.8	60.45	6.8%	-7.3%	15.8%	down:74,57	flat	up:1333,132	43	31.5%	132	-	-	-	-	+53%	-32%
+7010	Saudi Telecom Co.	Telecommunication Services	5	8	14.4	43.38	0.6%	1.2%	2.3%	down:13,6	up:54,53	up:394,323	21	4.2%	323	-	217	55%	-	-8%	+7%
+2010	Saudi Basic Industries Corp.	Materials	6	9	-	50.55	1.9%	-14.8%	-12.3%	down:48,5	down:37,5	down:905,146	264	24.2%	1102	-	303	7%	-	+1%	-5%
+2082	ACWA POWER Co.	Utilities	7	7	79.8	193.0	2.9%	16.6%	-12.5%	up:4,1	flat	flat	33	28.9%	461	-	-	-	-	+68%	-35%
+4013	Dr. Sulaiman Al Habib Medical Services Group	Health Care Equipment & Svc	8	25	34.0	234.4	-0.3%	5.1%	-10.9%	up:5,1	down:183,56	flat	64	19.4%	613	-	-	-	-	-47%	+15%
+1010	Riyad Bank	Banks	9	13	8.1	20.42	0.4%	-2.1%	-0.3%	down:6,4	down:27,6	flat	135	9.4%	340	-	753	34%	-	-33%	-11%
+5110	Saudi Energy Co.	Utilities	10	51	14.7	17.61	3.9%	5.1%	18.3%	flat	up:74,71	down:651,109	66	4.3%	33	-	-	-	-	-15%	-16%

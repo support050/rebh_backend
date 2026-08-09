@@ -8,7 +8,7 @@ router = APIRouter(prefix="/api/financials", tags=["XBRL Financials"])
 def find_item(items: list[dict], frags: list[str]) -> dict | None:
     for frag in frags:
         for item in items:
-            if not item["is_header"] and frag.lower() in item["label"].lower():
+            if frag.lower() in item["label"].lower():
                 return item
     return None
 
@@ -30,10 +30,10 @@ KPI_DEFS = {
         {"label": "Loans & Advances", "frags": ["loans,financing", "loans and advances"]},
     ],
     "income_statement": [
-        {"label": "Total Op. Income", "frags": ["total operating income", "revenue"]},
-        {"label": "Net Profit", "frags": ["profit (loss) for the period", "profit for the period"]},
-        {"label": "Operating Expenses", "frags": ["total operating expenses"]},
-        {"label": "EPS", "frags": ["total basic earnings"]},
+        {"label": "Total Op. Income", "frags": ["revenue / turnover", "total operating income"]},
+        {"label": "Net Profit", "frags": ["net profit for the period", "profit for the period"]},
+        {"label": "Operating Expenses", "frags": ["general and administrative expenses", "total operating expenses"]},
+        {"label": "EPS", "frags": ["basic earnings per share (eps)", "eps", "total basic earnings"]},
     ],
     "cash_flow": [
         {"label": "Operating CF", "frags": ["net cash from operating", "cash flows from operating"]},

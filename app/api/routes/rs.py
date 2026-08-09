@@ -1,4 +1,5 @@
-from fastapi import APIRouter, Depends, Query, HTTPException
+from fastapi import APIRouter, Depends, Query, HTTPException, Request
+from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import desc
 from typing import List, Optional
@@ -7,28 +8,31 @@ import logging
 import os
 import json
 from pathlib import Path
+from pydantic import BaseModel
 
 from app.core.database import get_db
 from app.models.rs_daily import RSDaily
 from app.models.user_prefs import UserPreference
 from app.schemas.rs import RSResponse, RSLatestResponse
 from app.core.limiter import limiter
-from fastapi import Request
 from app.core.cache_helpers import (
     cache_read_through,
     make_rs_latest_key,
     make_rs_history_key,
     make_rs_advanced_key,
-    normalize_string
 )
 from app.core.cache_config import CACHE_TTL_SCREENERS, CACHE_TTL_RS_HISTORY
-from app.core.config import settings
 from app.api.deps import get_current_user
 from app.models.user import User
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/rs", tags=["Relative Strength"])
+
+
+class UserPrefsUpdate(BaseModel):
+    preferences: dict
+
 
 @router.get("/latest", response_model=RSLatestResponse)
 @limiter.limit("20/minute")
@@ -46,7 +50,6 @@ async def get_latest_rs(
     
     async def fetch_rs_latest():
         try:
-            # 1. معرفة آخر تاريخين متاحين
             dates_row = db.query(RSDaily.date).distinct().order_by(desc(RSDaily.date)).limit(2).all()
             
             if not dates_row:
@@ -55,25 +58,19 @@ async def get_latest_rs(
             latest_date = dates_row[0][0]
             prev_date = dates_row[1][0] if len(dates_row) > 1 else None
             
-            # 2. الحصول على التقييمات السابقة (إذا وجدت)
             prev_ratings = {}
             if prev_date:
                 prev_results = db.query(RSDaily.symbol, RSDaily.rs_rating).filter(RSDaily.date == prev_date).all()
                 prev_ratings = {r.symbol: r.rs_rating for r in prev_results}
             
-            # 3. بناء الاستعلام للبيانات الحالية
             query = db.query(RSDaily).filter(RSDaily.date == latest_date)
             
             if min_rs is not None:
                 query = query.filter(RSDaily.rs_rating >= min_rs)
             
-            # الترتيب حسب RS Rating بشكل افتراضي
             query = query.order_by(desc(RSDaily.rs_rating))
-            
-            # تنفيذ الاستعلام مع الحد الأقصى
             results = query.limit(limit).all()
             
-            # 4. دمج التقييمات السابقة
             for r in results:
                 r.prev_rs_rating = prev_ratings.get(r.symbol)
             
@@ -88,13 +85,13 @@ async def get_latest_rs(
             logger.error(f"Error in get_latest_rs: {e}")
             raise HTTPException(status_code=500, detail=f"Server Error: {str(e)}")
     
-    # Use cache read-through
     result = await cache_read_through(
         cache_key,
         CACHE_TTL_SCREENERS,
         fetch_rs_latest
     )
     return result
+
 
 @router.get("/latest_hub")
 @router.get("/latest_hub/")
@@ -111,6 +108,86 @@ async def get_latest_hub():
         logger.error(f"❌ latest_hub: rs_data.json not found at {json_path}")
         return JSONResponse(content={"stocks": [], "error": f"File not found: {json_path}"}, status_code=200)
 
+
+@router.get("/screener/advanced", response_model=RSLatestResponse)
+@limiter.limit("10/minute")
+async def advanced_screener(
+    request: Request,
+    min_rs: int = Query(0, ge=0, le=99),
+    min_rank_3m: Optional[int] = Query(None, description="Minimum 3 Month Rank"),
+    min_rank_6m: Optional[int] = Query(None, description="Minimum 6 Month Rank"),
+    sort_by: str = Query("rs_rating", regex="^(rs_rating|rank_3m|rank_6m|rank_12m|return_3m|return_12m)$"),
+    limit: int = Query(50, le=200),
+    db: Session = Depends(get_db)
+):
+    """
+    فلترة متقدمة للأسهم بناءً على الرتب والفترات.
+    Cached with 10-minute TTL.
+    """
+    cache_key = make_rs_advanced_key(min_rs, min_rank_3m, min_rank_6m, sort_by, limit)
+    
+    async def fetch_advanced():
+        latest_date_row = db.query(RSDaily.date).order_by(desc(RSDaily.date)).first()
+        if not latest_date_row:
+            return RSLatestResponse(data=[], total_count=0, date=date.today())
+        
+        latest_date = latest_date_row[0]
+        
+        query = db.query(RSDaily).filter(RSDaily.date == latest_date)
+        
+        if min_rs > 0:
+            query = query.filter(RSDaily.rs_rating >= min_rs)
+        
+        if min_rank_3m is not None:
+            query = query.filter(RSDaily.rank_3m >= min_rank_3m)
+            
+        if min_rank_6m is not None:
+            query = query.filter(RSDaily.rank_6m >= min_rank_6m)
+        
+        if hasattr(RSDaily, sort_by):
+            col = getattr(RSDaily, sort_by)
+            query = query.order_by(desc(col))
+        else:
+            query = query.order_by(desc(RSDaily.rs_rating))
+            
+        results = query.limit(limit).all()
+        
+        return RSLatestResponse(
+            data=results,
+            total_count=len(results),
+            date=latest_date
+        )
+    
+    result = await cache_read_through(
+        cache_key,
+        CACHE_TTL_SCREENERS,
+        fetch_advanced
+    )
+    return result
+
+
+@router.get("/user_preferences")
+def get_user_preferences(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    pref = db.query(UserPreference).filter(UserPreference.user_id == current_user.id).first()
+    if pref:
+        return {"preferences": pref.preferences}
+    return {"preferences": {}}
+
+
+@router.post("/user_preferences")
+def update_user_preferences(prefs: UserPrefsUpdate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    pref = db.query(UserPreference).filter(UserPreference.user_id == current_user.id).first()
+    if not pref:
+        pref = UserPreference(user_id=current_user.id)
+        pref.preferences = prefs.preferences
+        db.add(pref)
+    else:
+        pref.preferences = prefs.preferences
+    db.commit()
+    return {"status": "success", "preferences": pref.preferences}
+
+
+# NOTE: parameterized /{symbol} must be registered AFTER all static paths
 @router.get("/{symbol}", response_model=List[RSResponse])
 @limiter.limit("20/minute")
 async def get_rs_history(
@@ -140,101 +217,13 @@ async def get_rs_history(
         if to_date:
             query = query.filter(RSDaily.date <= to_date)
         
-        # ترتيب حسب التاريخ
         results = query.order_by(RSDaily.date).all()
         
         return results or []
     
-    # Use cache read-through
     result = await cache_read_through(
         cache_key,
         CACHE_TTL_RS_HISTORY,
         fetch_rs_history
     )
     return result
-
-@router.get("/screener/advanced", response_model=RSLatestResponse)
-@limiter.limit("10/minute")
-async def advanced_screener(
-    request: Request,
-    min_rs: int = Query(0, ge=0, le=99),
-    min_rank_3m: Optional[int] = Query(None, description="Minimum 3 Month Rank"),
-    min_rank_6m: Optional[int] = Query(None, description="Minimum 6 Month Rank"),
-    sort_by: str = Query("rs_rating", regex="^(rs_rating|rank_3m|rank_6m|rank_12m|return_3m|return_12m)$"),
-    limit: int = Query(50, le=200),
-    db: Session = Depends(get_db)
-):
-    """
-    فلترة متقدمة للأسهم بناءً على الرتب والفترات.
-    Cached with 10-minute TTL.
-    """
-    cache_key = make_rs_advanced_key(min_rs, min_rank_3m, min_rank_6m, sort_by, limit)
-    
-    async def fetch_advanced():
-        # آخر تاريخ
-        latest_date_row = db.query(RSDaily.date).order_by(desc(RSDaily.date)).first()
-        if not latest_date_row:
-            return RSLatestResponse(data=[], total_count=0, date=date.today())
-        
-        latest_date = latest_date_row[0]
-        
-        query = db.query(RSDaily).filter(RSDaily.date == latest_date)
-        
-        # تطبيق الفلاتر
-        if min_rs > 0:
-            query = query.filter(RSDaily.rs_rating >= min_rs)
-        
-        if min_rank_3m is not None:
-            query = query.filter(RSDaily.rank_3m >= min_rank_3m)
-            
-        if min_rank_6m is not None:
-            query = query.filter(RSDaily.rank_6m >= min_rank_6m)
-        
-        # الترتيب
-        if hasattr(RSDaily, sort_by):
-            col = getattr(RSDaily, sort_by)
-            query = query.order_by(desc(col))
-        else:
-            query = query.order_by(desc(RSDaily.rs_rating))
-            
-        results = query.limit(limit).all()
-        
-        return RSLatestResponse(
-            data=results,
-            total_count=len(results),
-            date=latest_date
-        )
-    
-    # Use cache read-through
-    result = await cache_read_through(
-        cache_key,
-        CACHE_TTL_SCREENERS,
-        fetch_advanced
-    )
-    return result
-
-from pydantic import BaseModel
-from fastapi.responses import JSONResponse
-
-class UserPrefsUpdate(BaseModel):
-    preferences: dict
-
-
-
-@router.get("/user_preferences")
-def get_user_preferences(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    pref = db.query(UserPreference).filter(UserPreference.user_id == current_user.id).first()
-    if pref:
-        return {"preferences": pref.preferences}
-    return {"preferences": {}}
-
-@router.post("/user_preferences")
-def update_user_preferences(prefs: UserPrefsUpdate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    pref = db.query(UserPreference).filter(UserPreference.user_id == current_user.id).first()
-    if not pref:
-        pref = UserPreference(user_id=current_user.id, preferences=prefs.preferences)
-        db.add(pref)
-    else:
-        pref.preferences = prefs.preferences
-    db.commit()
-    return {"status": "success", "preferences": pref.preferences}

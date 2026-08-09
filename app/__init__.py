@@ -10,4 +10,4 @@
 # from app.api.routes import companies, financials
 
 
-from app.models import financials  # تأكد من استيراد النماذج
+
