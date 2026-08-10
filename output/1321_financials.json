@@ -45,6 +45,1312 @@
     ]
   },
   "sections": {
+    "equity_changes": {
+      "period_meta": [
+        {
+          "key": "2020-04_2021-03",
+          "start": "2020-04-01",
+          "end": "2021-03-31",
+          "period_type": "FY"
+        },
+        {
+          "key": "2021-04_2021-06",
+          "start": "2021-04-01",
+          "end": "2021-06-30",
+          "period_type": "Q"
+        },
+        {
+          "key": "2021-04_2021-09",
+          "start": "2021-04-01",
+          "end": "2021-09-30",
+          "period_type": "H1"
+        },
+        {
+          "key": "2021-07_2021-09",
+          "start": "2021-07-01",
+          "end": "2021-09-30",
+          "period_type": "Q"
+        },
+        {
+          "key": "2021-04_2021-12",
+          "start": "2021-04-01",
+          "end": "2021-12-31",
+          "period_type": "9M"
+        },
+        {
+          "key": "2021-10_2021-12",
+          "start": "2021-10-01",
+          "end": "2021-12-31",
+          "period_type": "Q"
+        },
+        {
+          "key": "2021-04_2022-03",
+          "start": "2021-04-01",
+          "end": "2022-03-31",
+          "period_type": "FY"
+        },
+        {
+          "key": "2022-04_2022-06",
+          "start": "2022-04-01",
+          "end": "2022-06-30",
+          "period_type": "Q"
+        },
+        {
+          "key": "2022-04_2022-09",
+          "start": "2022-04-01",
+          "end": "2022-09-30",
+          "period_type": "H1"
+        },
+        {
+          "key": "2022-07_2022-09",
+          "start": "2022-07-01",
+          "end": "2022-09-30",
+          "period_type": "Q"
+        },
+        {
+          "key": "2022-04_2022-12",
+          "start": "2022-04-01",
+          "end": "2022-12-31",
+          "period_type": "9M"
+        },
+        {
+          "key": "2022-10_2022-12",
+          "start": "2022-10-01",
+          "end": "2022-12-31",
+          "period_type": "Q"
+        },
+        {
+          "key": "2022-04_2023-03",
+          "start": "2022-04-01",
+          "end": "2023-03-31",
+          "period_type": "FY"
+        },
+        {
+          "key": "2023-04_2023-06",
+          "start": "2023-04-01",
+          "end": "2023-06-30",
+          "period_type": "Q"
+        },
+        {
+          "key": "2023-04_2023-09",
+          "start": "2023-04-01",
+          "end": "2023-09-30",
+          "period_type": "H1"
+        },
+        {
+          "key": "2023-07_2023-09",
+          "start": "2023-07-01",
+          "end": "2023-09-30",
+          "period_type": "Q"
+        },
+        {
+          "key": "2023-04_2023-12",
+          "start": "2023-04-01",
+          "end": "2023-12-31",
+          "period_type": "9M"
+        },
+        {
+          "key": "2023-10_2023-12",
+          "start": "2023-10-01",
+          "end": "2023-12-31",
+          "period_type": "Q"
+        },
+        {
+          "key": "2023-04_2024-03",
+          "start": "2023-04-01",
+          "end": "2024-03-31",
+          "period_type": "FY"
+        },
+        {
+          "key": "2024-04_2024-06",
+          "start": "2024-04-01",
+          "end": "2024-06-30",
+          "period_type": "Q"
+        },
+        {
+          "key": "2024-04_2024-09",
+          "start": "2024-04-01",
+          "end": "2024-09-30",
+          "period_type": "H1"
+        },
+        {
+          "key": "2024-07_2024-09",
+          "start": "2024-07-01",
+          "end": "2024-09-30",
+          "period_type": "Q"
+        },
+        {
+          "key": "2024-04_2024-12",
+          "start": "2024-04-01",
+          "end": "2024-12-31",
+          "period_type": "9M"
+        },
+        {
+          "key": "2024-10_2024-12",
+          "start": "2024-10-01",
+          "end": "2024-12-31",
+          "period_type": "Q"
+        },
+        {
+          "key": "2024-04_2025-03",
+          "start": "2024-04-01",
+          "end": "2025-03-31",
+          "period_type": "FY"
+        },
+        {
+          "key": "2025-04_2025-06",
+          "start": "2025-04-01",
+          "end": "2025-06-30",
+          "period_type": "Q"
+        },
+        {
+          "key": "2025-04_2025-09",
+          "start": "2025-04-01",
+          "end": "2025-09-30",
+          "period_type": "H1"
+        },
+        {
+          "key": "2025-07_2025-09",
+          "start": "2025-07-01",
+          "end": "2025-09-30",
+          "period_type": "Q"
+        },
+        {
+          "key": "2025-04_2025-12",
+          "start": "2025-04-01",
+          "end": "2025-12-31",
+          "period_type": "9M"
+        },
+        {
+          "key": "2025-10_2025-12",
+          "start": "2025-10-01",
+          "end": "2025-12-31",
+          "period_type": "Q"
+        },
+        {
+          "key": "2025-04_2026-03",
+          "start": "2025-04-01",
+          "end": "2026-03-31",
+          "period_type": "FY"
+        }
+      ],
+      "periods": [
+        "2020-04_2021-03",
+        "2021-04_2021-06",
+        "2021-04_2021-09",
+        "2021-07_2021-09",
+        "2021-04_2021-12",
+        "2021-10_2021-12",
+        "2021-04_2022-03",
+        "2022-04_2022-06",
+        "2022-04_2022-09",
+        "2022-07_2022-09",
+        "2022-04_2022-12",
+        "2022-10_2022-12",
+        "2022-04_2023-03",
+        "2023-04_2023-06",
+        "2023-04_2023-09",
+        "2023-07_2023-09",
+        "2023-04_2023-12",
+        "2023-10_2023-12",
+        "2023-04_2024-03",
+        "2024-04_2024-06",
+        "2024-04_2024-09",
+        "2024-07_2024-09",
+        "2024-04_2024-12",
+        "2024-10_2024-12",
+        "2024-04_2025-03",
+        "2025-04_2025-06",
+        "2025-04_2025-09",
+        "2025-07_2025-09",
+        "2025-04_2025-12",
+        "2025-10_2025-12",
+        "2025-04_2026-03"
+      ],
+      "items": [
+        {
+          "label": "ربح (خسارة) الفترة",
+          "is_header": false,
+          "values": {
+            "2021-04_2022-03": -3245320.0,
+            "2020-04_2021-03": 148266023.0,
+            "2022-04_2023-03": 99920835.0,
+            "2022-04_2022-06": 6232810.0,
+            "2021-04_2021-06": 2147886.0,
+            "2022-07_2022-09": 9224842.0,
+            "2021-07_2021-09": -874015.0,
+            "2022-04_2022-09": 15457652.0,
+            "2021-04_2021-09": 1273871.0,
+            "2022-10_2022-12": 47523974.0,
+            "2021-10_2021-12": -18839834.0,
+            "2022-04_2022-12": 62981626.0,
+            "2021-04_2021-12": -17565963.0,
+            "2023-04_2024-03": 267507881.0,
+            "2023-04_2023-06": -18561259.0,
+            "2023-07_2023-09": 20793355.0,
+            "2023-04_2023-09": 2232096.0,
+            "2023-10_2023-12": 85718849.0,
+            "2023-04_2023-12": 87950945.0,
+            "2024-04_2025-03": 382123608.0,
+            "2024-04_2024-06": 71244701.0,
+            "2024-07_2024-09": 112849135.0,
+            "2024-04_2024-09": 184093836.0,
+            "2024-10_2024-12": 112443748.0,
+            "2024-04_2024-12": 296537584.0,
+            "2025-04_2026-03": 573262283.0,
+            "2025-04_2025-06": 90267350.0,
+            "2025-07_2025-09": 158580593.0,
+            "2025-04_2025-09": 248847943.0,
+            "2025-10_2025-12": 160001072.0,
+            "2025-04_2025-12": 408849015.0
+          }
+        },
+        {
+          "label": "أرباح (خسائر) إعادة تقييم برامج المزايا المحددة",
+          "is_header": false,
+          "values": {
+            "2021-04_2022-03": 618378.0,
+            "2020-04_2021-03": -509422.0,
+            "2022-04_2023-03": 529843.0,
+            "2022-04_2022-06": 203362.0,
+            "2022-07_2022-09": 219697.0,
+            "2021-07_2021-09": 81928.0,
+            "2022-04_2022-09": 423059.0,
+            "2021-04_2021-09": 81928.0,
+            "2022-10_2022-12": 136255.0,
+            "2021-10_2021-12": 94020.0,
+            "2022-04_2022-12": 559314.0,
+            "2021-04_2021-12": 175948.0,
+            "2023-04_2024-03": 464559.0,
+            "2023-04_2023-06": 306606.0,
+            "2023-07_2023-09": 43051.0,
+            "2023-04_2023-09": 349657.0,
+            "2023-10_2023-12": 483216.0,
+            "2023-04_2023-12": 832873.0,
+            "2024-04_2025-03": -5090006.0,
+            "2024-04_2024-06": -52334.0,
+            "2024-07_2024-09": -3623665.0,
+            "2024-04_2024-09": -3675999.0,
+            "2024-10_2024-12": -658537.0,
+            "2024-04_2024-12": -4334536.0,
+            "2025-04_2026-03": -2131832.0,
+            "2025-04_2025-06": 343181.0,
+            "2025-07_2025-09": -963061.0,
+            "2025-04_2025-09": -619880.0,
+            "2025-10_2025-12": -894333.0,
+            "2025-04_2025-12": -1514213.0
+          }
+        },
+        {
+          "label": "إجمالي الدخل الشامل الآخر الذي لن يعاد تصنيفه إلى الربح أو الخسارة",
+          "is_header": false,
+          "values": {
+            "2021-04_2022-03": 618378.0,
+            "2020-04_2021-03": -509422.0,
+            "2022-04_2023-03": 529843.0,
+            "2022-04_2022-06": 203362.0,
+            "2022-07_2022-09": 219697.0,
+            "2021-07_2021-09": 81928.0,
+            "2022-04_2022-09": 423059.0,
+            "2021-04_2021-09": 81928.0,
+            "2022-10_2022-12": 136255.0,
+            "2021-10_2021-12": 94020.0,
+            "2022-04_2022-12": 559314.0,
+            "2021-04_2021-12": 175948.0,
+            "2023-04_2024-03": 464559.0,
+            "2023-04_2023-06": 306606.0,
+            "2023-07_2023-09": 43051.0,
+            "2023-04_2023-09": 349657.0,
+            "2023-10_2023-12": 483216.0,
+            "2023-04_2023-12": 832873.0,
+            "2024-04_2025-03": -5090006.0,
+            "2024-04_2024-06": -52334.0,
+            "2024-07_2024-09": -3623665.0,
+            "2024-04_2024-09": -3675999.0,
+            "2024-10_2024-12": -658537.0,
+            "2024-04_2024-12": -4334536.0,
+            "2025-04_2026-03": -2131832.0,
+            "2025-04_2025-06": 343181.0,
+            "2025-07_2025-09": -963061.0,
+            "2025-04_2025-09": -619880.0,
+            "2025-10_2025-12": -894333.0,
+            "2025-04_2025-12": -1514213.0
+          }
+        },
+        {
+          "label": "إجمالي الدخل (خسارة) الشامل الآخر",
+          "is_header": false,
+          "values": {
+            "2021-04_2022-03": 618378.0,
+            "2020-04_2021-03": -509422.0,
+            "2022-04_2023-03": 529843.0,
+            "2022-04_2022-06": 203362.0,
+            "2022-07_2022-09": 219697.0,
+            "2021-07_2021-09": 81928.0,
+            "2022-04_2022-09": 423059.0,
+            "2021-04_2021-09": 81928.0,
+            "2022-10_2022-12": 136255.0,
+            "2021-10_2021-12": 94020.0,
+            "2022-04_2022-12": 559314.0,
+            "2021-04_2021-12": 175948.0,
+            "2023-04_2024-03": 464559.0,
+            "2023-04_2023-06": 306606.0,
+            "2023-07_2023-09": 43051.0,
+            "2023-04_2023-09": 349657.0,
+            "2023-10_2023-12": 483216.0,
+            "2023-04_2023-12": 832873.0,
+            "2024-04_2025-03": -5090006.0,
+            "2024-04_2024-06": -52334.0,
+            "2024-07_2024-09": -3623665.0,
+            "2024-04_2024-09": -3675999.0,
+            "2024-10_2024-12": -658537.0,
+            "2024-04_2024-12": -4334536.0,
+            "2025-04_2026-03": -2131832.0,
+            "2025-04_2025-06": 343181.0,
+            "2025-07_2025-09": -963061.0,
+            "2025-04_2025-09": -619880.0,
+            "2025-10_2025-12": -894333.0,
+            "2025-04_2025-12": -1514213.0
+          }
+        },
+        {
+          "label": "إجمالي الدخل (الخسارة) الشامل للفترة",
+          "is_header": false,
+          "values": {
+            "2021-04_2022-03": -2626942.0,
+            "2020-04_2021-03": 147756601.0,
+            "2022-04_2023-03": 100450678.0,
+            "2022-04_2022-06": 6436172.0,
+            "2021-04_2021-06": 2147886.0,
+            "2022-07_2022-09": 9444539.0,
+            "2021-07_2021-09": -792087.0,
+            "2022-04_2022-09": 15880711.0,
+            "2021-04_2021-09": 1355799.0,
+            "2022-10_2022-12": 47660229.0,
+            "2021-10_2021-12": -18745814.0,
+            "2022-04_2022-12": 63540940.0,
+            "2021-04_2021-12": -17390015.0,
+            "2023-04_2024-03": 267972440.0,
+            "2023-04_2023-06": -18254653.0,
+            "2023-07_2023-09": 20836406.0,
+            "2023-04_2023-09": 2581753.0,
+            "2023-10_2023-12": 86202065.0,
+            "2023-04_2023-12": 88783818.0,
+            "2024-04_2025-03": 377033602.0,
+            "2024-04_2024-06": 71192367.0,
+            "2024-07_2024-09": 109225470.0,
+            "2024-04_2024-09": 180417837.0,
+            "2024-10_2024-12": 111785211.0,
+            "2024-04_2024-12": 292203048.0,
+            "2025-04_2026-03": 571130451.0,
+            "2025-04_2025-06": 90610531.0,
+            "2025-07_2025-09": 157617532.0,
+            "2025-04_2025-09": 248228063.0,
+            "2025-10_2025-12": 159106739.0,
+            "2025-04_2025-12": 407334802.0
+          }
+        },
+        {
+          "label": "إجمالي الدخل (الخسارة) الشامل، المتعلق بمساهمي الشركة الأم",
+          "is_header": false,
+          "values": {
+            "2021-04_2022-03": -2626942.0,
+            "2020-04_2021-03": 147756601.0,
+            "2022-04_2023-03": 100450678.0,
+            "2022-04_2022-06": 6436172.0,
+            "2021-04_2021-06": 2147886.0,
+            "2022-07_2022-09": 9444539.0,
+            "2021-07_2021-09": -792087.0,
+            "2022-04_2022-09": 15880711.0,
+            "2021-04_2021-09": 1355799.0,
+            "2022-10_2022-12": 47660229.0,
+            "2021-10_2021-12": -18745814.0,
+            "2022-04_2022-12": 63540940.0,
+            "2021-04_2021-12": -17390015.0,
+            "2023-04_2024-03": 267972440.0,
+            "2023-04_2023-06": -18254653.0,
+            "2023-07_2023-09": 20836406.0,
+            "2023-04_2023-09": 2581753.0,
+            "2023-10_2023-12": 86202065.0,
+            "2023-04_2023-12": 88783818.0,
+            "2024-04_2025-03": 377033602.0,
+            "2024-04_2024-06": 71192367.0,
+            "2024-07_2024-09": 109225470.0,
+            "2024-04_2024-09": 180417837.0,
+            "2024-10_2024-12": 111785211.0,
+            "2024-04_2024-12": 292203048.0,
+            "2025-04_2026-03": 571130451.0,
+            "2025-04_2025-06": 90610531.0,
+            "2025-07_2025-09": 157617532.0,
+            "2025-04_2025-09": 248228063.0,
+            "2025-10_2025-12": 159106739.0,
+            "2025-04_2025-12": 407334802.0
+          }
+        },
+        {
+          "label": "Statement of changes in equity",
+          "is_header": true,
+          "values": {}
+        },
+        {
+          "label": "Equity balance at beginning of period (before adjustments)",
+          "is_header": false,
+          "values": {
+            "2021-04_2022-03": {
+              "Share capital": 210000000.0,
+              "Statutory reserve": 35005488.0,
+              "Retained earnings (accumulated losses)": 272611582.0,
+              "Total equity": 517617070.0
+            },
+            "2020-04_2021-03": {
+              "Share capital": 76046875.0,
+              "Statutory reserve": 20178886.0,
+              "Retained earnings (accumulated losses)": 180336614.0,
+              "Total equity": 276562375.0
+            },
+            "2022-04_2022-12": {
+              "Share capital": 210000000.0,
+              "Statutory reserve": 35005488.0,
+              "Retained earnings (accumulated losses)": 269984640.0,
+              "Total equity": 514990128.0
+            },
+            "2021-04_2021-12": {
+              "Share capital": 210000000.0,
+              "Statutory reserve": 35005488.0,
+              "Retained earnings (accumulated losses)": 272611582.0,
+              "Total equity": 517617070.0
+            },
+            "2022-04_2023-03": {
+              "Share capital": 210000000.0,
+              "Statutory reserve": 35005488.0,
+              "Retained earnings (accumulated losses)": 269984640.0,
+              "Total equity": 514990128.0
+            },
+            "2023-04_2023-06": {
+              "Share capital": 210000000.0,
+              "Statutory reserve": 35005488.0,
+              "Retained earnings (accumulated losses)": 255443234.0,
+              "Total equity": 500448722.0
+            },
+            "2022-04_2022-06": {
+              "Share capital": 210000000.0,
+              "Statutory reserve": 35005488.0,
+              "Retained earnings (accumulated losses)": 269984640.0,
+              "Total equity": 514990128.0
+            },
+            "2023-04_2023-12": {
+              "Share capital": 315000000.0,
+              "Statutory reserve": 44997572.0,
+              "Retained earnings (accumulated losses)": 255443234.0,
+              "Total equity": 615440806.0
+            },
+            "2023-04_2024-03": {
+              "Share capital": 315000000.0,
+              "Statutory reserve": 44997572.0,
+              "Retained earnings (accumulated losses)": 255443234.0,
+              "Total equity": 615440806.0
+            },
+            "2024-04_2025-03": {
+              "Share capital": 315000000.0,
+              "Statutory reserve": 71748360.0,
+              "Retained earnings (accumulated losses)": 465164886.0,
+              "Total equity": 851913246.0
+            },
+            "2025-04_2025-09": {
+              "Share capital": 315000000.0,
+              "Statutory reserve": 71748360.0,
+              "Retained earnings (accumulated losses)": 747698488.0,
+              "Total equity": 1134446848.0
+            },
+            "2024-04_2024-09": {
+              "Share capital": 315000000.0,
+              "Statutory reserve": 71748360.0,
+              "Retained earnings (accumulated losses)": 465164886.0,
+              "Total equity": 851913246.0
+            },
+            "2025-04_2025-12": {
+              "Share capital": 315000000.0,
+              "Statutory reserve": 71748360.0,
+              "Retained earnings (accumulated losses)": 747698488.0,
+              "Total equity": 1134446848.0
+            },
+            "2024-04_2024-12": {
+              "Share capital": 315000000.0,
+              "Statutory reserve": 71748360.0,
+              "Retained earnings (accumulated losses)": 465164886.0,
+              "Total equity": 851913246.0
+            },
+            "2025-04_2026-03": {
+              "Share capital": 315000000.0,
+              "Statutory reserve": 71748360.0,
+              "Retained earnings (accumulated losses)": 747698488.0,
+              "Total equity": 1134446848.0
+            }
+          }
+        },
+        {
+          "label": "Equity balance at beginning of period (after adjustments)",
+          "is_header": false,
+          "values": {
+            "2021-04_2022-03": {
+              "Share capital": 210000000.0,
+              "Statutory reserve": 35005488.0,
+              "Retained earnings (accumulated losses)": 272611582.0,
+              "Total equity": 517617070.0
+            },
+            "2020-04_2021-03": {
+              "Share capital": 76046875.0,
+              "Statutory reserve": 20178886.0,
+              "Retained earnings (accumulated losses)": 180336614.0,
+              "Total equity": 276562375.0
+            },
+            "2022-04_2022-12": {
+              "Share capital": 210000000.0,
+              "Statutory reserve": 35005488.0,
+              "Retained earnings (accumulated losses)": 269984640.0,
+              "Total equity": 514990128.0
+            },
+            "2021-04_2021-12": {
+              "Share capital": 210000000.0,
+              "Statutory reserve": 35005488.0,
+              "Retained earnings (accumulated losses)": 272611582.0,
+              "Total equity": 517617070.0
+            },
+            "2022-04_2023-03": {
+              "Share capital": 210000000.0,
+              "Statutory reserve": 35005488.0,
+              "Retained earnings (accumulated losses)": 269984640.0,
+              "Total equity": 514990128.0
+            },
+            "2023-04_2023-06": {
+              "Share capital": 210000000.0,
+              "Statutory reserve": 35005488.0,
+              "Retained earnings (accumulated losses)": 255443234.0,
+              "Total equity": 500448722.0
+            },
+            "2022-04_2022-06": {
+              "Share capital": 210000000.0,
+              "Statutory reserve": 35005488.0,
+              "Retained earnings (accumulated losses)": 269984640.0,
+              "Total equity": 514990128.0
+            },
+            "2023-04_2023-12": {
+              "Share capital": 315000000.0,
+              "Statutory reserve": 44997572.0,
+              "Retained earnings (accumulated losses)": 255443234.0,
+              "Total equity": 615440806.0
+            },
+            "2023-04_2024-03": {
+              "Share capital": 315000000.0,
+              "Statutory reserve": 44997572.0,
+              "Retained earnings (accumulated losses)": 255443234.0,
+              "Total equity": 615440806.0
+            },
+            "2024-04_2025-03": {
+              "Share capital": 315000000.0,
+              "Statutory reserve": 71748360.0,
+              "Retained earnings (accumulated losses)": 465164886.0,
+              "Total equity": 851913246.0
+            },
+            "2025-04_2025-09": {
+              "Share capital": 315000000.0,
+              "Statutory reserve": 71748360.0,
+              "Retained earnings (accumulated losses)": 747698488.0,
+              "Total equity": 1134446848.0
+            },
+            "2024-04_2024-09": {
+              "Share capital": 315000000.0,
+              "Statutory reserve": 71748360.0,
+              "Retained earnings (accumulated losses)": 465164886.0,
+              "Total equity": 851913246.0
+            },
+            "2025-04_2025-12": {
+              "Share capital": 315000000.0,
+              "Statutory reserve": 71748360.0,
+              "Retained earnings (accumulated losses)": 747698488.0,
+              "Total equity": 1134446848.0
+            },
+            "2024-04_2024-12": {
+              "Share capital": 315000000.0,
+              "Statutory reserve": 71748360.0,
+              "Retained earnings (accumulated losses)": 465164886.0,
+              "Total equity": 851913246.0
+            },
+            "2025-04_2026-03": {
+              "Share capital": 315000000.0,
+              "Statutory reserve": 71748360.0,
+              "Retained earnings (accumulated losses)": 747698488.0,
+              "Total equity": 1134446848.0
+            }
+          }
+        },
+        {
+          "label": "Changes in equity",
+          "is_header": true,
+          "values": {}
+        },
+        {
+          "label": "Comprehensive income",
+          "is_header": true,
+          "values": {}
+        },
+        {
+          "label": "Profit (loss) for period",
+          "is_header": false,
+          "values": {
+            "2021-04_2022-03": {
+              "Retained earnings (accumulated losses)": -3245320.0,
+              "Total equity": -3245320.0
+            },
+            "2020-04_2021-03": {
+              "Retained earnings (accumulated losses)": 148266023.0,
+              "Total equity": 148266023.0
+            },
+            "2022-04_2022-06": {
+              "Retained earnings (accumulated losses)": 6232810.0,
+              "Total equity": 6232810.0
+            },
+            "2021-04_2021-06": 2147886.0,
+            "2022-07_2022-09": 9224842.0,
+            "2021-07_2021-09": -874015.0,
+            "2022-04_2022-09": 15457652.0,
+            "2021-04_2021-09": 1273871.0,
+            "2022-04_2022-12": {
+              "Retained earnings (accumulated losses)": 62981626.0,
+              "Total equity": 62981626.0
+            },
+            "2021-04_2021-12": {
+              "Retained earnings (accumulated losses)": -17565963.0,
+              "Total equity": -17565963.0
+            },
+            "2022-04_2023-03": {
+              "Retained earnings (accumulated losses)": 99920835.0,
+              "Total equity": 99920835.0
+            },
+            "2023-04_2023-06": {
+              "Retained earnings (accumulated losses)": -18561259.0,
+              "Total equity": -18561259.0
+            },
+            "2023-07_2023-09": 20793355.0,
+            "2023-04_2023-09": 2232096.0,
+            "2023-04_2023-12": {
+              "Retained earnings (accumulated losses)": 87950945.0,
+              "Total equity": 87950945.0
+            },
+            "2023-04_2024-03": {
+              "Retained earnings (accumulated losses)": 267507881.0,
+              "Total equity": 267507881.0
+            },
+            "2024-04_2024-06": 71244701.0,
+            "2024-07_2024-09": 112849135.0,
+            "2024-04_2024-09": {
+              "Retained earnings (accumulated losses)": 184093836.0,
+              "Total equity": 184093836.0
+            },
+            "2024-10_2024-12": 112443748.0,
+            "2023-10_2023-12": 85718849.0,
+            "2024-04_2024-12": {
+              "Retained earnings (accumulated losses)": 296537584.0,
+              "Total equity": 296537584.0
+            },
+            "2024-04_2025-03": {
+              "Retained earnings (accumulated losses)": 382123608.0,
+              "Total equity": 382123608.0
+            },
+            "2025-04_2025-06": 90267350.0,
+            "2025-04_2025-09": {
+              "Retained earnings (accumulated losses)": 248847943.0,
+              "Total equity": 248847943.0
+            },
+            "2025-04_2025-12": {
+              "Retained earnings (accumulated losses)": 408849015.0,
+              "Total equity": 408849015.0
+            },
+            "2025-04_2026-03": {
+              "Retained earnings (accumulated losses)": 573262283.0,
+              "Total equity": 573262283.0
+            }
+          }
+        },
+        {
+          "label": "Other comprehensive income",
+          "is_header": false,
+          "values": {
+            "2021-04_2022-03": {
+              "Retained earnings (accumulated losses)": 618378.0,
+              "Total equity": 618378.0
+            },
+            "2020-04_2021-03": {
+              "Retained earnings (accumulated losses)": -509422.0,
+              "Total equity": -509422.0
+            },
+            "2022-04_2022-12": {
+              "Retained earnings (accumulated losses)": 559314.0,
+              "Total equity": 559314.0
+            },
+            "2021-04_2021-12": {
+              "Retained earnings (accumulated losses)": 175948.0,
+              "Total equity": 175948.0
+            },
+            "2022-04_2023-03": {
+              "Retained earnings (accumulated losses)": 529843.0,
+              "Total equity": 529843.0
+            },
+            "2023-04_2023-06": {
+              "Retained earnings (accumulated losses)": 306606.0,
+              "Total equity": 306606.0
+            },
+            "2022-04_2022-06": {
+              "Retained earnings (accumulated losses)": 203362.0,
+              "Total equity": 203362.0
+            },
+            "2023-04_2023-12": {
+              "Retained earnings (accumulated losses)": 832873.0,
+              "Total equity": 832873.0
+            },
+            "2023-04_2024-03": {
+              "Retained earnings (accumulated losses)": 464559.0,
+              "Total equity": 464559.0
+            },
+            "2024-04_2025-03": {
+              "Retained earnings (accumulated losses)": -5090006.0,
+              "Total equity": -5090006.0
+            },
+            "2025-04_2025-09": {
+              "Retained earnings (accumulated losses)": -619880.0,
+              "Total equity": -619880.0
+            },
+            "2024-04_2024-09": {
+              "Retained earnings (accumulated losses)": -3675999.0,
+              "Total equity": -3675999.0
+            },
+            "2025-04_2025-12": {
+              "Retained earnings (accumulated losses)": -1514213.0,
+              "Total equity": -1514213.0
+            },
+            "2024-04_2024-12": {
+              "Retained earnings (accumulated losses)": -4334536.0,
+              "Total equity": -4334536.0
+            },
+            "2025-04_2026-03": {
+              "Retained earnings (accumulated losses)": -2131832.0,
+              "Total equity": -2131832.0
+            }
+          }
+        },
+        {
+          "label": "Total comprehensive income (loss) for period",
+          "is_header": false,
+          "values": {
+            "2021-04_2022-03": {
+              "Retained earnings (accumulated losses)": -2626942.0,
+              "Total equity": -2626942.0
+            },
+            "2020-04_2021-03": {
+              "Retained earnings (accumulated losses)": 147756601.0,
+              "Total equity": 147756601.0
+            },
+            "2022-04_2022-06": {
+              "Retained earnings (accumulated losses)": 6436172.0,
+              "Total equity": 6436172.0
+            },
+            "2021-04_2021-06": 2147886.0,
+            "2022-07_2022-09": 9444539.0,
+            "2021-07_2021-09": -792087.0,
+            "2022-04_2022-09": 15880711.0,
+            "2021-04_2021-09": 1355799.0,
+            "2022-04_2022-12": {
+              "Retained earnings (accumulated losses)": 63540940.0,
+              "Total equity": 63540940.0
+            },
+            "2021-04_2021-12": {
+              "Retained earnings (accumulated losses)": -17390015.0,
+              "Total equity": -17390015.0
+            },
+            "2022-04_2023-03": {
+              "Retained earnings (accumulated losses)": 100450678.0,
+              "Total equity": 100450678.0
+            },
+            "2023-04_2023-06": {
+              "Retained earnings (accumulated losses)": -18254653.0,
+              "Total equity": -18254653.0
+            },
+            "2023-07_2023-09": 20836406.0,
+            "2023-04_2023-09": 2581753.0,
+            "2023-04_2023-12": {
+              "Retained earnings (accumulated losses)": 88783818.0,
+              "Total equity": 88783818.0
+            },
+            "2023-04_2024-03": {
+              "Retained earnings (accumulated losses)": 267972440.0,
+              "Total equity": 267972440.0
+            },
+            "2024-04_2024-06": 71192367.0,
+            "2024-07_2024-09": 109225470.0,
+            "2024-04_2024-09": {
+              "Retained earnings (accumulated losses)": 180417837.0,
+              "Total equity": 180417837.0
+            },
+            "2024-10_2024-12": 111785211.0,
+            "2023-10_2023-12": 86202065.0,
+            "2024-04_2024-12": {
+              "Retained earnings (accumulated losses)": 292203048.0,
+              "Total equity": 292203048.0
+            },
+            "2024-04_2025-03": {
+              "Retained earnings (accumulated losses)": 377033602.0,
+              "Total equity": 377033602.0
+            },
+            "2025-04_2025-06": 90610531.0,
+            "2025-04_2025-09": {
+              "Retained earnings (accumulated losses)": 248228063.0,
+              "Total equity": 248228063.0
+            },
+            "2025-04_2025-12": {
+              "Retained earnings (accumulated losses)": 407334802.0,
+              "Total equity": 407334802.0
+            },
+            "2025-04_2026-03": {
+              "Retained earnings (accumulated losses)": 571130451.0,
+              "Total equity": 571130451.0
+            }
+          }
+        },
+        {
+          "label": "Transfer from retained earnings",
+          "is_header": false,
+          "values": {
+            "2020-04_2021-03": {
+              "Retained earnings (accumulated losses)": 14826607.0,
+              "Total equity": 14826607.0
+            },
+            "2022-04_2022-12": {
+              "Retained earnings (accumulated losses)": 105000000.0,
+              "Total equity": 105000000.0
+            }
+          }
+        },
+        {
+          "label": "Transfer to statutory reserve",
+          "is_header": false,
+          "values": {
+            "2020-04_2021-03": {
+              "Statutory reserve": 14826602.0,
+              "Total equity": 14826602.0
+            },
+            "2022-04_2023-03": {
+              "Statutory reserve": 9992084.0,
+              "Retained earnings (accumulated losses)": -9992084.0,
+              "Total equity": 0.0
+            },
+            "2023-04_2023-06": {
+              "Statutory reserve": 9992084.0,
+              "Total equity": 9992084.0
+            },
+            "2023-04_2024-03": {
+              "Statutory reserve": 26750788.0,
+              "Retained earnings (accumulated losses)": -26750788.0,
+              "Total equity": 0.0
+            }
+          }
+        },
+        {
+          "label": "Other contributions by equity holders",
+          "is_header": false,
+          "values": {
+            "2020-04_2021-03": {
+              "Share capital": 133953125.0,
+              "Total equity": 133953125.0
+            }
+          }
+        },
+        {
+          "label": "Other miscellaneous changes in equity",
+          "is_header": false,
+          "values": {
+            "2020-04_2021-03": {
+              "Retained earnings (accumulated losses)": -40655026.0,
+              "Total equity": -40655026.0
+            },
+            "2025-04_2025-09": {
+              "Statutory reserve": -71748360.0,
+              "Retained earnings (accumulated losses)": 71748360.0,
+              "Total equity": 0.0
+            },
+            "2025-04_2025-12": {
+              "Statutory reserve": -71748360.0,
+              "Retained earnings (accumulated losses)": 71748360.0,
+              "Total equity": 0.0
+            },
+            "2025-04_2026-03": {
+              "Statutory reserve": -71748360.0,
+              "Retained earnings (accumulated losses)": 71748360.0,
+              "Total equity": 0.0
+            }
+          }
+        },
+        {
+          "label": "Total changes in shareholders equity",
+          "is_header": false,
+          "values": {
+            "2020-04_2021-03": {
+              "Share capital": 133953125.0,
+              "Statutory reserve": 14826602.0,
+              "Retained earnings (accumulated losses)": 92274968.0,
+              "Total equity": 241054695.0
+            },
+            "2021-04_2022-03": {
+              "Retained earnings (accumulated losses)": -2626942.0,
+              "Total equity": -2626942.0
+            },
+            "2022-04_2022-12": {
+              "Share capital": 105000000.0,
+              "Retained earnings (accumulated losses)": -41459060.0,
+              "Total equity": 63540940.0
+            },
+            "2021-04_2021-12": {
+              "Retained earnings (accumulated losses)": -17390015.0,
+              "Total equity": -17390015.0
+            },
+            "2022-04_2023-03": {
+              "Share capital": 105000000.0,
+              "Statutory reserve": 9992084.0,
+              "Retained earnings (accumulated losses)": -14541406.0,
+              "Total equity": 100450678.0
+            },
+            "2023-04_2023-06": {
+              "Share capital": 105000000.0,
+              "Statutory reserve": 9992084.0,
+              "Retained earnings (accumulated losses)": -18254653.0,
+              "Total equity": 96737431.0
+            },
+            "2022-04_2022-06": {
+              "Retained earnings (accumulated losses)": 6436172.0,
+              "Total equity": 6436172.0
+            },
+            "2023-04_2023-12": {
+              "Retained earnings (accumulated losses)": 57283818.0,
+              "Total equity": 57283818.0
+            },
+            "2023-04_2024-03": {
+              "Statutory reserve": 26750788.0,
+              "Retained earnings (accumulated losses)": 209721652.0,
+              "Total equity": 236472440.0
+            },
+            "2024-04_2025-03": {
+              "Retained earnings (accumulated losses)": 282533602.0,
+              "Total equity": 282533602.0
+            },
+            "2025-04_2025-09": {
+              "Statutory reserve": -71748360.0,
+              "Retained earnings (accumulated losses)": 241226423.0,
+              "Total equity": 169478063.0
+            },
+            "2024-04_2024-09": {
+              "Retained earnings (accumulated losses)": 133167837.0,
+              "Total equity": 133167837.0
+            },
+            "2025-04_2025-12": {
+              "Statutory reserve": -71748360.0,
+              "Retained earnings (accumulated losses)": 337333162.0,
+              "Total equity": 265584802.0
+            },
+            "2024-04_2024-12": {
+              "Retained earnings (accumulated losses)": 197703048.0,
+              "Total equity": 197703048.0
+            },
+            "2025-04_2026-03": {
+              "Statutory reserve": -71748360.0,
+              "Retained earnings (accumulated losses)": 501128811.0,
+              "Total equity": 429380451.0
+            }
+          }
+        },
+        {
+          "label": "Equity balance at end of period",
+          "is_header": false,
+          "values": {
+            "2021-04_2022-03": {
+              "Share capital": 210000000.0,
+              "Statutory reserve": 35005488.0,
+              "Retained earnings (accumulated losses)": 269984640.0,
+              "Total equity": 514990128.0
+            },
+            "2020-04_2021-03": {
+              "Share capital": 210000000.0,
+              "Statutory reserve": 35005488.0,
+              "Retained earnings (accumulated losses)": 272611582.0,
+              "Total equity": 517617070.0
+            },
+            "2022-04_2022-12": {
+              "Share capital": 315000000.0,
+              "Statutory reserve": 35005488.0,
+              "Retained earnings (accumulated losses)": 228525580.0,
+              "Total equity": 578531068.0
+            },
+            "2021-04_2021-12": {
+              "Share capital": 210000000.0,
+              "Statutory reserve": 35005488.0,
+              "Retained earnings (accumulated losses)": 255221567.0,
+              "Total equity": 500227055.0
+            },
+            "2022-04_2023-03": {
+              "Share capital": 315000000.0,
+              "Statutory reserve": 44997572.0,
+              "Retained earnings (accumulated losses)": 255443234.0,
+              "Total equity": 615440806.0
+            },
+            "2023-04_2023-06": {
+              "Share capital": 315000000.0,
+              "Statutory reserve": 44997572.0,
+              "Retained earnings (accumulated losses)": 237188581.0,
+              "Total equity": 597186153.0
+            },
+            "2022-04_2022-06": {
+              "Share capital": 210000000.0,
+              "Statutory reserve": 35005488.0,
+              "Retained earnings (accumulated losses)": 276420812.0,
+              "Total equity": 521426300.0
+            },
+            "2023-04_2023-12": {
+              "Share capital": 315000000.0,
+              "Statutory reserve": 44997572.0,
+              "Retained earnings (accumulated losses)": 312727052.0,
+              "Total equity": 672724624.0
+            },
+            "2023-04_2024-03": {
+              "Share capital": 315000000.0,
+              "Statutory reserve": 71748360.0,
+              "Retained earnings (accumulated losses)": 465164886.0,
+              "Total equity": 851913246.0
+            },
+            "2024-04_2025-03": {
+              "Share capital": 315000000.0,
+              "Statutory reserve": 71748360.0,
+              "Retained earnings (accumulated losses)": 747698488.0,
+              "Total equity": 1134446848.0
+            },
+            "2025-04_2025-09": {
+              "Share capital": 315000000.0,
+              "Statutory reserve": 0.0,
+              "Retained earnings (accumulated losses)": 988924911.0,
+              "Total equity": 1303924911.0
+            },
+            "2024-04_2024-09": {
+              "Share capital": 315000000.0,
+              "Statutory reserve": 71748360.0,
+              "Retained earnings (accumulated losses)": 598332723.0,
+              "Total equity": 985081083.0
+            },
+            "2025-04_2025-12": {
+              "Share capital": 315000000.0,
+              "Statutory reserve": 0.0,
+              "Retained earnings (accumulated losses)": 1085031650.0,
+              "Total equity": 1400031650.0
+            },
+            "2024-04_2024-12": {
+              "Share capital": 315000000.0,
+              "Statutory reserve": 71748360.0,
+              "Retained earnings (accumulated losses)": 662867934.0,
+              "Total equity": 1049616294.0
+            },
+            "2025-04_2026-03": {
+              "Share capital": 315000000.0,
+              "Statutory reserve": 0.0,
+              "Retained earnings (accumulated losses)": 1248827299.0,
+              "Total equity": 1563827299.0
+            }
+          }
+        },
+        {
+          "label": "Statement of other comprehensive income, before tax",
+          "is_header": true,
+          "values": {}
+        },
+        {
+          "label": "Statement of comprehensive income",
+          "is_header": true,
+          "values": {}
+        },
+        {
+          "label": "Components of other comprehensive income that will not be reclassified to profit or loss",
+          "is_header": true,
+          "values": {}
+        },
+        {
+          "label": "Remeasurement gains (losses) on defined benefit plans",
+          "is_header": false,
+          "values": {
+            "2022-04_2022-06": 203362.0,
+            "2022-07_2022-09": 219697.0,
+            "2021-07_2021-09": 81928.0,
+            "2022-04_2022-09": 423059.0,
+            "2021-04_2021-09": 81928.0,
+            "2023-07_2023-09": 43051.0,
+            "2023-04_2023-09": 349657.0,
+            "2024-04_2024-06": -52334.0,
+            "2023-04_2023-06": 306606.0,
+            "2024-07_2024-09": -3623665.0,
+            "2024-04_2024-09": -3675999.0,
+            "2024-10_2024-12": -658537.0,
+            "2023-10_2023-12": 483216.0,
+            "2024-04_2024-12": -4334536.0,
+            "2023-04_2023-12": 832873.0,
+            "2025-04_2025-06": 343181.0
+          }
+        },
+        {
+          "label": "Total other comprehensive income that will not be reclassified to profit or loss",
+          "is_header": false,
+          "values": {
+            "2022-04_2022-06": 203362.0,
+            "2022-07_2022-09": 219697.0,
+            "2021-07_2021-09": 81928.0,
+            "2022-04_2022-09": 423059.0,
+            "2021-04_2021-09": 81928.0,
+            "2023-07_2023-09": 43051.0,
+            "2023-04_2023-09": 349657.0,
+            "2024-04_2024-06": -52334.0,
+            "2023-04_2023-06": 306606.0,
+            "2024-07_2024-09": -3623665.0,
+            "2024-04_2024-09": -3675999.0,
+            "2024-10_2024-12": -658537.0,
+            "2023-10_2023-12": 483216.0,
+            "2024-04_2024-12": -4334536.0,
+            "2023-04_2023-12": 832873.0,
+            "2025-04_2025-06": 343181.0
+          }
+        },
+        {
+          "label": "Total other comprehensive income (loss)",
+          "is_header": false,
+          "values": {
+            "2022-04_2022-06": 203362.0,
+            "2022-07_2022-09": 219697.0,
+            "2021-07_2021-09": 81928.0,
+            "2022-04_2022-09": 423059.0,
+            "2021-04_2021-09": 81928.0,
+            "2023-07_2023-09": 43051.0,
+            "2023-04_2023-09": 349657.0,
+            "2024-04_2024-06": -52334.0,
+            "2023-04_2023-06": 306606.0,
+            "2024-07_2024-09": -3623665.0,
+            "2024-04_2024-09": -3675999.0,
+            "2024-10_2024-12": -658537.0,
+            "2023-10_2023-12": 483216.0,
+            "2024-04_2024-12": -4334536.0,
+            "2023-04_2023-12": 832873.0,
+            "2025-04_2025-06": 343181.0
+          }
+        },
+        {
+          "label": "Total comprehensive income (loss) attributable to",
+          "is_header": true,
+          "values": {}
+        },
+        {
+          "label": "Total comprehensive income (loss), attributable to equity holders of parent",
+          "is_header": false,
+          "values": {
+            "2022-04_2022-06": 6436172.0,
+            "2021-04_2021-06": 2147886.0,
+            "2022-07_2022-09": 9444539.0,
+            "2021-07_2021-09": -792087.0,
+            "2022-04_2022-09": 15880711.0,
+            "2021-04_2021-09": 1355799.0,
+            "2023-07_2023-09": 20836406.0,
+            "2023-04_2023-09": 2581753.0,
+            "2024-04_2024-06": 71192367.0,
+            "2023-04_2023-06": -18254653.0,
+            "2024-07_2024-09": 109225470.0,
+            "2024-04_2024-09": 180417837.0,
+            "2024-10_2024-12": 111785211.0,
+            "2023-10_2023-12": 86202065.0,
+            "2024-04_2024-12": 292203048.0,
+            "2023-04_2023-12": 88783818.0,
+            "2025-04_2025-06": 90610531.0
+          }
+        },
+        {
+          "label": "Issue of equity",
+          "is_header": false,
+          "values": {
+            "2022-04_2022-12": {
+              "Share capital": 105000000.0,
+              "Total equity": 0.0,
+              "Retained earnings (accumulated losses)": -105000000.0
+            },
+            "2022-04_2023-03": {
+              "Share capital": 105000000.0,
+              "Retained earnings (accumulated losses)": -105000000.0,
+              "Total equity": 0.0
+            },
+            "2023-04_2023-06": {
+              "Share capital": 105000000.0,
+              "Total equity": 105000000.0
+            }
+          }
+        },
+        {
+          "label": "Final dividend paid",
+          "is_header": false,
+          "values": {
+            "2023-04_2023-12": {
+              "Retained earnings (accumulated losses)": 31500000.0,
+              "Total equity": 31500000.0
+            },
+            "2023-04_2024-03": {
+              "Retained earnings (accumulated losses)": 31500000.0,
+              "Total equity": 31500000.0
+            },
+            "2024-04_2025-03": {
+              "Retained earnings (accumulated losses)": 94500000.0,
+              "Total equity": 94500000.0
+            },
+            "2025-04_2025-09": {
+              "Retained earnings (accumulated losses)": 78750000.0,
+              "Total equity": 78750000.0
+            },
+            "2024-04_2024-09": {
+              "Retained earnings (accumulated losses)": 47250000.0,
+              "Total equity": 47250000.0
+            },
+            "2025-04_2025-12": {
+              "Retained earnings (accumulated losses)": 141750000.0,
+              "Total equity": 141750000.0
+            },
+            "2024-04_2024-12": {
+              "Retained earnings (accumulated losses)": 94500000.0,
+              "Total equity": 94500000.0
+            },
+            "2025-04_2026-03": {
+              "Retained earnings (accumulated losses)": 141750000.0,
+              "Total equity": 141750000.0
+            }
+          }
+        }
+      ],
+      "section_type": "equity_matrix",
+      "components": [
+        "Share capital",
+        "Share premium",
+        "Treasury shares",
+        "Statutory reserve",
+        "General reserve",
+        "Retained earnings (accumulated losses)",
+        "Asset revaluation reserve",
+        "Available-for-sale",
+        "Employee share based plan reserve",
+        "Reserve of exchange differences on translation",
+        "Cash flow hedges reserve",
+        "Reserve of disposal group held for distribution/ sale",
+        "Miscellaneous other reserves",
+        "Total other reserves",
+        "Equity attributable to owners of parent",
+        "Non-controlling interests",
+        "Total equity"
+      ]
+    },
     "balance_sheet": {
       "period_meta": [
         {
@@ -6511,1312 +7817,6 @@
         }
       ]
     },
-    "equity_changes": {
-      "period_meta": [
-        {
-          "key": "2020-04_2021-03",
-          "start": "2020-04-01",
-          "end": "2021-03-31",
-          "period_type": "FY"
-        },
-        {
-          "key": "2021-04_2021-06",
-          "start": "2021-04-01",
-          "end": "2021-06-30",
-          "period_type": "Q"
-        },
-        {
-          "key": "2021-04_2021-09",
-          "start": "2021-04-01",
-          "end": "2021-09-30",
-          "period_type": "H1"
-        },
-        {
-          "key": "2021-07_2021-09",
-          "start": "2021-07-01",
-          "end": "2021-09-30",
-          "period_type": "Q"
-        },
-        {
-          "key": "2021-04_2021-12",
-          "start": "2021-04-01",
-          "end": "2021-12-31",
-          "period_type": "9M"
-        },
-        {
-          "key": "2021-10_2021-12",
-          "start": "2021-10-01",
-          "end": "2021-12-31",
-          "period_type": "Q"
-        },
-        {
-          "key": "2021-04_2022-03",
-          "start": "2021-04-01",
-          "end": "2022-03-31",
-          "period_type": "FY"
-        },
-        {
-          "key": "2022-04_2022-06",
-          "start": "2022-04-01",
-          "end": "2022-06-30",
-          "period_type": "Q"
-        },
-        {
-          "key": "2022-04_2022-09",
-          "start": "2022-04-01",
-          "end": "2022-09-30",
-          "period_type": "H1"
-        },
-        {
-          "key": "2022-07_2022-09",
-          "start": "2022-07-01",
-          "end": "2022-09-30",
-          "period_type": "Q"
-        },
-        {
-          "key": "2022-04_2022-12",
-          "start": "2022-04-01",
-          "end": "2022-12-31",
-          "period_type": "9M"
-        },
-        {
-          "key": "2022-10_2022-12",
-          "start": "2022-10-01",
-          "end": "2022-12-31",
-          "period_type": "Q"
-        },
-        {
-          "key": "2022-04_2023-03",
-          "start": "2022-04-01",
-          "end": "2023-03-31",
-          "period_type": "FY"
-        },
-        {
-          "key": "2023-04_2023-06",
-          "start": "2023-04-01",
-          "end": "2023-06-30",
-          "period_type": "Q"
-        },
-        {
-          "key": "2023-04_2023-09",
-          "start": "2023-04-01",
-          "end": "2023-09-30",
-          "period_type": "H1"
-        },
-        {
-          "key": "2023-07_2023-09",
-          "start": "2023-07-01",
-          "end": "2023-09-30",
-          "period_type": "Q"
-        },
-        {
-          "key": "2023-04_2023-12",
-          "start": "2023-04-01",
-          "end": "2023-12-31",
-          "period_type": "9M"
-        },
-        {
-          "key": "2023-10_2023-12",
-          "start": "2023-10-01",
-          "end": "2023-12-31",
-          "period_type": "Q"
-        },
-        {
-          "key": "2023-04_2024-03",
-          "start": "2023-04-01",
-          "end": "2024-03-31",
-          "period_type": "FY"
-        },
-        {
-          "key": "2024-04_2024-06",
-          "start": "2024-04-01",
-          "end": "2024-06-30",
-          "period_type": "Q"
-        },
-        {
-          "key": "2024-04_2024-09",
-          "start": "2024-04-01",
-          "end": "2024-09-30",
-          "period_type": "H1"
-        },
-        {
-          "key": "2024-07_2024-09",
-          "start": "2024-07-01",
-          "end": "2024-09-30",
-          "period_type": "Q"
-        },
-        {
-          "key": "2024-04_2024-12",
-          "start": "2024-04-01",
-          "end": "2024-12-31",
-          "period_type": "9M"
-        },
-        {
-          "key": "2024-10_2024-12",
-          "start": "2024-10-01",
-          "end": "2024-12-31",
-          "period_type": "Q"
-        },
-        {
-          "key": "2024-04_2025-03",
-          "start": "2024-04-01",
-          "end": "2025-03-31",
-          "period_type": "FY"
-        },
-        {
-          "key": "2025-04_2025-06",
-          "start": "2025-04-01",
-          "end": "2025-06-30",
-          "period_type": "Q"
-        },
-        {
-          "key": "2025-04_2025-09",
-          "start": "2025-04-01",
-          "end": "2025-09-30",
-          "period_type": "H1"
-        },
-        {
-          "key": "2025-07_2025-09",
-          "start": "2025-07-01",
-          "end": "2025-09-30",
-          "period_type": "Q"
-        },
-        {
-          "key": "2025-04_2025-12",
-          "start": "2025-04-01",
-          "end": "2025-12-31",
-          "period_type": "9M"
-        },
-        {
-          "key": "2025-10_2025-12",
-          "start": "2025-10-01",
-          "end": "2025-12-31",
-          "period_type": "Q"
-        },
-        {
-          "key": "2025-04_2026-03",
-          "start": "2025-04-01",
-          "end": "2026-03-31",
-          "period_type": "FY"
-        }
-      ],
-      "periods": [
-        "2020-04_2021-03",
-        "2021-04_2021-06",
-        "2021-04_2021-09",
-        "2021-07_2021-09",
-        "2021-04_2021-12",
-        "2021-10_2021-12",
-        "2021-04_2022-03",
-        "2022-04_2022-06",
-        "2022-04_2022-09",
-        "2022-07_2022-09",
-        "2022-04_2022-12",
-        "2022-10_2022-12",
-        "2022-04_2023-03",
-        "2023-04_2023-06",
-        "2023-04_2023-09",
-        "2023-07_2023-09",
-        "2023-04_2023-12",
-        "2023-10_2023-12",
-        "2023-04_2024-03",
-        "2024-04_2024-06",
-        "2024-04_2024-09",
-        "2024-07_2024-09",
-        "2024-04_2024-12",
-        "2024-10_2024-12",
-        "2024-04_2025-03",
-        "2025-04_2025-06",
-        "2025-04_2025-09",
-        "2025-07_2025-09",
-        "2025-04_2025-12",
-        "2025-10_2025-12",
-        "2025-04_2026-03"
-      ],
-      "items": [
-        {
-          "label": "ربح (خسارة) الفترة",
-          "is_header": false,
-          "values": {
-            "2021-04_2022-03": -3245320.0,
-            "2020-04_2021-03": 148266023.0,
-            "2022-04_2023-03": 99920835.0,
-            "2022-04_2022-06": 6232810.0,
-            "2021-04_2021-06": 2147886.0,
-            "2022-07_2022-09": 9224842.0,
-            "2021-07_2021-09": -874015.0,
-            "2022-04_2022-09": 15457652.0,
-            "2021-04_2021-09": 1273871.0,
-            "2022-10_2022-12": 47523974.0,
-            "2021-10_2021-12": -18839834.0,
-            "2022-04_2022-12": 62981626.0,
-            "2021-04_2021-12": -17565963.0,
-            "2023-04_2024-03": 267507881.0,
-            "2023-04_2023-06": -18561259.0,
-            "2023-07_2023-09": 20793355.0,
-            "2023-04_2023-09": 2232096.0,
-            "2023-10_2023-12": 85718849.0,
-            "2023-04_2023-12": 87950945.0,
-            "2024-04_2025-03": 382123608.0,
-            "2024-04_2024-06": 71244701.0,
-            "2024-07_2024-09": 112849135.0,
-            "2024-04_2024-09": 184093836.0,
-            "2024-10_2024-12": 112443748.0,
-            "2024-04_2024-12": 296537584.0,
-            "2025-04_2026-03": 573262283.0,
-            "2025-04_2025-06": 90267350.0,
-            "2025-07_2025-09": 158580593.0,
-            "2025-04_2025-09": 248847943.0,
-            "2025-10_2025-12": 160001072.0,
-            "2025-04_2025-12": 408849015.0
-          }
-        },
-        {
-          "label": "أرباح (خسائر) إعادة تقييم برامج المزايا المحددة",
-          "is_header": false,
-          "values": {
-            "2021-04_2022-03": 618378.0,
-            "2020-04_2021-03": -509422.0,
-            "2022-04_2023-03": 529843.0,
-            "2022-04_2022-06": 203362.0,
-            "2022-07_2022-09": 219697.0,
-            "2021-07_2021-09": 81928.0,
-            "2022-04_2022-09": 423059.0,
-            "2021-04_2021-09": 81928.0,
-            "2022-10_2022-12": 136255.0,
-            "2021-10_2021-12": 94020.0,
-            "2022-04_2022-12": 559314.0,
-            "2021-04_2021-12": 175948.0,
-            "2023-04_2024-03": 464559.0,
-            "2023-04_2023-06": 306606.0,
-            "2023-07_2023-09": 43051.0,
-            "2023-04_2023-09": 349657.0,
-            "2023-10_2023-12": 483216.0,
-            "2023-04_2023-12": 832873.0,
-            "2024-04_2025-03": -5090006.0,
-            "2024-04_2024-06": -52334.0,
-            "2024-07_2024-09": -3623665.0,
-            "2024-04_2024-09": -3675999.0,
-            "2024-10_2024-12": -658537.0,
-            "2024-04_2024-12": -4334536.0,
-            "2025-04_2026-03": -2131832.0,
-            "2025-04_2025-06": 343181.0,
-            "2025-07_2025-09": -963061.0,
-            "2025-04_2025-09": -619880.0,
-            "2025-10_2025-12": -894333.0,
-            "2025-04_2025-12": -1514213.0
-          }
-        },
-        {
-          "label": "إجمالي الدخل الشامل الآخر الذي لن يعاد تصنيفه إلى الربح أو الخسارة",
-          "is_header": false,
-          "values": {
-            "2021-04_2022-03": 618378.0,
-            "2020-04_2021-03": -509422.0,
-            "2022-04_2023-03": 529843.0,
-            "2022-04_2022-06": 203362.0,
-            "2022-07_2022-09": 219697.0,
-            "2021-07_2021-09": 81928.0,
-            "2022-04_2022-09": 423059.0,
-            "2021-04_2021-09": 81928.0,
-            "2022-10_2022-12": 136255.0,
-            "2021-10_2021-12": 94020.0,
-            "2022-04_2022-12": 559314.0,
-            "2021-04_2021-12": 175948.0,
-            "2023-04_2024-03": 464559.0,
-            "2023-04_2023-06": 306606.0,
-            "2023-07_2023-09": 43051.0,
-            "2023-04_2023-09": 349657.0,
-            "2023-10_2023-12": 483216.0,
-            "2023-04_2023-12": 832873.0,
-            "2024-04_2025-03": -5090006.0,
-            "2024-04_2024-06": -52334.0,
-            "2024-07_2024-09": -3623665.0,
-            "2024-04_2024-09": -3675999.0,
-            "2024-10_2024-12": -658537.0,
-            "2024-04_2024-12": -4334536.0,
-            "2025-04_2026-03": -2131832.0,
-            "2025-04_2025-06": 343181.0,
-            "2025-07_2025-09": -963061.0,
-            "2025-04_2025-09": -619880.0,
-            "2025-10_2025-12": -894333.0,
-            "2025-04_2025-12": -1514213.0
-          }
-        },
-        {
-          "label": "إجمالي الدخل (خسارة) الشامل الآخر",
-          "is_header": false,
-          "values": {
-            "2021-04_2022-03": 618378.0,
-            "2020-04_2021-03": -509422.0,
-            "2022-04_2023-03": 529843.0,
-            "2022-04_2022-06": 203362.0,
-            "2022-07_2022-09": 219697.0,
-            "2021-07_2021-09": 81928.0,
-            "2022-04_2022-09": 423059.0,
-            "2021-04_2021-09": 81928.0,
-            "2022-10_2022-12": 136255.0,
-            "2021-10_2021-12": 94020.0,
-            "2022-04_2022-12": 559314.0,
-            "2021-04_2021-12": 175948.0,
-            "2023-04_2024-03": 464559.0,
-            "2023-04_2023-06": 306606.0,
-            "2023-07_2023-09": 43051.0,
-            "2023-04_2023-09": 349657.0,
-            "2023-10_2023-12": 483216.0,
-            "2023-04_2023-12": 832873.0,
-            "2024-04_2025-03": -5090006.0,
-            "2024-04_2024-06": -52334.0,
-            "2024-07_2024-09": -3623665.0,
-            "2024-04_2024-09": -3675999.0,
-            "2024-10_2024-12": -658537.0,
-            "2024-04_2024-12": -4334536.0,
-            "2025-04_2026-03": -2131832.0,
-            "2025-04_2025-06": 343181.0,
-            "2025-07_2025-09": -963061.0,
-            "2025-04_2025-09": -619880.0,
-            "2025-10_2025-12": -894333.0,
-            "2025-04_2025-12": -1514213.0
-          }
-        },
-        {
-          "label": "إجمالي الدخل (الخسارة) الشامل للفترة",
-          "is_header": false,
-          "values": {
-            "2021-04_2022-03": -2626942.0,
-            "2020-04_2021-03": 147756601.0,
-            "2022-04_2023-03": 100450678.0,
-            "2022-04_2022-06": 6436172.0,
-            "2021-04_2021-06": 2147886.0,
-            "2022-07_2022-09": 9444539.0,
-            "2021-07_2021-09": -792087.0,
-            "2022-04_2022-09": 15880711.0,
-            "2021-04_2021-09": 1355799.0,
-            "2022-10_2022-12": 47660229.0,
-            "2021-10_2021-12": -18745814.0,
-            "2022-04_2022-12": 63540940.0,
-            "2021-04_2021-12": -17390015.0,
-            "2023-04_2024-03": 267972440.0,
-            "2023-04_2023-06": -18254653.0,
-            "2023-07_2023-09": 20836406.0,
-            "2023-04_2023-09": 2581753.0,
-            "2023-10_2023-12": 86202065.0,
-            "2023-04_2023-12": 88783818.0,
-            "2024-04_2025-03": 377033602.0,
-            "2024-04_2024-06": 71192367.0,
-            "2024-07_2024-09": 109225470.0,
-            "2024-04_2024-09": 180417837.0,
-            "2024-10_2024-12": 111785211.0,
-            "2024-04_2024-12": 292203048.0,
-            "2025-04_2026-03": 571130451.0,
-            "2025-04_2025-06": 90610531.0,
-            "2025-07_2025-09": 157617532.0,
-            "2025-04_2025-09": 248228063.0,
-            "2025-10_2025-12": 159106739.0,
-            "2025-04_2025-12": 407334802.0
-          }
-        },
-        {
-          "label": "إجمالي الدخل (الخسارة) الشامل، المتعلق بمساهمي الشركة الأم",
-          "is_header": false,
-          "values": {
-            "2021-04_2022-03": -2626942.0,
-            "2020-04_2021-03": 147756601.0,
-            "2022-04_2023-03": 100450678.0,
-            "2022-04_2022-06": 6436172.0,
-            "2021-04_2021-06": 2147886.0,
-            "2022-07_2022-09": 9444539.0,
-            "2021-07_2021-09": -792087.0,
-            "2022-04_2022-09": 15880711.0,
-            "2021-04_2021-09": 1355799.0,
-            "2022-10_2022-12": 47660229.0,
-            "2021-10_2021-12": -18745814.0,
-            "2022-04_2022-12": 63540940.0,
-            "2021-04_2021-12": -17390015.0,
-            "2023-04_2024-03": 267972440.0,
-            "2023-04_2023-06": -18254653.0,
-            "2023-07_2023-09": 20836406.0,
-            "2023-04_2023-09": 2581753.0,
-            "2023-10_2023-12": 86202065.0,
-            "2023-04_2023-12": 88783818.0,
-            "2024-04_2025-03": 377033602.0,
-            "2024-04_2024-06": 71192367.0,
-            "2024-07_2024-09": 109225470.0,
-            "2024-04_2024-09": 180417837.0,
-            "2024-10_2024-12": 111785211.0,
-            "2024-04_2024-12": 292203048.0,
-            "2025-04_2026-03": 571130451.0,
-            "2025-04_2025-06": 90610531.0,
-            "2025-07_2025-09": 157617532.0,
-            "2025-04_2025-09": 248228063.0,
-            "2025-10_2025-12": 159106739.0,
-            "2025-04_2025-12": 407334802.0
-          }
-        },
-        {
-          "label": "Statement of changes in equity",
-          "is_header": true,
-          "values": {}
-        },
-        {
-          "label": "Equity balance at beginning of period (before adjustments)",
-          "is_header": false,
-          "values": {
-            "2021-04_2022-03": {
-              "Share capital": 210000000.0,
-              "Statutory reserve": 35005488.0,
-              "Retained earnings (accumulated losses)": 272611582.0,
-              "Total equity": 517617070.0
-            },
-            "2020-04_2021-03": {
-              "Share capital": 76046875.0,
-              "Statutory reserve": 20178886.0,
-              "Retained earnings (accumulated losses)": 180336614.0,
-              "Total equity": 276562375.0
-            },
-            "2022-04_2022-12": {
-              "Share capital": 210000000.0,
-              "Statutory reserve": 35005488.0,
-              "Retained earnings (accumulated losses)": 269984640.0,
-              "Total equity": 514990128.0
-            },
-            "2021-04_2021-12": {
-              "Share capital": 210000000.0,
-              "Statutory reserve": 35005488.0,
-              "Retained earnings (accumulated losses)": 272611582.0,
-              "Total equity": 517617070.0
-            },
-            "2022-04_2023-03": {
-              "Share capital": 210000000.0,
-              "Statutory reserve": 35005488.0,
-              "Retained earnings (accumulated losses)": 269984640.0,
-              "Total equity": 514990128.0
-            },
-            "2023-04_2023-06": {
-              "Share capital": 210000000.0,
-              "Statutory reserve": 35005488.0,
-              "Retained earnings (accumulated losses)": 255443234.0,
-              "Total equity": 500448722.0
-            },
-            "2022-04_2022-06": {
-              "Share capital": 210000000.0,
-              "Statutory reserve": 35005488.0,
-              "Retained earnings (accumulated losses)": 269984640.0,
-              "Total equity": 514990128.0
-            },
-            "2023-04_2023-12": {
-              "Share capital": 315000000.0,
-              "Statutory reserve": 44997572.0,
-              "Retained earnings (accumulated losses)": 255443234.0,
-              "Total equity": 615440806.0
-            },
-            "2023-04_2024-03": {
-              "Share capital": 315000000.0,
-              "Statutory reserve": 44997572.0,
-              "Retained earnings (accumulated losses)": 255443234.0,
-              "Total equity": 615440806.0
-            },
-            "2024-04_2025-03": {
-              "Share capital": 315000000.0,
-              "Statutory reserve": 71748360.0,
-              "Retained earnings (accumulated losses)": 465164886.0,
-              "Total equity": 851913246.0
-            },
-            "2025-04_2025-09": {
-              "Share capital": 315000000.0,
-              "Statutory reserve": 71748360.0,
-              "Retained earnings (accumulated losses)": 747698488.0,
-              "Total equity": 1134446848.0
-            },
-            "2024-04_2024-09": {
-              "Share capital": 315000000.0,
-              "Statutory reserve": 71748360.0,
-              "Retained earnings (accumulated losses)": 465164886.0,
-              "Total equity": 851913246.0
-            },
-            "2025-04_2025-12": {
-              "Share capital": 315000000.0,
-              "Statutory reserve": 71748360.0,
-              "Retained earnings (accumulated losses)": 747698488.0,
-              "Total equity": 1134446848.0
-            },
-            "2024-04_2024-12": {
-              "Share capital": 315000000.0,
-              "Statutory reserve": 71748360.0,
-              "Retained earnings (accumulated losses)": 465164886.0,
-              "Total equity": 851913246.0
-            },
-            "2025-04_2026-03": {
-              "Share capital": 315000000.0,
-              "Statutory reserve": 71748360.0,
-              "Retained earnings (accumulated losses)": 747698488.0,
-              "Total equity": 1134446848.0
-            }
-          }
-        },
-        {
-          "label": "Equity balance at beginning of period (after adjustments)",
-          "is_header": false,
-          "values": {
-            "2021-04_2022-03": {
-              "Share capital": 210000000.0,
-              "Statutory reserve": 35005488.0,
-              "Retained earnings (accumulated losses)": 272611582.0,
-              "Total equity": 517617070.0
-            },
-            "2020-04_2021-03": {
-              "Share capital": 76046875.0,
-              "Statutory reserve": 20178886.0,
-              "Retained earnings (accumulated losses)": 180336614.0,
-              "Total equity": 276562375.0
-            },
-            "2022-04_2022-12": {
-              "Share capital": 210000000.0,
-              "Statutory reserve": 35005488.0,
-              "Retained earnings (accumulated losses)": 269984640.0,
-              "Total equity": 514990128.0
-            },
-            "2021-04_2021-12": {
-              "Share capital": 210000000.0,
-              "Statutory reserve": 35005488.0,
-              "Retained earnings (accumulated losses)": 272611582.0,
-              "Total equity": 517617070.0
-            },
-            "2022-04_2023-03": {
-              "Share capital": 210000000.0,
-              "Statutory reserve": 35005488.0,
-              "Retained earnings (accumulated losses)": 269984640.0,
-              "Total equity": 514990128.0
-            },
-            "2023-04_2023-06": {
-              "Share capital": 210000000.0,
-              "Statutory reserve": 35005488.0,
-              "Retained earnings (accumulated losses)": 255443234.0,
-              "Total equity": 500448722.0
-            },
-            "2022-04_2022-06": {
-              "Share capital": 210000000.0,
-              "Statutory reserve": 35005488.0,
-              "Retained earnings (accumulated losses)": 269984640.0,
-              "Total equity": 514990128.0
-            },
-            "2023-04_2023-12": {
-              "Share capital": 315000000.0,
-              "Statutory reserve": 44997572.0,
-              "Retained earnings (accumulated losses)": 255443234.0,
-              "Total equity": 615440806.0
-            },
-            "2023-04_2024-03": {
-              "Share capital": 315000000.0,
-              "Statutory reserve": 44997572.0,
-              "Retained earnings (accumulated losses)": 255443234.0,
-              "Total equity": 615440806.0
-            },
-            "2024-04_2025-03": {
-              "Share capital": 315000000.0,
-              "Statutory reserve": 71748360.0,
-              "Retained earnings (accumulated losses)": 465164886.0,
-              "Total equity": 851913246.0
-            },
-            "2025-04_2025-09": {
-              "Share capital": 315000000.0,
-              "Statutory reserve": 71748360.0,
-              "Retained earnings (accumulated losses)": 747698488.0,
-              "Total equity": 1134446848.0
-            },
-            "2024-04_2024-09": {
-              "Share capital": 315000000.0,
-              "Statutory reserve": 71748360.0,
-              "Retained earnings (accumulated losses)": 465164886.0,
-              "Total equity": 851913246.0
-            },
-            "2025-04_2025-12": {
-              "Share capital": 315000000.0,
-              "Statutory reserve": 71748360.0,
-              "Retained earnings (accumulated losses)": 747698488.0,
-              "Total equity": 1134446848.0
-            },
-            "2024-04_2024-12": {
-              "Share capital": 315000000.0,
-              "Statutory reserve": 71748360.0,
-              "Retained earnings (accumulated losses)": 465164886.0,
-              "Total equity": 851913246.0
-            },
-            "2025-04_2026-03": {
-              "Share capital": 315000000.0,
-              "Statutory reserve": 71748360.0,
-              "Retained earnings (accumulated losses)": 747698488.0,
-              "Total equity": 1134446848.0
-            }
-          }
-        },
-        {
-          "label": "Changes in equity",
-          "is_header": true,
-          "values": {}
-        },
-        {
-          "label": "Comprehensive income",
-          "is_header": true,
-          "values": {}
-        },
-        {
-          "label": "Profit (loss) for period",
-          "is_header": false,
-          "values": {
-            "2021-04_2022-03": {
-              "Retained earnings (accumulated losses)": -3245320.0,
-              "Total equity": -3245320.0
-            },
-            "2020-04_2021-03": {
-              "Retained earnings (accumulated losses)": 148266023.0,
-              "Total equity": 148266023.0
-            },
-            "2022-04_2022-06": {
-              "Retained earnings (accumulated losses)": 6232810.0,
-              "Total equity": 6232810.0
-            },
-            "2021-04_2021-06": 2147886.0,
-            "2022-07_2022-09": 9224842.0,
-            "2021-07_2021-09": -874015.0,
-            "2022-04_2022-09": 15457652.0,
-            "2021-04_2021-09": 1273871.0,
-            "2022-04_2022-12": {
-              "Retained earnings (accumulated losses)": 62981626.0,
-              "Total equity": 62981626.0
-            },
-            "2021-04_2021-12": {
-              "Retained earnings (accumulated losses)": -17565963.0,
-              "Total equity": -17565963.0
-            },
-            "2022-04_2023-03": {
-              "Retained earnings (accumulated losses)": 99920835.0,
-              "Total equity": 99920835.0
-            },
-            "2023-04_2023-06": {
-              "Retained earnings (accumulated losses)": -18561259.0,
-              "Total equity": -18561259.0
-            },
-            "2023-07_2023-09": 20793355.0,
-            "2023-04_2023-09": 2232096.0,
-            "2023-04_2023-12": {
-              "Retained earnings (accumulated losses)": 87950945.0,
-              "Total equity": 87950945.0
-            },
-            "2023-04_2024-03": {
-              "Retained earnings (accumulated losses)": 267507881.0,
-              "Total equity": 267507881.0
-            },
-            "2024-04_2024-06": 71244701.0,
-            "2024-07_2024-09": 112849135.0,
-            "2024-04_2024-09": {
-              "Retained earnings (accumulated losses)": 184093836.0,
-              "Total equity": 184093836.0
-            },
-            "2024-10_2024-12": 112443748.0,
-            "2023-10_2023-12": 85718849.0,
-            "2024-04_2024-12": {
-              "Retained earnings (accumulated losses)": 296537584.0,
-              "Total equity": 296537584.0
-            },
-            "2024-04_2025-03": {
-              "Retained earnings (accumulated losses)": 382123608.0,
-              "Total equity": 382123608.0
-            },
-            "2025-04_2025-06": 90267350.0,
-            "2025-04_2025-09": {
-              "Retained earnings (accumulated losses)": 248847943.0,
-              "Total equity": 248847943.0
-            },
-            "2025-04_2025-12": {
-              "Retained earnings (accumulated losses)": 408849015.0,
-              "Total equity": 408849015.0
-            },
-            "2025-04_2026-03": {
-              "Retained earnings (accumulated losses)": 573262283.0,
-              "Total equity": 573262283.0
-            }
-          }
-        },
-        {
-          "label": "Other comprehensive income",
-          "is_header": false,
-          "values": {
-            "2021-04_2022-03": {
-              "Retained earnings (accumulated losses)": 618378.0,
-              "Total equity": 618378.0
-            },
-            "2020-04_2021-03": {
-              "Retained earnings (accumulated losses)": -509422.0,
-              "Total equity": -509422.0
-            },
-            "2022-04_2022-12": {
-              "Retained earnings (accumulated losses)": 559314.0,
-              "Total equity": 559314.0
-            },
-            "2021-04_2021-12": {
-              "Retained earnings (accumulated losses)": 175948.0,
-              "Total equity": 175948.0
-            },
-            "2022-04_2023-03": {
-              "Retained earnings (accumulated losses)": 529843.0,
-              "Total equity": 529843.0
-            },
-            "2023-04_2023-06": {
-              "Retained earnings (accumulated losses)": 306606.0,
-              "Total equity": 306606.0
-            },
-            "2022-04_2022-06": {
-              "Retained earnings (accumulated losses)": 203362.0,
-              "Total equity": 203362.0
-            },
-            "2023-04_2023-12": {
-              "Retained earnings (accumulated losses)": 832873.0,
-              "Total equity": 832873.0
-            },
-            "2023-04_2024-03": {
-              "Retained earnings (accumulated losses)": 464559.0,
-              "Total equity": 464559.0
-            },
-            "2024-04_2025-03": {
-              "Retained earnings (accumulated losses)": -5090006.0,
-              "Total equity": -5090006.0
-            },
-            "2025-04_2025-09": {
-              "Retained earnings (accumulated losses)": -619880.0,
-              "Total equity": -619880.0
-            },
-            "2024-04_2024-09": {
-              "Retained earnings (accumulated losses)": -3675999.0,
-              "Total equity": -3675999.0
-            },
-            "2025-04_2025-12": {
-              "Retained earnings (accumulated losses)": -1514213.0,
-              "Total equity": -1514213.0
-            },
-            "2024-04_2024-12": {
-              "Retained earnings (accumulated losses)": -4334536.0,
-              "Total equity": -4334536.0
-            },
-            "2025-04_2026-03": {
-              "Retained earnings (accumulated losses)": -2131832.0,
-              "Total equity": -2131832.0
-            }
-          }
-        },
-        {
-          "label": "Total comprehensive income (loss) for period",
-          "is_header": false,
-          "values": {
-            "2021-04_2022-03": {
-              "Retained earnings (accumulated losses)": -2626942.0,
-              "Total equity": -2626942.0
-            },
-            "2020-04_2021-03": {
-              "Retained earnings (accumulated losses)": 147756601.0,
-              "Total equity": 147756601.0
-            },
-            "2022-04_2022-06": {
-              "Retained earnings (accumulated losses)": 6436172.0,
-              "Total equity": 6436172.0
-            },
-            "2021-04_2021-06": 2147886.0,
-            "2022-07_2022-09": 9444539.0,
-            "2021-07_2021-09": -792087.0,
-            "2022-04_2022-09": 15880711.0,
-            "2021-04_2021-09": 1355799.0,
-            "2022-04_2022-12": {
-              "Retained earnings (accumulated losses)": 63540940.0,
-              "Total equity": 63540940.0
-            },
-            "2021-04_2021-12": {
-              "Retained earnings (accumulated losses)": -17390015.0,
-              "Total equity": -17390015.0
-            },
-            "2022-04_2023-03": {
-              "Retained earnings (accumulated losses)": 100450678.0,
-              "Total equity": 100450678.0
-            },
-            "2023-04_2023-06": {
-              "Retained earnings (accumulated losses)": -18254653.0,
-              "Total equity": -18254653.0
-            },
-            "2023-07_2023-09": 20836406.0,
-            "2023-04_2023-09": 2581753.0,
-            "2023-04_2023-12": {
-              "Retained earnings (accumulated losses)": 88783818.0,
-              "Total equity": 88783818.0
-            },
-            "2023-04_2024-03": {
-              "Retained earnings (accumulated losses)": 267972440.0,
-              "Total equity": 267972440.0
-            },
-            "2024-04_2024-06": 71192367.0,
-            "2024-07_2024-09": 109225470.0,
-            "2024-04_2024-09": {
-              "Retained earnings (accumulated losses)": 180417837.0,
-              "Total equity": 180417837.0
-            },
-            "2024-10_2024-12": 111785211.0,
-            "2023-10_2023-12": 86202065.0,
-            "2024-04_2024-12": {
-              "Retained earnings (accumulated losses)": 292203048.0,
-              "Total equity": 292203048.0
-            },
-            "2024-04_2025-03": {
-              "Retained earnings (accumulated losses)": 377033602.0,
-              "Total equity": 377033602.0
-            },
-            "2025-04_2025-06": 90610531.0,
-            "2025-04_2025-09": {
-              "Retained earnings (accumulated losses)": 248228063.0,
-              "Total equity": 248228063.0
-            },
-            "2025-04_2025-12": {
-              "Retained earnings (accumulated losses)": 407334802.0,
-              "Total equity": 407334802.0
-            },
-            "2025-04_2026-03": {
-              "Retained earnings (accumulated losses)": 571130451.0,
-              "Total equity": 571130451.0
-            }
-          }
-        },
-        {
-          "label": "Transfer from retained earnings",
-          "is_header": false,
-          "values": {
-            "2020-04_2021-03": {
-              "Retained earnings (accumulated losses)": 14826607.0,
-              "Total equity": 14826607.0
-            },
-            "2022-04_2022-12": {
-              "Retained earnings (accumulated losses)": 105000000.0,
-              "Total equity": 105000000.0
-            }
-          }
-        },
-        {
-          "label": "Transfer to statutory reserve",
-          "is_header": false,
-          "values": {
-            "2020-04_2021-03": {
-              "Statutory reserve": 14826602.0,
-              "Total equity": 14826602.0
-            },
-            "2022-04_2023-03": {
-              "Statutory reserve": 9992084.0,
-              "Retained earnings (accumulated losses)": -9992084.0,
-              "Total equity": 0.0
-            },
-            "2023-04_2023-06": {
-              "Statutory reserve": 9992084.0,
-              "Total equity": 9992084.0
-            },
-            "2023-04_2024-03": {
-              "Statutory reserve": 26750788.0,
-              "Retained earnings (accumulated losses)": -26750788.0,
-              "Total equity": 0.0
-            }
-          }
-        },
-        {
-          "label": "Other contributions by equity holders",
-          "is_header": false,
-          "values": {
-            "2020-04_2021-03": {
-              "Share capital": 133953125.0,
-              "Total equity": 133953125.0
-            }
-          }
-        },
-        {
-          "label": "Other miscellaneous changes in equity",
-          "is_header": false,
-          "values": {
-            "2020-04_2021-03": {
-              "Retained earnings (accumulated losses)": -40655026.0,
-              "Total equity": -40655026.0
-            },
-            "2025-04_2025-09": {
-              "Statutory reserve": -71748360.0,
-              "Retained earnings (accumulated losses)": 71748360.0,
-              "Total equity": 0.0
-            },
-            "2025-04_2025-12": {
-              "Statutory reserve": -71748360.0,
-              "Retained earnings (accumulated losses)": 71748360.0,
-              "Total equity": 0.0
-            },
-            "2025-04_2026-03": {
-              "Statutory reserve": -71748360.0,
-              "Retained earnings (accumulated losses)": 71748360.0,
-              "Total equity": 0.0
-            }
-          }
-        },
-        {
-          "label": "Total changes in shareholders equity",
-          "is_header": false,
-          "values": {
-            "2020-04_2021-03": {
-              "Share capital": 133953125.0,
-              "Statutory reserve": 14826602.0,
-              "Retained earnings (accumulated losses)": 92274968.0,
-              "Total equity": 241054695.0
-            },
-            "2021-04_2022-03": {
-              "Retained earnings (accumulated losses)": -2626942.0,
-              "Total equity": -2626942.0
-            },
-            "2022-04_2022-12": {
-              "Share capital": 105000000.0,
-              "Retained earnings (accumulated losses)": -41459060.0,
-              "Total equity": 63540940.0
-            },
-            "2021-04_2021-12": {
-              "Retained earnings (accumulated losses)": -17390015.0,
-              "Total equity": -17390015.0
-            },
-            "2022-04_2023-03": {
-              "Share capital": 105000000.0,
-              "Statutory reserve": 9992084.0,
-              "Retained earnings (accumulated losses)": -14541406.0,
-              "Total equity": 100450678.0
-            },
-            "2023-04_2023-06": {
-              "Share capital": 105000000.0,
-              "Statutory reserve": 9992084.0,
-              "Retained earnings (accumulated losses)": -18254653.0,
-              "Total equity": 96737431.0
-            },
-            "2022-04_2022-06": {
-              "Retained earnings (accumulated losses)": 6436172.0,
-              "Total equity": 6436172.0
-            },
-            "2023-04_2023-12": {
-              "Retained earnings (accumulated losses)": 57283818.0,
-              "Total equity": 57283818.0
-            },
-            "2023-04_2024-03": {
-              "Statutory reserve": 26750788.0,
-              "Retained earnings (accumulated losses)": 209721652.0,
-              "Total equity": 236472440.0
-            },
-            "2024-04_2025-03": {
-              "Retained earnings (accumulated losses)": 282533602.0,
-              "Total equity": 282533602.0
-            },
-            "2025-04_2025-09": {
-              "Statutory reserve": -71748360.0,
-              "Retained earnings (accumulated losses)": 241226423.0,
-              "Total equity": 169478063.0
-            },
-            "2024-04_2024-09": {
-              "Retained earnings (accumulated losses)": 133167837.0,
-              "Total equity": 133167837.0
-            },
-            "2025-04_2025-12": {
-              "Statutory reserve": -71748360.0,
-              "Retained earnings (accumulated losses)": 337333162.0,
-              "Total equity": 265584802.0
-            },
-            "2024-04_2024-12": {
-              "Retained earnings (accumulated losses)": 197703048.0,
-              "Total equity": 197703048.0
-            },
-            "2025-04_2026-03": {
-              "Statutory reserve": -71748360.0,
-              "Retained earnings (accumulated losses)": 501128811.0,
-              "Total equity": 429380451.0
-            }
-          }
-        },
-        {
-          "label": "Equity balance at end of period",
-          "is_header": false,
-          "values": {
-            "2021-04_2022-03": {
-              "Share capital": 210000000.0,
-              "Statutory reserve": 35005488.0,
-              "Retained earnings (accumulated losses)": 269984640.0,
-              "Total equity": 514990128.0
-            },
-            "2020-04_2021-03": {
-              "Share capital": 210000000.0,
-              "Statutory reserve": 35005488.0,
-              "Retained earnings (accumulated losses)": 272611582.0,
-              "Total equity": 517617070.0
-            },
-            "2022-04_2022-12": {
-              "Share capital": 315000000.0,
-              "Statutory reserve": 35005488.0,
-              "Retained earnings (accumulated losses)": 228525580.0,
-              "Total equity": 578531068.0
-            },
-            "2021-04_2021-12": {
-              "Share capital": 210000000.0,
-              "Statutory reserve": 35005488.0,
-              "Retained earnings (accumulated losses)": 255221567.0,
-              "Total equity": 500227055.0
-            },
-            "2022-04_2023-03": {
-              "Share capital": 315000000.0,
-              "Statutory reserve": 44997572.0,
-              "Retained earnings (accumulated losses)": 255443234.0,
-              "Total equity": 615440806.0
-            },
-            "2023-04_2023-06": {
-              "Share capital": 315000000.0,
-              "Statutory reserve": 44997572.0,
-              "Retained earnings (accumulated losses)": 237188581.0,
-              "Total equity": 597186153.0
-            },
-            "2022-04_2022-06": {
-              "Share capital": 210000000.0,
-              "Statutory reserve": 35005488.0,
-              "Retained earnings (accumulated losses)": 276420812.0,
-              "Total equity": 521426300.0
-            },
-            "2023-04_2023-12": {
-              "Share capital": 315000000.0,
-              "Statutory reserve": 44997572.0,
-              "Retained earnings (accumulated losses)": 312727052.0,
-              "Total equity": 672724624.0
-            },
-            "2023-04_2024-03": {
-              "Share capital": 315000000.0,
-              "Statutory reserve": 71748360.0,
-              "Retained earnings (accumulated losses)": 465164886.0,
-              "Total equity": 851913246.0
-            },
-            "2024-04_2025-03": {
-              "Share capital": 315000000.0,
-              "Statutory reserve": 71748360.0,
-              "Retained earnings (accumulated losses)": 747698488.0,
-              "Total equity": 1134446848.0
-            },
-            "2025-04_2025-09": {
-              "Share capital": 315000000.0,
-              "Statutory reserve": 0.0,
-              "Retained earnings (accumulated losses)": 988924911.0,
-              "Total equity": 1303924911.0
-            },
-            "2024-04_2024-09": {
-              "Share capital": 315000000.0,
-              "Statutory reserve": 71748360.0,
-              "Retained earnings (accumulated losses)": 598332723.0,
-              "Total equity": 985081083.0
-            },
-            "2025-04_2025-12": {
-              "Share capital": 315000000.0,
-              "Statutory reserve": 0.0,
-              "Retained earnings (accumulated losses)": 1085031650.0,
-              "Total equity": 1400031650.0
-            },
-            "2024-04_2024-12": {
-              "Share capital": 315000000.0,
-              "Statutory reserve": 71748360.0,
-              "Retained earnings (accumulated losses)": 662867934.0,
-              "Total equity": 1049616294.0
-            },
-            "2025-04_2026-03": {
-              "Share capital": 315000000.0,
-              "Statutory reserve": 0.0,
-              "Retained earnings (accumulated losses)": 1248827299.0,
-              "Total equity": 1563827299.0
-            }
-          }
-        },
-        {
-          "label": "Statement of other comprehensive income, before tax",
-          "is_header": true,
-          "values": {}
-        },
-        {
-          "label": "Statement of comprehensive income",
-          "is_header": true,
-          "values": {}
-        },
-        {
-          "label": "Components of other comprehensive income that will not be reclassified to profit or loss",
-          "is_header": true,
-          "values": {}
-        },
-        {
-          "label": "Remeasurement gains (losses) on defined benefit plans",
-          "is_header": false,
-          "values": {
-            "2022-04_2022-06": 203362.0,
-            "2022-07_2022-09": 219697.0,
-            "2021-07_2021-09": 81928.0,
-            "2022-04_2022-09": 423059.0,
-            "2021-04_2021-09": 81928.0,
-            "2023-07_2023-09": 43051.0,
-            "2023-04_2023-09": 349657.0,
-            "2024-04_2024-06": -52334.0,
-            "2023-04_2023-06": 306606.0,
-            "2024-07_2024-09": -3623665.0,
-            "2024-04_2024-09": -3675999.0,
-            "2024-10_2024-12": -658537.0,
-            "2023-10_2023-12": 483216.0,
-            "2024-04_2024-12": -4334536.0,
-            "2023-04_2023-12": 832873.0,
-            "2025-04_2025-06": 343181.0
-          }
-        },
-        {
-          "label": "Total other comprehensive income that will not be reclassified to profit or loss",
-          "is_header": false,
-          "values": {
-            "2022-04_2022-06": 203362.0,
-            "2022-07_2022-09": 219697.0,
-            "2021-07_2021-09": 81928.0,
-            "2022-04_2022-09": 423059.0,
-            "2021-04_2021-09": 81928.0,
-            "2023-07_2023-09": 43051.0,
-            "2023-04_2023-09": 349657.0,
-            "2024-04_2024-06": -52334.0,
-            "2023-04_2023-06": 306606.0,
-            "2024-07_2024-09": -3623665.0,
-            "2024-04_2024-09": -3675999.0,
-            "2024-10_2024-12": -658537.0,
-            "2023-10_2023-12": 483216.0,
-            "2024-04_2024-12": -4334536.0,
-            "2023-04_2023-12": 832873.0,
-            "2025-04_2025-06": 343181.0
-          }
-        },
-        {
-          "label": "Total other comprehensive income (loss)",
-          "is_header": false,
-          "values": {
-            "2022-04_2022-06": 203362.0,
-            "2022-07_2022-09": 219697.0,
-            "2021-07_2021-09": 81928.0,
-            "2022-04_2022-09": 423059.0,
-            "2021-04_2021-09": 81928.0,
-            "2023-07_2023-09": 43051.0,
-            "2023-04_2023-09": 349657.0,
-            "2024-04_2024-06": -52334.0,
-            "2023-04_2023-06": 306606.0,
-            "2024-07_2024-09": -3623665.0,
-            "2024-04_2024-09": -3675999.0,
-            "2024-10_2024-12": -658537.0,
-            "2023-10_2023-12": 483216.0,
-            "2024-04_2024-12": -4334536.0,
-            "2023-04_2023-12": 832873.0,
-            "2025-04_2025-06": 343181.0
-          }
-        },
-        {
-          "label": "Total comprehensive income (loss) attributable to",
-          "is_header": true,
-          "values": {}
-        },
-        {
-          "label": "Total comprehensive income (loss), attributable to equity holders of parent",
-          "is_header": false,
-          "values": {
-            "2022-04_2022-06": 6436172.0,
-            "2021-04_2021-06": 2147886.0,
-            "2022-07_2022-09": 9444539.0,
-            "2021-07_2021-09": -792087.0,
-            "2022-04_2022-09": 15880711.0,
-            "2021-04_2021-09": 1355799.0,
-            "2023-07_2023-09": 20836406.0,
-            "2023-04_2023-09": 2581753.0,
-            "2024-04_2024-06": 71192367.0,
-            "2023-04_2023-06": -18254653.0,
-            "2024-07_2024-09": 109225470.0,
-            "2024-04_2024-09": 180417837.0,
-            "2024-10_2024-12": 111785211.0,
-            "2023-10_2023-12": 86202065.0,
-            "2024-04_2024-12": 292203048.0,
-            "2023-04_2023-12": 88783818.0,
-            "2025-04_2025-06": 90610531.0
-          }
-        },
-        {
-          "label": "Issue of equity",
-          "is_header": false,
-          "values": {
-            "2022-04_2022-12": {
-              "Share capital": 105000000.0,
-              "Total equity": 0.0,
-              "Retained earnings (accumulated losses)": -105000000.0
-            },
-            "2022-04_2023-03": {
-              "Share capital": 105000000.0,
-              "Retained earnings (accumulated losses)": -105000000.0,
-              "Total equity": 0.0
-            },
-            "2023-04_2023-06": {
-              "Share capital": 105000000.0,
-              "Total equity": 105000000.0
-            }
-          }
-        },
-        {
-          "label": "Final dividend paid",
-          "is_header": false,
-          "values": {
-            "2023-04_2023-12": {
-              "Retained earnings (accumulated losses)": 31500000.0,
-              "Total equity": 31500000.0
-            },
-            "2023-04_2024-03": {
-              "Retained earnings (accumulated losses)": 31500000.0,
-              "Total equity": 31500000.0
-            },
-            "2024-04_2025-03": {
-              "Retained earnings (accumulated losses)": 94500000.0,
-              "Total equity": 94500000.0
-            },
-            "2025-04_2025-09": {
-              "Retained earnings (accumulated losses)": 78750000.0,
-              "Total equity": 78750000.0
-            },
-            "2024-04_2024-09": {
-              "Retained earnings (accumulated losses)": 47250000.0,
-              "Total equity": 47250000.0
-            },
-            "2025-04_2025-12": {
-              "Retained earnings (accumulated losses)": 141750000.0,
-              "Total equity": 141750000.0
-            },
-            "2024-04_2024-12": {
-              "Retained earnings (accumulated losses)": 94500000.0,
-              "Total equity": 94500000.0
-            },
-            "2025-04_2026-03": {
-              "Retained earnings (accumulated losses)": 141750000.0,
-              "Total equity": 141750000.0
-            }
-          }
-        }
-      ],
-      "section_type": "equity_matrix",
-      "components": [
-        "Share capital",
-        "Share premium",
-        "Treasury shares",
-        "Statutory reserve",
-        "General reserve",
-        "Retained earnings (accumulated losses)",
-        "Asset revaluation reserve",
-        "Available-for-sale",
-        "Employee share based plan reserve",
-        "Reserve of exchange differences on translation",
-        "Cash flow hedges reserve",
-        "Reserve of disposal group held for distribution/ sale",
-        "Miscellaneous other reserves",
-        "Total other reserves",
-        "Equity attributable to owners of parent",
-        "Non-controlling interests",
-        "Total equity"
-      ]
-    },
     "standardized_income_statement": {
       "period_meta": [
         {
@@ -10485,9 +10485,9 @@
             "2022-06": 136840435.0,
             "2022-09": 223590736.0,
             "2022-12": 83421251.0,
-            "2023-03": 54094081.0,
+            "2023-03": 50979952.0,
             "2023-06": 110220832.0,
-            "2023-09": 226107432.0,
+            "2023-09": 221562245.0,
             "2023-12": 240786678.0,
             "2024-03": 113472028.0,
             "2024-06": 262425507.0,
@@ -12697,15 +12697,15 @@
             "2021-04_2021-09": 49108316.0,
             "2021-04_2021-12": 61812251.0,
             "2021-04_2022-03": 85557665.0,
-            "2022-04_2022-06": 42101372.0,
-            "2022-04_2022-09": 66831367.0,
+            "2022-04_2022-06": 40431119.0,
+            "2022-04_2022-09": 68599533.0,
             "2022-04_2022-12": 152844431.0,
             "2022-04_2023-03": 235892147.0,
             "2023-04_2023-06": 13519123.0,
             "2023-04_2023-09": 67573278.0,
             "2023-04_2023-12": 208905312.0,
             "2023-04_2024-03": 446453629.0,
-            "2024-04_2024-06": 109987085.0,
+            "2024-04_2024-06": 110991734.0,
             "2024-04_2024-09": 262165254.0,
             "2024-04_2024-12": 411717116.0,
             "2024-04_2025-03": 532496761.0,

@@ -432,6 +432,38 @@ def export_rs_hub_data(target_date: date = None):
             json.dump(output_json, f, ensure_ascii=False, indent=2)
             
         logger.info(f"✅ Successfully exported RS Hub data to {json_path}")
+        
+        # 11. رفع الملف إلى Cloudflare R2
+        r2_account_id = os.getenv("R2_ACCOUNT_ID")
+        r2_access_key = os.getenv("R2_ACCESS_KEY_ID")
+        r2_secret_key = os.getenv("R2_SECRET_ACCESS_KEY")
+        r2_bucket = os.getenv("R2_BUCKET_NAME", "lumivst-xbrl")
+        
+        if r2_account_id and r2_access_key and r2_secret_key:
+            logger.info("☁️ Uploading rs_data.json to Cloudflare R2...")
+            try:
+                import boto3
+                from botocore.config import Config
+                endpoint_url = f"https://{r2_account_id}.r2.cloudflarestorage.com"
+                s3_client = boto3.client(
+                    "s3",
+                    endpoint_url=endpoint_url,
+                    aws_access_key_id=r2_access_key,
+                    aws_secret_access_key=r2_secret_key,
+                    config=Config(signature_version="s3v4"),
+                )
+                s3_client.upload_file(
+                    Filename=str(json_path),
+                    Bucket=r2_bucket,
+                    Key="rs/rs_data.json",
+                    ExtraArgs={"ContentType": "application/json"}
+                )
+                logger.info(f"✅ Successfully uploaded rs_data.json to R2 bucket '{r2_bucket}' at key 'rs/rs_data.json'")
+            except Exception as e:
+                logger.error(f"❌ Failed to upload rs_data.json to R2: {e}")
+        else:
+            logger.info("ℹ️ R2 credentials not found in env, skipping R2 upload.")
+            
         return True
 
 if __name__ == "__main__":

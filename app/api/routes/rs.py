@@ -95,10 +95,60 @@ async def get_latest_rs(
 
 @router.get("/latest_hub")
 @router.get("/latest_hub/")
+@router.get("/latest_hub/")
 async def get_latest_hub():
     """
     Returns the unified rs_data.json cached file for the RS Rating Hub.
+    Attempts to fetch from R2 (using Redis cache to avoid constant downloading) if configured.
+    Falls back to local file system.
     """
+    r2_account_id = os.getenv("R2_ACCOUNT_ID")
+    r2_access_key = os.getenv("R2_ACCESS_KEY_ID")
+    r2_secret_key = os.getenv("R2_SECRET_ACCESS_KEY")
+    r2_bucket = os.getenv("R2_BUCKET_NAME", "lumivst-xbrl")
+    
+    # 1. Try fetching from R2 with Redis cache to maximize performance
+    if r2_account_id and r2_access_key and r2_secret_key:
+        cache_key = "rs_hub:latest_data"
+        try:
+            from app.core.redis import redis_cache
+            # Try to get cached data from Redis
+            if redis_cache.is_connected or await redis_cache.ensure_connection():
+                cached_data = await redis_cache.get(cache_key)
+                if cached_data:
+                    return JSONResponse(content=cached_data)
+        except Exception as cache_err:
+            logger.warning(f"Redis cache fetch failed for RS Hub: {cache_err}")
+            
+        # Download from R2
+        try:
+            import boto3
+            import json
+            from botocore.config import Config
+            endpoint_url = f"https://{r2_account_id}.r2.cloudflarestorage.com"
+            s3_client = boto3.client(
+                "s3",
+                endpoint_url=endpoint_url,
+                aws_access_key_id=r2_access_key,
+                aws_secret_access_key=r2_secret_key,
+                config=Config(signature_version="s3v4"),
+            )
+            response = s3_client.get_object(Bucket=r2_bucket, Key="rs/rs_data.json")
+            data = json.loads(response['Body'].read().decode('utf-8'))
+            
+            # Cache in Redis for 10 minutes (600 seconds)
+            try:
+                from app.core.redis import redis_cache
+                if redis_cache.is_connected or await redis_cache.ensure_connection():
+                    await redis_cache.set(cache_key, data, expire=600)
+            except Exception:
+                pass
+                
+            return JSONResponse(content=data)
+        except Exception as r2_err:
+            logger.error(f"Failed to fetch rs_data.json from R2: {r2_err}. Falling back to local file.")
+
+    # 2. Local Fallback
     json_path = Path(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))) / "static" / "rs_data.json"
     if json_path.exists():
         with open(json_path, "r", encoding="utf-8") as f:
