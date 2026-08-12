@@ -1,167 +1,242 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Request
-from sqlalchemy.orm import Session
-from typing import List
 from datetime import datetime
+from typing import List
 
+from fastapi import APIRouter, Depends, HTTPException, Request, status
+from sqlalchemy.orm import Session
+
+from app.api.deps import get_current_admin
+from app.core.auth import invalidate_all_sessions
 from app.core.database import get_db
+from app.core.limiter import limiter
+from app.core.redis import redis_cache
 from app.models.user import User
 from app.schemas.auth import UserResponse
-from app.api.deps import get_current_admin
-from app.core.redis import redis_cache
-from app.core.limiter import limiter
 
 router = APIRouter(prefix="/admin", tags=["Admin"])
 
+
 @router.get("/users", response_model=List[UserResponse])
 async def list_users(
-    skip: int = 0, 
-    limit: int = 100, 
+    skip: int = 0,
+    limit: int = 100,
     approved: bool = None,
     current_admin: User = Depends(get_current_admin),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """عرض قائمة المستخدمين (للمدير فقط)"""
+    _ = current_admin
     query = db.query(User)
-    
     if approved is not None:
         query = query.filter(User.is_approved == approved)
-        
-    users = query.offset(skip).limit(limit).all()
+    users = query.offset(skip).limit(min(limit, 500)).all()
     return users
+
 
 @router.get("/pending-users", response_model=List[UserResponse])
 async def get_pending_users(
     skip: int = 0,
     limit: int = 100,
     current_admin: User = Depends(get_current_admin),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """عرض المستخدمين المنتظرين للموافقة"""
-    users = db.query(User).filter(User.is_approved == False).offset(skip).limit(limit).all()
+    _ = current_admin
+    users = (
+        db.query(User)
+        .filter(User.is_approved == False)  # noqa: E712
+        .offset(skip)
+        .limit(min(limit, 500))
+        .all()
+    )
     return users
 
+
 @router.post("/approve-user/{user_id}")
-@limiter.limit("10/minute")  # Rate limit: 10 approvals per minute
+@limiter.limit("10/minute")
 async def approve_user(
     request: Request,
     user_id: int,
     current_admin: User = Depends(get_current_admin),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """موافقة المدير على مستخدم"""
+    _ = request
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-    
+
     if user.is_approved:
         return {"message": "User is already approved"}
-    
+
     user.is_approved = True
     user.approved_at = datetime.utcnow()
     user.approved_by = current_admin.id
-    
     db.commit()
-    
-    # Notify connected SSE clients
+
     await redis_cache.publish(f"user_approval_{user.id}", "approved")
-    
-    # Send email notification could go here
-    
     return {"message": f"User {user.email} approved successfully"}
 
+
 @router.delete("/users/{user_id}")
-@limiter.limit("5/minute")  # Rate limit: 5 deletions per minute
+@limiter.limit("5/minute")
 async def delete_user(
     request: Request,
     user_id: int,
     current_admin: User = Depends(get_current_admin),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """حذف مستخدم معين (للمدير فقط)"""
+    _ = request
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="المستخدم غير موجود")
-    
-    # Optional: Prevent deleting self?
-    if user.id == current_admin.id:
-         raise HTTPException(status_code=400, detail="لا يمكنك حذف حسابك الخاص من هنا")
 
+    if user.id == current_admin.id:
+        raise HTTPException(status_code=400, detail="لا يمكنك حذف حسابك الخاص من هنا")
+
+    if user.is_admin:
+        admin_count = db.query(User).filter(User.is_admin == True).count()  # noqa: E712
+        if admin_count <= 1:
+            raise HTTPException(
+                status_code=400,
+                detail="لا يمكن حذف آخر حساب مدير في النظام",
+            )
+
+    email = user.email
     db.delete(user)
     db.commit()
-    
-    # Invalidate token
-    from app.core.auth import invalidate_token
-    await invalidate_token(user_id)
-    
-    return {"message": f"تم حذف المستخدم {user.email} بنجاح"}
+    await invalidate_all_sessions(user_id)
+    return {"message": f"تم حذف المستخدم {email} بنجاح"}
+
+
+@router.post("/users/{user_id}/unlock")
+@limiter.limit("10/minute")
+async def unlock_user(
+    request: Request,
+    user_id: int,
+    current_admin: User = Depends(get_current_admin),
+    db: Session = Depends(get_db),
+):
+    """إلغاء قفل حساب مستخدم بعد محاولات فاشلة"""
+    _ = request
+    _ = current_admin
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    user.is_locked = False
+    user.locked_until = None
+    user.failed_login_attempts = 0
+    db.commit()
+    return {"message": f"User {user.email} unlocked"}
+
 
 @router.post("/refresh-data")
-@limiter.limit("3/minute")  # Rate limit: 3 refreshes per minute (expensive operation)
-async def refresh_stock_data(request: Request, page: int = 1, limit: int = 50, db: Session = Depends(get_db), current_admin: User = Depends(get_current_admin)):
-    """إجبار النظام على تحديث البيانات من API"""
+@limiter.limit("3/minute")
+async def refresh_stock_data(
+    request: Request,
+    page: int = 1,
+    limit: int = 50,
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(get_current_admin),
+):
+    """مسح كاش الأسهم وإرجاع إحصائيات الكاش (لا يعتمد على stock_cache القديم)."""
+    _ = request
+    _ = db
+    _ = current_admin
+    _ = page
     try:
-        # مسح الكاش أولاً
-        await stock_cache.clear_all_cache() 
-        
-        # جلب بيانات جديدة من API
-        api_data = await stock_cache.get_stocks(page=page, limit=limit) 
-        
-        if api_data and api_data.get("data"):
-            return {
-                "message": f"✅ تم تحديث بيانات {len(api_data['data'])} سهم",
-                "stocks_updated": len(api_data["data"]), 
-                "page": page,
-                "limit": limit
-            }
-        else:
-            raise HTTPException(status_code=500, detail="❌ فشل في جلب البيانات من API")
-            
+        stock_keys = await redis_cache.keys("tadawul_stocks:*")
+        deleted = 0
+        for key in stock_keys:
+            if await redis_cache.delete(key):
+                deleted += 1
+
+        # Also clear common tadawul bulk keys
+        tadawul_keys = await redis_cache.keys("tadawul:*")
+        for key in tadawul_keys:
+            if await redis_cache.delete(key):
+                deleted += 1
+
+        return {
+            "message": f"✅ تم مسح كاش الأسهم ({deleted} مفتاح)",
+            "keys_deleted": deleted,
+            "page": page,
+            "limit": limit,
+        }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"❌ خطأ في تحديث البيانات: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"❌ خطأ في تحديث البيانات: {type(e).__name__}",
+        )
+
 
 @router.get("/stats")
-async def get_system_stats(db: Session = Depends(get_db), current_admin: User = Depends(get_current_admin)):
+async def get_system_stats(
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(get_current_admin),
+):
     """إحصائيات النظام"""
+    _ = current_admin
     try:
-        # جلب إحصائيات من الـ cache
-        all_stocks_data = await stock_cache.get_all_stocks() 
-        total_stocks = all_stocks_data.get("total", 0) 
-        
-        # جلب إحصائيات من قاعدة البيانات لو محتاج
-        db_stats = {
-            "total_stocks": total_stocks,
+        total_users = db.query(User).count()
+        pending_users = db.query(User).filter(User.is_approved == False).count()  # noqa: E712
+        stock_keys = await redis_cache.keys("tadawul_stocks:*")
+        redis_ok = bool(redis_cache.is_connected)
+
+        return {
+            "total_users": total_users,
+            "pending_users": pending_users,
+            "cached_stock_keys": len(stock_keys),
             "database": "PostgreSQL",
-            "cache": "Redis", 
-            "data_source": "TwelveData API (Profile + Quote)",
-            "cache_strategy": "Redis → PostgreSQL → API"
+            "cache": "Redis" if redis_ok else "Redis (disconnected)",
+            "redis_connected": redis_ok,
         }
-        
-        return db_stats
-        
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"❌ خطأ في جلب إحصائيات النظام: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"❌ خطأ في جلب إحصائيات النظام: {type(e).__name__}",
+        )
+
 
 @router.post("/force-api-refresh/{symbol}")
-@limiter.limit("10/minute")  # Rate limit: 10 symbol refreshes per minute
-async def force_api_refresh(request: Request, symbol: str, current_admin: User = Depends(get_current_admin)):
-    """إجبار تحديث بيانات سهم معين من API"""
+@limiter.limit("10/minute")
+async def force_api_refresh(
+    request: Request,
+    symbol: str,
+    current_admin: User = Depends(get_current_admin),
+):
+    """مسح كاش سهم محدد لإجبار إعادة الجلب في الطلب التالي."""
+    _ = request
+    _ = current_admin
     try:
-        # مسح كاش السهم المحدد
-        cache_key = f"tadawul_stocks:symbol:{symbol}"
-        await redis_cache.delete(cache_key)
-        
-        # جلب بيانات جديدة من API
-        stock_data = await stock_cache.get_stock_by_symbol(symbol) 
-        
-        if stock_data:
-            return {
-                "message": f"✅ تم تحديث بيانات السهم {symbol} بنجاح",
-                "symbol": symbol,
-                "name": stock_data.get("name"),
-                "price": stock_data.get("price")
-            }
-        else:
-            raise HTTPException(status_code=404, detail=f"❌ لم يتم العثور على السهم {symbol}")
-            
+        clean = "".join(ch for ch in symbol if ch.isalnum()).upper()
+        if not clean or len(clean) > 32:
+            raise HTTPException(status_code=400, detail="Invalid symbol")
+
+        patterns = [
+            f"tadawul_stocks:symbol:{clean}*",
+            f"tadawul:*:{clean}*",
+            f"financials:*:{clean}:*",
+        ]
+        deleted = 0
+        for pattern in patterns:
+            keys = await redis_cache.keys(pattern)
+            for key in keys:
+                if await redis_cache.delete(key):
+                    deleted += 1
+
+        # Exact common key form used elsewhere
+        await redis_cache.delete(f"tadawul_stocks:symbol:{clean}")
+
+        return {
+            "message": f"✅ تم مسح كاش السهم {clean}",
+            "symbol": clean,
+            "keys_deleted": deleted,
+        }
+    except HTTPException:
+        raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"❌ خطأ في تحديث بيانات السهم: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"❌ خطأ في تحديث بيانات السهم: {type(e).__name__}",
+        )

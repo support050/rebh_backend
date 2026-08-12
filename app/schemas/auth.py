@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, ConfigDict, EmailStr
 from typing import Optional
 
 class Token(BaseModel):
@@ -24,20 +24,23 @@ class UserUpdate(BaseModel):
     current_password: Optional[str] = None
 
 class UserResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     email: EmailStr
-    full_name: str
-    
+    full_name: Optional[str] = None
     is_verified: bool
     is_approved: bool = False
     is_admin: bool = False
-    
-    class Config:
-        from_attributes = True
 
 class ForgetPasswordRequest(BaseModel):
     email: EmailStr
 
 class ResetPasswordRequest(BaseModel):
     token: str
+    password: str
+
+class OAuthConfirmLinkRequest(BaseModel):
+    """Prove control of an existing password account before linking OAuth."""
+    link_token: str
     password: str

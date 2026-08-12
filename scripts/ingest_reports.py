@@ -5,6 +5,7 @@ import os
 
 # API Configuration
 API_URL = "http://localhost:8000/api/ingest/official-reports"
+INTERNAL_API_KEY = os.getenv("INTERNAL_API_KEY", "")
 # Determine absolute path to data file
 script_dir = os.path.dirname(os.path.abspath(__file__))
 # Assumes script is in backend/scripts, so we go .. -> data
@@ -15,6 +16,10 @@ def ingest_data(symbol, lang='en'):
     
     if not os.path.exists(JSON_FILE_PATH):
         print(f"❌ File {JSON_FILE_PATH} not found. Please run the scraper first.")
+        return
+
+    if not INTERNAL_API_KEY:
+        print("❌ INTERNAL_API_KEY is not set. Refusing to call ingest without a key.")
         return
 
     with open(JSON_FILE_PATH, 'r', encoding='utf-8') as f:
@@ -29,7 +34,11 @@ def ingest_data(symbol, lang='en'):
     print(f"🚀 Sending data to API for Symbol: {symbol}...")
     
     try:
-        response = requests.post(API_URL, json=payload)
+        response = requests.post(
+            API_URL,
+            json=payload,
+            headers={"X-Internal-Key": INTERNAL_API_KEY},
+        )
         response.raise_for_status()
         print("✅ Success! Server Response:")
         print(json.dumps(response.json(), indent=2, ensure_ascii=False))

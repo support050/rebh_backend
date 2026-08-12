@@ -15,6 +15,7 @@ import json
 
 from app.core.database import get_db
 from app.core.redis import redis_cache
+from app.core.security import verify_internal_key
 from app.models.scraped_reports import Company, FinancialReport, ExcelReport, PeriodType, ReportType
 from app.schemas.scraped_financials import (
     IngestRequest, IngestResponse, BulkIngestRequest, BulkIngestResponse,
@@ -37,7 +38,8 @@ os.makedirs(EXCEL_STORAGE_PATH, exist_ok=True)
 @router.post("/ingest", response_model=IngestResponse)
 async def ingest_scraped_data(
     request: IngestRequest,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _auth: bool = Depends(verify_internal_key),
 ):
     """
     Receives scraped data from the Playwright script and saves to PostgreSQL.
@@ -151,18 +153,21 @@ async def ingest_scraped_data(
 @router.post("/ingest/bulk", response_model=BulkIngestResponse)
 async def bulk_ingest_scraped_data(
     request: BulkIngestRequest,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _auth: bool = Depends(verify_internal_key),
 ):
     """
     Bulk ingestion for multiple companies at once.
     Useful when scraping many companies in a batch.
     """
+    _ = _auth
     total_processed = 0
     failed = []
     
     for company_request in request.companies:
         try:
-            result = await ingest_scraped_data(company_request, db)
+            # Auth already verified for this request; pass True for internal call
+            result = await ingest_scraped_data(company_request, db, True)
             total_processed += result.reports_processed
         except Exception as e:
             failed.append(company_request.company_symbol)
@@ -326,12 +331,14 @@ async def upload_excel_file(
     file: UploadFile = File(..., description="Excel file to upload"),
     company_symbol: str = Form(..., description="Company symbol"),
     description: Optional[str] = Form(None, description="Optional description"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _auth: bool = Depends(verify_internal_key),
 ):
     """
     Accepts an Excel file upload and saves it to storage.
     Records metadata in the excel_reports table.
     """
+    _ = _auth
     try:
         # Validate file type
         allowed_extensions = ['.xlsx', '.xls', '.xlsm']

@@ -1,150 +1,134 @@
-from fastapi import APIRouter, HTTPException, Query
-from app.core.redis import redis_cache
+from fastapi import APIRouter, Depends, HTTPException, Query
 
-import asyncio
+from app.api.deps import get_current_admin
+from app.core.redis import redis_cache
+from app.models.user import User
 
 router = APIRouter(prefix="/cache", tags=["Cache Management"])
 
-@router.post("/clear/all")
-async def clear_all_cache():
-    """مسح كل الكاش"""
-    try:
-        await redis_cache.flush_all()
-        return {"message": "✅ تم مسح كل الكاش بنجاح"}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"خطأ في مسح الكاش: {str(e)}")
+# Auth allowlist / OAuth / verification key prefixes — never deleted by cache clears
+_PROTECTED_KEY_PREFIXES = (
+    "access_token:",
+    "access_jti:",
+    "refresh_token:",
+    "refresh_jti:",
+    "session_index:",
+    "oauth_state:",
+    "oauth_link:",
+    "verify_token:",
+    "reset_token:",
+)
+
+
+def _is_protected_key(key: str) -> bool:
+    return any(key.startswith(p) for p in _PROTECTED_KEY_PREFIXES)
+
+
+async def _delete_matching(patterns: list) -> int:
+    deleted = 0
+    for pattern in patterns:
+        keys = await redis_cache.keys(pattern)
+        for key in keys:
+            if _is_protected_key(key):
+                continue
+            if await redis_cache.delete(key):
+                deleted += 1
+    return deleted
+
 
 @router.post("/clear/stocks")
-async def clear_stocks_cache():
-    """مسح كاش الأسهم"""
+async def clear_stocks_cache(current_admin: User = Depends(get_current_admin)):
+    """مسح كاش الأسهم فقط (بدون FLUSHALL)."""
+    _ = current_admin
     try:
-        # مسح كل مفاتيح الأسهم من Redis
-        keys = await redis_cache.keys("tadawul_stocks:*")
-        deleted = 0
-        for key in keys:
-            deleted += await redis_cache.delete(key)
-        return {"message": f"✅ تم مسح كاش الأسهم بنجاح ({deleted} مفتاح)"}
+        deleted = await _delete_matching(["tadawul_stocks:*", "tadawul:*"])
+        return {"message": f"✅ تم مسح كاش الأسهم بنجاح ({deleted} مفتاح)", "deleted_count": deleted}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"خطأ في مسح كاش الأسهم: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"خطأ في مسح كاش الأسهم: {type(e).__name__}")
+
 
 @router.post("/clear/financials")
 async def clear_financial_cache(
-    symbol: str = Query(None, description="رمز سهم واحد أو رموز متعددة مفصولة بفواصل")
+    symbol: str = Query(None, description="رمز سهم واحد أو رموز متعددة مفصولة بفواصل"),
+    current_admin: User = Depends(get_current_admin),
 ):
     """مسح كاش البيانات المالية لرمز أو رموز محددة"""
+    _ = current_admin
     try:
         if symbol:
-            # مسح كاش رموز محددة
-            symbols = [s.strip() for s in symbol.split(',')]
-            deleted = 0
-            for sym in symbols:
-                pattern = f"financials:*:{sym}:*"
-                keys = await redis_cache.keys(pattern)
-                for key in keys:
-                    deleted += await redis_cache.delete(key)
-            
-            if len(symbols) > 1:
-                message = f"✅ تم مسح كاش البيانات المالية لـ {len(symbols)} رمز"
-            else:
-                message = f"✅ تم مسح كاش البيانات المالية لـ {symbol}"
+            symbols = [s.strip() for s in symbol.split(",")]
+            patterns = [f"financials:*:{sym}:*" for sym in symbols]
+            deleted = await _delete_matching(patterns)
+            message = f"✅ تم مسح كاش البيانات المالية لـ {len(symbols)} رمز"
         else:
-            # مسح كل كاش البيانات المالية
-            keys = await redis_cache.keys("financials:*")
-            deleted = 0
-            for key in keys:
-                deleted += await redis_cache.delete(key)
+            deleted = await _delete_matching(["financials:*"])
             message = "✅ تم مسح كاش البيانات المالية بالكامل"
-            
         return {"message": message, "deleted_count": deleted}
     except Exception as e:
-        print(f"❌ خطأ في مسح كاش البيانات المالية: {e}")
-        raise HTTPException(status_code=500, detail=f"خطأ في مسح كاش البيانات المالية: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"خطأ في مسح كاش البيانات المالية: {type(e).__name__}")
+
 
 @router.get("/status")
-async def cache_status():
+async def cache_status(current_admin: User = Depends(get_current_admin)):
     """الحصول على حالة الكاش"""
+    _ = current_admin
     try:
-        # اختبار اتصال Redis
         is_connected = redis_cache.redis_client is not None
         if is_connected:
             try:
                 await redis_cache.redis_client.ping()
                 status = "connected"
-            except:
+            except Exception:
                 status = "disconnected"
         else:
             status = "disconnected"
-        
+
         return {
             "redis_status": status,
-            "message": "✅ نظام الكاش يعمل بشكل طبيعي" if status == "connected" else "❌ نظام الكاش غير متاح"
+            "message": "✅ نظام الكاش يعمل بشكل طبيعي" if status == "connected" else "❌ نظام الكاش غير متاح",
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"خطأ في التحقق من حالة الكاش: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"خطأ في التحقق من حالة الكاش: {type(e).__name__}")
+
 
 @router.delete("/clear/symbols")
 async def clear_specific_symbols_cache(
     symbols: str = Query(..., description="رموز الأسهم مفصولة بفواصل"),
+    current_admin: User = Depends(get_current_admin),
 ):
     """مسح كاش رموز محددة من Redis"""
+    _ = current_admin
     try:
         symbol_list = [s.strip() for s in symbols.split(",")]
-        
-        cleared_count = 0
+        patterns = []
         for symbol in symbol_list:
-            clean_sym = ''.join(filter(str.isdigit, symbol)).upper()
-            
-            # مسح من Redis للأسهم
-            cache_key = f"tadawul_stocks:symbol:{clean_sym}:country:Saudi Arabia"
-            await redis_cache.delete(cache_key)
-            
-            # مسح كاش البيانات المالية
-            fin_keys = await redis_cache.keys(f"financials:*:{clean_sym}:*")
-            for key in fin_keys:
-                await redis_cache.delete(key)
-            
-            cleared_count += 1
-            print(f"🧹 تم مسح كاش {clean_sym}")
-        
+            clean_sym = "".join(filter(str.isdigit, symbol)).upper()
+            if not clean_sym:
+                continue
+            patterns.append(f"tadawul_stocks:symbol:{clean_sym}*")
+            patterns.append(f"financials:*:{clean_sym}:*")
+        deleted = await _delete_matching(patterns)
         return {
-            "message": f"✅ تم مسح كاش {cleared_count} رمز",
+            "message": f"✅ تم مسح كاش {len(symbol_list)} رمز",
             "cleared_symbols": symbol_list,
+            "deleted_count": deleted,
         }
-        
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"خطأ في مسح الكاش: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"خطأ في مسح الكاش: {type(e).__name__}")
+
 
 @router.get("/stats")
-async def cache_stats():
+async def cache_stats(current_admin: User = Depends(get_current_admin)):
     """إحصائيات الكاش"""
+    _ = current_admin
     try:
-        # جلب كل مفاتيح الـ stocks
         stock_keys = await redis_cache.keys("tadawul_stocks:*")
         financial_keys = await redis_cache.keys("financials:*")
-        
-        # تصنيف المفاتيح
-        symbol_keys = [k for k in stock_keys if "symbol:" in k]
-        bulk_keys = [k for k in stock_keys if "bulk:" in k]
-        page_keys = [k for k in stock_keys if "page:" in k]
-        all_keys = [k for k in stock_keys if "all:" in k]
-        
-        # مفاتيح البيانات المالية
-        income_keys = [k for k in financial_keys if "income:" in k]
-        balance_keys = [k for k in financial_keys if "balance:" in k]
-        cashflow_keys = [k for k in financial_keys if "cashflow:" in k]
-        
         return {
             "total_stock_keys": len(stock_keys),
-            "symbol_keys": len(symbol_keys),
-            "bulk_keys": len(bulk_keys),
-            "page_keys": len(page_keys),
-            "all_keys": len(all_keys),
             "total_financial_keys": len(financial_keys),
-            "income_keys": len(income_keys),
-            "balance_keys": len(balance_keys),
-            "cashflow_keys": len(cashflow_keys),
             "sample_stock_keys": stock_keys[:3],
-            "sample_financial_keys": financial_keys[:3]
+            "sample_financial_keys": financial_keys[:3],
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"خطأ في جلب إحصائيات الكاش: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"خطأ في جلب إحصائيات الكاش: {type(e).__name__}")

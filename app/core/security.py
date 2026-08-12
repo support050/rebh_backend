@@ -1,16 +1,30 @@
-from fastapi import Depends, HTTPException, Header
-import os
+from fastapi import Header, HTTPException, status
 
-def verify_internal_key(x_internal_key: str = Header(..., alias="X-Internal-Key")):
+from app.core.config import settings
+
+
+def verify_internal_key(x_internal_key: str | None = Header(None, alias="X-Internal-Key")):
     """
-    Dependency to verify internal API key for scrape endpoints.
-    Compares the X-Internal-Key header with INTERNAL_API_KEY environment variable.
+    Dependency to verify internal API key for scrape/ingest endpoints.
+    Never logs the presented or configured key.
     """
-    expected_key = os.getenv("INTERNAL_API_KEY")
+    expected_key = settings.INTERNAL_API_KEY
     if not expected_key:
-        raise HTTPException(status_code=500, detail="Internal API key not configured")
-    
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Internal API key not configured",
+        )
+
+    if not x_internal_key:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Internal API key required",
+        )
+
     if x_internal_key != expected_key:
-        raise HTTPException(status_code=403, detail="Invalid internal API key")
-    
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Invalid internal API key",
+        )
+
     return True

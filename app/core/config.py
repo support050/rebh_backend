@@ -1,56 +1,143 @@
 # app/core/config.py
+"""Centralized, validated application settings. Fails fast on missing required secrets."""
+
+from __future__ import annotations
 
 import logging
-import os
-from dotenv import load_dotenv
+from functools import lru_cache
+from typing import List
 
-load_dotenv()
+from pydantic import Field, field_validator, model_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 logger = logging.getLogger(__name__)
 
-class Settings:
-    def __init__(self):
-        self.DATABASE_URL = os.getenv("DATABASE_URL")
-        self.REDIS_URL = os.getenv("REDIS_URL")
-        self.CACHE_EXPIRE_SECONDS = int(os.getenv("CACHE_EXPIRE_SECONDS", "300"))
-        self.STOCK_PRICE_CACHE_SECONDS = int(os.getenv("STOCK_PRICE_CACHE_SECONDS", "300"))
-        self.API_KEY = os.getenv("TWELVE_DATA_API_KEY")
-        self.BASE_URL = "https://api.twelvedata.com"
-        
-        # إعدادات إضافية مهمة للإنتاج
-        self.DEBUG = os.getenv("DEBUG", "False").lower() == "true"
-        self.ENVIRONMENT = os.getenv("ENVIRONMENT", "production")
 
-        # ⚠️ تحديث الـ CORS للإنتاج
-        allowed_origins_str = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000,https://www.rebh.ai,https://rebh.ai")
-        if self.DEBUG:
-            self.ALLOWED_ORIGINS = ["*"]
+class Settings(BaseSettings):
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        case_sensitive=True,
+        extra="ignore",
+        populate_by_name=True,
+    )
+
+    # ── Required infrastructure ──────────────────────────────────────────
+    DATABASE_URL: str
+    REDIS_URL: str
+    SECRET_KEY: str = Field(min_length=32)
+
+    # ── Environment ──────────────────────────────────────────────────────
+    DEBUG: bool = False
+    ENVIRONMENT: str = "production"
+
+    # ── JWT ──────────────────────────────────────────────────────────────
+    JWT_ALGORITHM: str = "HS256"
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 15
+    REFRESH_TOKEN_EXPIRE_DAYS: int = 14
+
+    # ── CORS / URLs (comma-separated in env) ─────────────────────────────
+    ALLOWED_ORIGINS_RAW: str = Field(
+        default="http://localhost:3000,http://127.0.0.1:3000",
+        validation_alias="ALLOWED_ORIGINS",
+    )
+    FRONTEND_URL: str = "http://localhost:3000"
+
+    # ── Cache ────────────────────────────────────────────────────────────
+    CACHE_EXPIRE_SECONDS: int = 300
+    STOCK_PRICE_CACHE_SECONDS: int = 300
+
+    # ── External APIs ────────────────────────────────────────────────────
+    TWELVE_DATA_API_KEY: str | None = None
+    INTERNAL_API_KEY: str | None = None
+    BASE_URL: str = "https://api.twelvedata.com"
+
+    # ── SMTP ─────────────────────────────────────────────────────────────
+    SMTP_SERVER: str = "smtp.gmail.com"
+    SMTP_PORT: int = 587
+    SMTP_USER: str = ""
+    SMTP_PASSWORD: str = ""
+    FROM_EMAIL: str = "noreply@rebh.ai"
+    SMTP_USE_TLS: bool = True
+    SMTP_TIMEOUT_SECONDS: int = 30
+
+    # ── OAuth ────────────────────────────────────────────────────────────
+    GOOGLE_CLIENT_ID: str | None = None
+    GOOGLE_CLIENT_SECRET: str | None = None
+    FACEBOOK_CLIENT_ID: str | None = None
+    FACEBOOK_CLIENT_SECRET: str | None = None
+
+    # ── Brute-force / session security ───────────────────────────────────
+    MAX_FAILED_LOGIN_ATTEMPTS: int = 5
+    LOCKOUT_DURATION_MINUTES: int = 30
+    MAX_CONCURRENT_SESSIONS: int = 5
+    REFRESH_LOCK_TTL_SECONDS: int = 10
+
+    # ── Password reset / verification ────────────────────────────────────
+    RESET_TOKEN_EXPIRE_MINUTES: int = 15
+    VERIFICATION_TOKEN_EXPIRE_MINUTES: int = 60
+
+    @field_validator("SECRET_KEY")
+    @classmethod
+    def secret_key_strength(cls, v: str) -> str:
+        weak = {"changeme", "secret", "dev", "test", "your-secret-key"}
+        if v.strip().lower() in weak:
+            raise ValueError("SECRET_KEY is too weak")
+        return v
+
+    @field_validator("ENVIRONMENT")
+    @classmethod
+    def normalize_environment(cls, v: str) -> str:
+        return (v or "production").lower()
+
+    @model_validator(mode="after")
+    def validate_production_security(self) -> "Settings":
+        origins = [o.strip() for o in self.ALLOWED_ORIGINS_RAW.split(",") if o.strip()]
+
+        if self.ENVIRONMENT == "production":
+            if self.DEBUG:
+                raise ValueError(
+                    "Invalid configuration: DEBUG must be False when ENVIRONMENT=production"
+                )
+            if not origins or "*" in origins:
+                raise ValueError(
+                    "Invalid configuration: ALLOWED_ORIGINS must be an explicit "
+                    "non-wildcard list when ENVIRONMENT=production"
+                )
+            key = (self.INTERNAL_API_KEY or "").strip()
+            weak_internal = {"changeme", "secret", "dev", "test", "internal", "your-internal-api-key"}
+            if not key or len(key) < 16 or key.lower() in weak_internal:
+                raise ValueError(
+                    "Invalid configuration: INTERNAL_API_KEY must be set to a strong "
+                    "value (min 16 chars) when ENVIRONMENT=production"
+                )
+        elif self.DEBUG and "*" in origins:
             logger.warning(
-                "SECURITY: DEBUG=True sets ALLOWED_ORIGINS=['*']. "
-                "This is incompatible with allow_credentials=True in production. "
-                "Never deploy with DEBUG=True."
+                "SECURITY: ALLOWED_ORIGINS contains '*' while DEBUG=True. "
+                "Do not use wildcard origins with credentialed cookies."
             )
-        else:
-            # CORS origins = frontend domains that call the API (not the backend URL itself).
-            # Set ALLOWED_ORIGINS env on Render, e.g. https://rebh.ai,https://www.rebh.ai,<vercel-url>
-            self.ALLOWED_ORIGINS = [origin.strip() for origin in allowed_origins_str.split(",") if origin.strip()]
+        return self
 
-        # Email Settings
-        self.SMTP_SERVER = os.getenv("SMTP_SERVER", "smtp.gmail.com")
-        self.SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
-        self.SMTP_USER = os.getenv("SMTP_USER", "")
-        self.SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "")
-        self.FROM_EMAIL = os.getenv("FROM_EMAIL", "noreply@rebh.ai")
+    @property
+    def ALLOWED_ORIGINS(self) -> List[str]:
+        """
+        Explicit origin list only. Never expands to ['*'] based on DEBUG.
+        Production wildcard is rejected at settings validation time.
+        """
+        origins = [o.strip() for o in self.ALLOWED_ORIGINS_RAW.split(",") if o.strip()]
+        if self.ENVIRONMENT == "production" and ("*" in origins or not origins):
+            # Defense in depth if raw value is mutated after init
+            raise RuntimeError("Refusing permissive CORS in production")
+        return origins
 
-        # Social Login
-        self.GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
-        self.GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET")
-        self.FACEBOOK_CLIENT_ID = os.getenv("FACEBOOK_CLIENT_ID")
-        self.FACEBOOK_CLIENT_SECRET = os.getenv("FACEBOOK_CLIENT_SECRET")
-        
-        # Frontend URL for OAuth redirects
-        self.FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
-
-settings = Settings()
+    @property
+    def API_KEY(self) -> str | None:
+        return self.TWELVE_DATA_API_KEY
 
 
+@lru_cache
+def get_settings() -> Settings:
+    return Settings()
+
+
+settings = get_settings()

@@ -118,7 +118,7 @@ protected_dependencies = [Depends(get_current_user)]
 admin_dependencies = [Depends(get_current_admin)]
 
 app.include_router(stocks.router, dependencies=protected_dependencies)
-app.include_router(cache.router, dependencies=protected_dependencies)
+app.include_router(cache.router, dependencies=admin_dependencies)
 
 app.include_router(rs.router, prefix="/api", dependencies=protected_dependencies)  # RS V1 endpoints
 app.include_router(rs_v2.router, prefix="/api", dependencies=protected_dependencies)  # RS V2 endpoints
@@ -181,7 +181,7 @@ async def startup_event():
     
     redis_connected = await redis_cache.init_redis()
     if not redis_connected:
-        print("⚠️ سنتحدث بدون كاش Redis")
+        print("⚠️ Redis unavailable — authentication will fail-closed (503) until Redis recovers")
     else:
         print("✅ Redis cache initialized successfully")
     

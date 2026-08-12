@@ -7,6 +7,7 @@ import os
 from datetime import datetime
 
 from app.core.database import get_db
+from app.core.security import verify_internal_key
 from app.services.storage import storage_service
 from app.models.official_filings import CompanyOfficialFiling, FilingCategory, FilingPeriod, FileType, FilingLanguage
 from app.models.scraped_reports import Company
@@ -134,11 +135,13 @@ async def process_ingestion(symbol: str, items: List[Dict[str, Any]], db_session
 async def ingest_official_reports(
     payload: IngestOfficialFilingsRequest,
     background_tasks: BackgroundTasks,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _auth: bool = Depends(verify_internal_key),
 ):
     """
     Ingest metadata + triggers background file download/upload.
     """
+    _ = _auth
     
     products_to_process = []
     
@@ -265,11 +268,15 @@ def get_company_reports(symbol: str, db: Session = Depends(get_db)):
 from sqlalchemy import func as sql_func, distinct
 
 @router.get("/reports/admin/summary")
-def get_admin_reports_summary(db: Session = Depends(get_db)):
+def get_admin_reports_summary(
+    db: Session = Depends(get_db),
+    _auth: bool = Depends(verify_internal_key),
+):
     """
     Returns a summary of all companies with filing counts, grouped by language.
     Used by the Admin Reports Management dashboard.
     """
+    _ = _auth
     # Subquery: count filings per symbol, language
     results = (
         db.query(
@@ -316,10 +323,15 @@ def get_admin_reports_summary(db: Session = Depends(get_db)):
 
 
 @router.get("/reports/admin/{symbol}/details")
-def get_admin_company_details(symbol: str, db: Session = Depends(get_db)):
+def get_admin_company_details(
+    symbol: str,
+    db: Session = Depends(get_db),
+    _auth: bool = Depends(verify_internal_key),
+):
     """
     Returns detailed filing records for a specific company symbol.
     """
+    _ = _auth
     filings = (
         db.query(CompanyOfficialFiling)
         .filter(CompanyOfficialFiling.company_symbol == symbol)
@@ -349,10 +361,16 @@ def get_admin_company_details(symbol: str, db: Session = Depends(get_db)):
 
 
 @router.delete("/reports/admin/{symbol}/{filing_id}")
-def delete_single_filing(symbol: str, filing_id: int, db: Session = Depends(get_db)):
+def delete_single_filing(
+    symbol: str,
+    filing_id: int,
+    db: Session = Depends(get_db),
+    _auth: bool = Depends(verify_internal_key),
+):
     """
     Delete a single filing record from DB (and its R2 file).
     """
+    _ = _auth
     filing = (
         db.query(CompanyOfficialFiling)
         .filter(CompanyOfficialFiling.id == filing_id, CompanyOfficialFiling.company_symbol == symbol)

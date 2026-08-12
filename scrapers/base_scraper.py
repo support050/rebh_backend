@@ -24,7 +24,8 @@ TIMEOUT_MS = 120000
 
 # API Configuration
 API_BASE_URL = os.getenv("LUMIVST_API_URL", "http://localhost:8000")
-API_TOKEN = os.getenv("LUMIVST_API_TOKEN", "")
+# Prefer INTERNAL_API_KEY (X-Internal-Key); fall back to legacy LUMIVST_API_TOKEN
+API_TOKEN = os.getenv("INTERNAL_API_KEY", "") or os.getenv("LUMIVST_API_TOKEN", "")
 
 # Report type mapping
 REPORT_TYPE_MAP = {
@@ -72,7 +73,7 @@ class BaseScraper(ABC):
         """Initialize HTTP client for API calls."""
         headers = {"Content-Type": "application/json"}
         if self.api_token:
-            headers["Authorization"] = f"Bearer {self.api_token}"
+            headers["X-Internal-Key"] = self.api_token
         self.http_client = httpx.AsyncClient(
             base_url=self.api_url,
             headers=headers,
@@ -507,7 +508,7 @@ class BaseScraper(ABC):
             
             headers = {}
             if self.api_token:
-                headers["Authorization"] = f"Bearer {self.api_token}"
+                headers["X-Internal-Key"] = self.api_token
             
             async with httpx.AsyncClient(base_url=self.api_url, headers=headers, timeout=60.0) as client:
                 response = await client.post(
