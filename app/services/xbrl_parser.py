@@ -483,7 +483,13 @@ def _make_unmapped_item(item, periods):
 
 
 def parse_and_merge_xbrl_files(filepaths):
-    return merge_files([parse_xbrl_file(str(p)) for p in filepaths])
+    results = []
+    for p in filepaths:
+        try:
+            results.append(parse_xbrl_file(str(p)))
+        except Exception as e:
+            print(f"  ⚠️ Warning: Skipping corrupted file {p.name}: {e}")
+    return merge_files(results)
 
 
 # ── CLI ───────────────────────────────────────────────────────────────────
