@@ -233,19 +233,20 @@ class RedisCache:
         Only one concurrent caller can successfully consume a key.
         """
         client = await self._require_client()
+        lua = """
+        local v = redis.call('GET', KEYS[1])
+        if v then
+          redis.call('DEL', KEYS[1])
+        end
+        return v
+        """
         try:
-            # Prefer native GETDEL (Redis >= 6.2)
-            if hasattr(client, "getdel"):
+            # redis-py exposes getdel even when the server is older than Redis 6.2
+            try:
                 raw = await client.getdel(key)
-            else:
-                # Lua fallback for older Redis
-                lua = """
-                local v = redis.call('GET', KEYS[1])
-                if v then
-                  redis.call('DEL', KEYS[1])
-                end
-                return v
-                """
+            except Exception as cmd_err:
+                if type(cmd_err).__name__ != "ResponseError":
+                    raise
                 raw = await client.eval(lua, 1, key)
 
             if raw is None:

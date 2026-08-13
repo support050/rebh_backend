@@ -144,12 +144,19 @@ def calculate_and_store_rs_line_metrics(db: Session, target_date: date = None):
                 print(f"✅ Processed {processed}/{total_stocks} stocks...")
                 
         except Exception as e:
-            # log warning but continue
-            # logger.warning(f"Error processing {symbol}: {e}")
             errors += 1
             processed += 1
+            try:
+                db.rollback()
+            except Exception:
+                pass
+            logger.warning("Error processing %s: %s", symbol, type(e).__name__)
             
-    db.commit()
+    try:
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
     print("=" * 60)
     print("📊 RS Line Metrics Calculation Summary:")
     print(f"   ✅ Success: {successful}")

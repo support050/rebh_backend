@@ -9,7 +9,7 @@ import datetime
 import pandas as pd
 from datetime import date, timedelta
 from pathlib import Path
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.dialects.postgresql import insert
 
@@ -121,6 +121,36 @@ def update_aporia_analytics():
         logger.error(traceback.format_exc())
         return False
 
+
+def _rollback_session(db):
+    try:
+        db.rollback()
+    except Exception:
+        pass
+
+
+def _release_update_lock(market_date=None):
+    """Clear is_updating using a fresh session so a poisoned transaction cannot block unlock."""
+    lock_db = SessionLocal()
+    try:
+        if market_date is not None:
+            lock_db.execute(text("""
+                UPDATE update_status
+                SET latest_ready_date = :market_date,
+                    is_updating = FALSE,
+                    completed_at = :now
+                WHERE id = 1
+            """), {"market_date": market_date, "now": datetime.datetime.utcnow()})
+        else:
+            lock_db.execute(text("UPDATE update_status SET is_updating = FALSE WHERE id = 1"))
+        lock_db.commit()
+    except Exception as e:
+        logger.error(f"⚠️ Failed to release update lock: {e}")
+        _rollback_session(lock_db)
+    finally:
+        lock_db.close()
+
+
 def update_daily(target_date_str=None):
     """
     1. Scrape Daily Data
@@ -134,7 +164,6 @@ def update_daily(target_date_str=None):
         logger.info(f"🚀 Starting Daily Market Update...")
         
         # 0. Set Update Status to Updating
-        from sqlalchemy import text
         import datetime as dt_module
         db.execute(text("""
             UPDATE update_status 
@@ -433,6 +462,7 @@ def update_daily(target_date_str=None):
             logger.info("✅ RS Line Metrics calculated and stored successfully.")
         except Exception as rs_err:
             logger.error(f"⚠️ RS Line Metrics calculation failed: {rs_err}")
+            _rollback_session(db)
 
         # 8.7 Export RS Hub cached JSON data
         # -------------------------------------------------------------------
@@ -446,14 +476,19 @@ def update_daily(target_date_str=None):
 
         # 9. Finalize Update Status (Atomic Switch)
         # -------------------------------------------------------------------
-        db.execute(text("""
-            UPDATE update_status 
-            SET latest_ready_date = :market_date, 
-                is_updating = FALSE, 
-                completed_at = :now 
-            WHERE id = 1
-        """), {"market_date": market_date, "now": dt_module.datetime.utcnow()})
-        db.commit()
+        try:
+            db.execute(text("""
+                UPDATE update_status 
+                SET latest_ready_date = :market_date, 
+                    is_updating = FALSE, 
+                    completed_at = :now 
+                WHERE id = 1
+            """), {"market_date": market_date, "now": dt_module.datetime.utcnow()})
+            db.commit()
+        except Exception as finalize_err:
+            logger.error(f"⚠️ Finalize on existing session failed: {finalize_err}")
+            _rollback_session(db)
+            _release_update_lock(market_date)
 
         # 10. Invalidate Caches so new data shows up immediately
         # -------------------------------------------------------------------
@@ -478,11 +513,14 @@ def update_daily(target_date_str=None):
 
     except Exception as e:
         logger.error(f"❌ Critical Error in Daily Update: {e}")
-        # Release the lock if it fails
-        db.execute(text("UPDATE update_status SET is_updating = FALSE WHERE id = 1"))
-        db.commit()
+        logger.error(traceback.format_exc())
+        _rollback_session(db)
+        _release_update_lock()
     finally:
-        db.close()
+        try:
+            db.close()
+        except Exception:
+            pass
 
 if __name__ == "__main__":
     import argparse
