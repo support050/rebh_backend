@@ -200,7 +200,7 @@ class FinancialReportsScraper(BaseScraper):
         print(f"Companies to scrape: {len(self.symbols)}")
         print(f"{'='*60}")
         
-        async with async_playwright() as p:
+        try:
             await self.init_browser()
             
             successful = 0
@@ -232,6 +232,9 @@ class FinancialReportsScraper(BaseScraper):
                 
             finally:
                 await self.close_browser()
+        except Exception as e:
+            print(f"Failed to run scraper: {e}")
+            raise e
         
         print(f"\n{'='*60}")
         print(f"Report Links Scraping Complete!")

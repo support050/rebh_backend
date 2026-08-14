@@ -135,20 +135,6 @@ class TestInternalKeyRequired:
         )
         assert res.status_code == 401
 
-    def test_upload_excel_requires_key(self, client):
-        res = client.post(
-            "/api/scraper/upload-excel",
-            data={"company_symbol": "1111"},
-            files={
-                "file": (
-                    "t.xlsx",
-                    b"fake",
-                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                )
-            },
-        )
-        assert res.status_code == 401
-
 
 class TestVerifyInternalKeyUnit:
     def test_missing_key_401(self, monkeypatch):

@@ -3,7 +3,7 @@
 SQLAlchemy models for scraped financial data from Saudi Exchange.
 These models store data from the Playwright scraper integration.
 """
-from sqlalchemy import Column, Integer, String, Date, DateTime, Enum, Text, UniqueConstraint
+from sqlalchemy import Column, Integer, String, Date, DateTime, Enum, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.sql import func
 from app.core.database import Base
@@ -85,23 +85,3 @@ class FinancialReport(Base):
     
     def __repr__(self):
         return f"<FinancialReport(symbol='{self.company_symbol}', type='{self.report_type}', period='{self.period_type}', date='{self.period_end_date}')>"
-
-
-class ExcelReport(Base):
-    """
-    Excel Reports table - stores metadata about uploaded Excel files.
-    Files are stored on disk/storage, this table keeps track of metadata.
-    """
-    __tablename__ = "excel_reports"
-    
-    id = Column(Integer, primary_key=True, index=True)
-    company_symbol = Column(String(20), nullable=False, index=True)
-    file_name = Column(String(255), nullable=False)
-    file_path = Column(Text, nullable=False)  # Full path to stored file
-    file_size = Column(Integer, nullable=True)  # File size in bytes
-    description = Column(Text, nullable=True)  # Optional description
-    
-    uploaded_at = Column(DateTime(timezone=True), server_default=func.now())
-    
-    def __repr__(self):
-        return f"<ExcelReport(symbol='{self.company_symbol}', file='{self.file_name}')>"

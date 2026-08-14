@@ -144,40 +144,6 @@ class BulkIngestResponse(BaseModel):
     failed_companies: List[str]
 
 
-# ==================== Excel Report Schemas ====================
-
-class ExcelReportBase(BaseModel):
-    """Base schema for Excel report."""
-    company_symbol: str = Field(..., description="Company symbol")
-    file_name: str = Field(..., description="Original file name")
-    description: Optional[str] = Field(None, description="Optional description")
-
-
-class ExcelReportCreate(ExcelReportBase):
-    """Schema for creating Excel report metadata."""
-    file_path: str = Field(..., description="Path where file is stored")
-    file_size: Optional[int] = Field(None, description="File size in bytes")
-
-
-class ExcelReportResponse(ExcelReportBase):
-    """Schema for Excel report response."""
-    id: int
-    file_path: str
-    file_size: Optional[int] = None
-    uploaded_at: datetime
-    download_url: Optional[str] = Field(None, description="URL to download the file")
-    
-    class Config:
-        from_attributes = True
-
-
-class ExcelReportListResponse(BaseModel):
-    """Schema for list of Excel reports."""
-    reports: List[ExcelReportResponse]
-    total: int
-    symbol: str
-
-
 # ==================== Historical Financial Data Response ====================
 
 class FinancialPeriodData(BaseModel):

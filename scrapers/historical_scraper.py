@@ -22,59 +22,81 @@ class HistoricalScraper(BaseScraper):
     
     async def scrape_historical_financials(self) -> Dict[str, Any]:
         """
-        Scrape historical financial data including Balance Sheet, Income Statement, and Cash Flows.
-        Activates history mode first by clicking "Display Previous Periods".
+        Scrape financial data for both recent and historical years.
+        Collects recent years first, then activates history mode and collects older years.
         """
         history_data = {}
-        
-        # Activate history mode
-        print("    → Activating History Mode (Clicking 'Display Previous Periods')...")
-        if not await self.table_has_history():
-            await self.click_display_previous_periods()
-            
-            # Wait for history headers to appear
-            print("      → Waiting for history headers to appear...")
-            for _ in range(15):
-                await self.page.wait_for_timeout(1000)
-                if await self.table_has_history():
-                    print("      → History headers (2021/2020) appeared!")
-                    break
-        
-        # Iterate through sub-tabs and periods
         sub_tabs = ["Balance Sheet", "Statement Of Income", "Cash Flows"]
         periods = ["Annually", "Quarterly"]
         
+        # --- Phase 1: Collect Recent Years ---
+        print("    → Phase 1: Collecting recent years...")
+        recent_data = {}
         for tab_name in sub_tabs:
-            print(f"      → Sub-tab: {tab_name}...")
+            print(f"      → Sub-tab: {tab_name} (Recent)...")
             if not await self.click_tab(tab_name):
                 continue
             await self.page.wait_for_timeout(2500)
-
+            for period in periods:
+                await self.click_tab(period)
+                await self.page.wait_for_timeout(2500)
+                key = f"{tab_name.replace(' ', '_')}_{period}"
+                recent_data[key] = await self.get_visible_tables()
+        
+        # --- Activate history mode ---
+        print("    → Activating History Mode (Clicking 'Display Previous Periods')...")
+        await self.click_display_previous_periods()
+        print("      → Waiting for history headers to appear...")
+        for _ in range(15):
+            await self.page.wait_for_timeout(1000)
+            if await self.table_has_history():
+                print("      → History headers appeared!")
+                break
+                
+        # --- Phase 2: Collect Historical Years & Merge ---
+        print("    → Phase 2: Collecting historical years and merging...")
+        for tab_name in sub_tabs:
+            print(f"      → Sub-tab: {tab_name} (Historical)...")
+            if not await self.click_tab(tab_name):
+                continue
+            await self.page.wait_for_timeout(2500)
+            
             for period in periods:
                 print(f"        → Period: {period}...")
                 await self.click_tab(period)
                 await self.page.wait_for_timeout(2500)
                 
-                target_table = None
-                visible_tables = await self.get_visible_tables()
+                key = f"{tab_name.replace(' ', '_')}_{period}"
+                historical_tables = await self.get_visible_tables()
                 
-                # Prioritize table with history headers
-                for tbl in visible_tables:
+                # Combine tables from Phase 1 and Phase 2
+                all_tables = recent_data.get(key, []) + historical_tables
+                
+                merged_table_dict = {}
+                for tbl in all_tables:
                     if not tbl:
                         continue
                     headers = str(list(tbl[0].keys())).lower()
-                    if "2021" in headers or "2020" in headers or "2019" in headers:
-                        target_table = tbl
-                        break
-                
-                if not target_table and visible_tables:
-                    # Fallback to largest table
-                    target_table = max(visible_tables, key=len)
+                    if not any(y in headers for y in ["2026", "2025", "2024", "2023", "2022", "2021", "2020", "2019", "2018", "2017"]):
+                        continue
+                        
+                    first_col = list(tbl[0].keys())[0]
+                    for row in tbl:
+                        metric = row.get(first_col, "").strip()
+                        if not metric:
+                            continue
+                        if metric not in merged_table_dict:
+                            merged_table_dict[metric] = {first_col: metric}
+                        
+                        # Merge columns
+                        for k, v in row.items():
+                            if k != first_col and k not in merged_table_dict[metric]:
+                                merged_table_dict[metric][k] = v
 
-                if target_table:
-                    key = f"{tab_name.replace(' ', '_')}_{period}"
+                if merged_table_dict:
+                    target_table = list(merged_table_dict.values())
                     history_data[key] = [target_table]
-                    print(f"          ✅ Captured {len(target_table)} rows")
+                    print(f"          ✅ Captured {len(target_table)} rows (Merged Recent + Historical)")
         
         return history_data
     
@@ -137,14 +159,13 @@ class HistoricalScraper(BaseScraper):
         print(f"Companies to scrape: {len(self.symbols)}")
         print(f"{'='*60}")
         
-        async with async_playwright() as p:
+        try:
             await self.init_browser()
             await self.init_http_client()
             
             successful = 0
             failed = 0
             api_success = 0
-            excel_success = 0
             results = {}
             
             try:
@@ -164,12 +185,6 @@ class HistoricalScraper(BaseScraper):
                             # Send to API
                             if await self.send_to_api(history_data):
                                 api_success += 1
-                            
-                            # Upload Excel
-                            excel_bytes = await self.export_to_excel(history_data)
-                            if excel_bytes:
-                                if await self.upload_excel(symbol, excel_bytes):
-                                    excel_success += 1
                         else:
                             failed += 1
                         
@@ -184,6 +199,9 @@ class HistoricalScraper(BaseScraper):
             finally:
                 await self.close_browser()
                 await self.close_http_client()
+        except Exception as e:
+            print(f"Failed to run scraper: {e}")
+            raise e
         
         print(f"\n{'='*60}")
         print(f"Historical Scraping Complete!")
@@ -191,7 +209,6 @@ class HistoricalScraper(BaseScraper):
         print(f"✅ Scraped Successfully: {successful}")
         print(f"❌ Failed: {failed}")
         print(f"📤 API Ingested: {api_success}")
-        print(f"📊 Excel Uploaded: {excel_success}")
         print(f"{'='*60}")
         
         return {
@@ -200,7 +217,6 @@ class HistoricalScraper(BaseScraper):
                 "successful": successful,
                 "failed": failed,
                 "api_ingested": api_success,
-                "excel_uploaded": excel_success
             },
             "results": results
         }
@@ -215,7 +231,6 @@ async def main():
         symbols=test_symbols,
         headless=False,
         send_to_api=False,  # Set True when API is running
-        upload_excel=False  # Set True when API is running
     )
     
     results = await scraper.scrape_all()

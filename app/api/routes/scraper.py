@@ -3,24 +3,20 @@
 FastAPI router for scraped financial data integration.
 Handles ingestion from Playwright scraper and data retrieval.
 """
-from fastapi import APIRouter, HTTPException, Query, Depends, UploadFile, File, Form
-from fastapi.responses import FileResponse
+from fastapi import APIRouter, HTTPException, Query, Depends
 from sqlalchemy.orm import Session
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy import desc
-from datetime import datetime, date
+from datetime import datetime
 from typing import Optional, List
-import os
 import json
 
 from app.core.database import get_db
 from app.core.redis import redis_cache
 from app.core.security import verify_internal_key
-from app.models.scraped_reports import Company, FinancialReport, ExcelReport, PeriodType, ReportType
+from app.models.scraped_reports import Company, FinancialReport, PeriodType, ReportType
 from app.schemas.scraped_financials import (
     IngestRequest, IngestResponse, BulkIngestRequest, BulkIngestResponse,
-    FinancialReportResponse, FinancialReportListResponse,
-    ExcelReportResponse, ExcelReportListResponse,
     HistoricalFinancialsResponse, FinancialPeriodData,
     FinancialTableResponse, FinancialTableRow,
     CompanyResponse, PeriodTypeEnum, ReportTypeEnum
@@ -28,9 +24,7 @@ from app.schemas.scraped_financials import (
 
 router = APIRouter(prefix="/api/scraper", tags=["Scraper Integration"])
 
-# Configuration for file storage
-EXCEL_STORAGE_PATH = os.getenv("EXCEL_STORAGE_PATH", "./storage/excel_reports")
-os.makedirs(EXCEL_STORAGE_PATH, exist_ok=True)
+FINANCIALS_CACHE_TTL = 7 * 24 * 60 * 60  # 7 days
 
 
 # ==================== Ingest Endpoints ====================
@@ -109,12 +103,11 @@ async def ingest_scraped_data(
         db.commit()
         
         # 3. Invalidate Redis cache for this symbol
-        cache_keys = [
-            f"scraper:financials:{request.company_symbol}",
-            f"scraper:table:{request.company_symbol}:*"
-        ]
-        for key in cache_keys:
-            await redis_cache.delete(key)
+        await redis_cache.delete(f"scraper:financials:{request.company_symbol}")
+        
+        table_keys = await redis_cache.keys(f"scraper:table:{request.company_symbol}:*")
+        for k in table_keys:
+            await redis_cache.delete(k)
             
         from app.core.cache_helpers import (
             invalidate_prices_latest,
@@ -197,7 +190,7 @@ async def get_historical_financials(
         cache_key = f"scraper:financials:{symbol}"
         cached = await redis_cache.get(cache_key)
         if cached:
-            return cached
+            return json.loads(cached)
         
         # Get company info
         company = db.query(Company).filter(Company.symbol == symbol).first()
@@ -240,8 +233,7 @@ async def get_historical_financials(
             cash_flows=cash_flows
         )
         
-        # Cache for 1 hour
-        await redis_cache.set(cache_key, response.model_dump_json(), expire=3600)
+        await redis_cache.set(cache_key, response.model_dump_json(), expire=FINANCIALS_CACHE_TTL)
         
         return response
         
@@ -267,7 +259,7 @@ async def get_financial_table(
         cache_key = f"scraper:table:{symbol}:{report_type.value}:{period_type.value}:{limit}"
         cached = await redis_cache.get(cache_key)
         if cached:
-            return cached
+            return json.loads(cached)
         
         # Query reports
         reports = db.query(FinancialReport).filter(
@@ -312,8 +304,7 @@ async def get_financial_table(
             rows=rows
         )
         
-        # Cache for 30 minutes
-        await redis_cache.set(cache_key, response.model_dump_json(), expire=1800)
+        await redis_cache.set(cache_key, response.model_dump_json(), expire=FINANCIALS_CACHE_TTL)
         
         return response
         
@@ -322,156 +313,6 @@ async def get_financial_table(
     except Exception as e:
         print(f"❌ Error getting financial table for {symbol}: {e}")
         raise HTTPException(status_code=500, detail=f"Error retrieving financial table: {str(e)}")
-
-
-# ==================== Excel Upload/Download Endpoints ====================
-
-@router.post("/upload-excel", response_model=ExcelReportResponse)
-async def upload_excel_file(
-    file: UploadFile = File(..., description="Excel file to upload"),
-    company_symbol: str = Form(..., description="Company symbol"),
-    description: Optional[str] = Form(None, description="Optional description"),
-    db: Session = Depends(get_db),
-    _auth: bool = Depends(verify_internal_key),
-):
-    """
-    Accepts an Excel file upload and saves it to storage.
-    Records metadata in the excel_reports table.
-    """
-    _ = _auth
-    try:
-        # Validate file type
-        allowed_extensions = ['.xlsx', '.xls', '.xlsm']
-        file_ext = os.path.splitext(file.filename)[1].lower()
-        if file_ext not in allowed_extensions:
-            raise HTTPException(
-                status_code=400, 
-                detail=f"Invalid file type. Allowed: {', '.join(allowed_extensions)}"
-            )
-        
-        # Create company-specific directory
-        company_dir = os.path.join(EXCEL_STORAGE_PATH, company_symbol)
-        os.makedirs(company_dir, exist_ok=True)
-        
-        # Generate unique filename with timestamp
-        timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
-        safe_filename = f"{timestamp}_{file.filename}"
-        file_path = os.path.join(company_dir, safe_filename)
-        
-        # Save file
-        content = await file.read()
-        with open(file_path, "wb") as f:
-            f.write(content)
-        
-        file_size = len(content)
-        
-        # Create database record
-        excel_report = ExcelReport(
-            company_symbol=company_symbol,
-            file_name=file.filename,
-            file_path=file_path,
-            file_size=file_size,
-            description=description
-        )
-        db.add(excel_report)
-        db.commit()
-        db.refresh(excel_report)
-        
-        print(f"✅ Uploaded Excel file for {company_symbol}: {file.filename}")
-        
-        # Generate download URL
-        download_url = f"/api/scraper/excel-reports/{company_symbol}/{excel_report.id}/download"
-        
-        return ExcelReportResponse(
-            id=excel_report.id,
-            company_symbol=excel_report.company_symbol,
-            file_name=excel_report.file_name,
-            file_path=excel_report.file_path,
-            file_size=excel_report.file_size,
-            description=excel_report.description,
-            uploaded_at=excel_report.uploaded_at,
-            download_url=download_url
-        )
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        db.rollback()
-        print(f"❌ Error uploading Excel file: {e}")
-        raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
-
-
-@router.get("/excel-reports/{symbol}", response_model=ExcelReportListResponse)
-async def get_excel_reports(
-    symbol: str,
-    db: Session = Depends(get_db)
-):
-    """
-    Returns list of available Excel files for a company with download links.
-    """
-    try:
-        reports = db.query(ExcelReport).filter(
-            ExcelReport.company_symbol == symbol
-        ).order_by(desc(ExcelReport.uploaded_at)).all()
-        
-        # Add download URLs
-        response_reports = []
-        for report in reports:
-            download_url = f"/api/scraper/excel-reports/{symbol}/{report.id}/download"
-            response_reports.append(ExcelReportResponse(
-                id=report.id,
-                company_symbol=report.company_symbol,
-                file_name=report.file_name,
-                file_path=report.file_path,
-                file_size=report.file_size,
-                description=report.description,
-                uploaded_at=report.uploaded_at,
-                download_url=download_url
-            ))
-        
-        return ExcelReportListResponse(
-            reports=response_reports,
-            total=len(reports),
-            symbol=symbol
-        )
-        
-    except Exception as e:
-        print(f"❌ Error getting Excel reports for {symbol}: {e}")
-        raise HTTPException(status_code=500, detail=f"Error retrieving Excel reports: {str(e)}")
-
-
-@router.get("/excel-reports/{symbol}/{report_id}/download")
-async def download_excel_file(
-    symbol: str,
-    report_id: int,
-    db: Session = Depends(get_db)
-):
-    """
-    Downloads an Excel file by ID.
-    """
-    try:
-        report = db.query(ExcelReport).filter(
-            ExcelReport.id == report_id,
-            ExcelReport.company_symbol == symbol
-        ).first()
-        
-        if not report:
-            raise HTTPException(status_code=404, detail="Excel report not found")
-        
-        if not os.path.exists(report.file_path):
-            raise HTTPException(status_code=404, detail="File not found on disk")
-        
-        return FileResponse(
-            path=report.file_path,
-            filename=report.file_name,
-            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        )
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        print(f"❌ Error downloading Excel file: {e}")
-        raise HTTPException(status_code=500, detail=f"Download failed: {str(e)}")
 
 
 # ==================== Company Endpoints ====================

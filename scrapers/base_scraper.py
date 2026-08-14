@@ -7,10 +7,7 @@ import re
 import json
 import os
 import httpx
-import pandas as pd
-from io import BytesIO
 from typing import Dict, List, Any, Optional
-from datetime import datetime
 from playwright.async_api import async_playwright, Page, Locator, Browser, BrowserContext
 from abc import ABC, abstractmethod
 
@@ -49,19 +46,18 @@ class BaseScraper(ABC):
         api_token: str = API_TOKEN,
         save_json: bool = True,
         send_to_api: bool = True,
-        upload_excel: bool = True
     ):
         self.headless = headless
         self.api_url = api_url
         self.api_token = api_token
         self.save_json = save_json
         self.send_to_api_enabled = send_to_api
-        self.upload_excel_enabled = upload_excel
         
         self.http_client: Optional[httpx.AsyncClient] = None
         self.browser: Optional[Browser] = None
         self.context: Optional[BrowserContext] = None
         self.page: Optional[Page] = None
+        self.playwright = None
         
         # Output directory
         self.output_dir = os.path.join(os.path.dirname(__file__), "..", "scraped_data")
@@ -90,8 +86,8 @@ class BaseScraper(ABC):
     
     async def init_browser(self):
         """Initialize Playwright browser."""
-        playwright = await async_playwright().start()
-        self.browser = await playwright.chromium.launch(
+        self.playwright = await async_playwright().start()
+        self.browser = await self.playwright.chromium.launch(
             headless=self.headless,
             args=["--disable-http2"]
         )
@@ -109,6 +105,9 @@ class BaseScraper(ABC):
             self.browser = None
             self.context = None
             self.page = None
+        if self.playwright:
+            await self.playwright.stop()
+            self.playwright = None
     
     # ==================== Navigation Helpers ====================
     
@@ -460,73 +459,6 @@ class BaseScraper(ABC):
             return None
         except Exception:
             return None
-    
-    # ==================== Excel Export ====================
-    
-    async def export_to_excel(self, company_data: Dict[str, Any]) -> Optional[bytes]:
-        """Export scraped data to Excel format in memory."""
-        try:
-            symbol = company_data.get("symbol", "")
-            financial_info = company_data.get("financial_information", {}) or company_data.get("history_information", {})
-            
-            if not financial_info:
-                return None
-            
-            output = BytesIO()
-            with pd.ExcelWriter(output, engine='openpyxl') as writer:
-                for key, table_data_list in financial_info.items():
-                    if not table_data_list or not table_data_list[0]:
-                        continue
-                    table_data = table_data_list[0]
-                    df = pd.DataFrame(table_data)
-                    sheet_name = key[:31]
-                    df.to_excel(writer, sheet_name=sheet_name, index=False)
-            
-            output.seek(0)
-            return output.getvalue()
-            
-        except Exception as e:
-            print(f"    ❌ Error creating Excel: {e}")
-            return None
-    
-    async def upload_excel(self, symbol: str, excel_bytes: bytes) -> bool:
-        """Upload Excel file to the API."""
-        if not self.upload_excel_enabled:
-            return False
-        
-        try:
-            timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
-            filename = f"{symbol}_financials_{timestamp}.xlsx"
-            
-            files = {
-                "file": (filename, excel_bytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-            }
-            data = {
-                "company_symbol": symbol,
-                "description": f"Financial data scraped on {datetime.utcnow().isoformat()}"
-            }
-            
-            headers = {}
-            if self.api_token:
-                headers["X-Internal-Key"] = self.api_token
-            
-            async with httpx.AsyncClient(base_url=self.api_url, headers=headers, timeout=60.0) as client:
-                response = await client.post(
-                    "/api/scraper/upload-excel",
-                    files=files,
-                    data=data
-                )
-            
-            if response.status_code == 200:
-                print(f"    ✅ Excel uploaded: {filename}")
-                return True
-            else:
-                print(f"    ❌ Excel upload failed: {response.status_code}")
-                return False
-                
-        except Exception as e:
-            print(f"    ❌ Error uploading Excel: {e}")
-            return False
     
     # ==================== JSON Save ====================
     
