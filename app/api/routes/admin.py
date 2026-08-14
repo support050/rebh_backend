@@ -11,6 +11,7 @@ from app.core.limiter import limiter
 from app.core.redis import redis_cache
 from app.models.user import User
 from app.schemas.auth import UserResponse
+from app.services.user_cleanup import delete_user_related_data
 
 router = APIRouter(prefix="/admin", tags=["Admin"])
 
@@ -77,6 +78,48 @@ async def approve_user(
     return {"message": f"User {user.email} approved successfully"}
 
 
+@router.post("/revoke-user/{user_id}")
+@limiter.limit("10/minute")
+async def revoke_user(
+    request: Request,
+    user_id: int,
+    current_admin: User = Depends(get_current_admin),
+    db: Session = Depends(get_db),
+):
+    """سحب صلاحية مستخدم وحذف حسابه وبياناته بالكامل"""
+    _ = request
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    if user.id == current_admin.id:
+        raise HTTPException(status_code=400, detail="لا يمكنك حذف حسابك الخاص")
+
+    if user.is_admin:
+        admin_count = db.query(User).filter(User.is_admin == True).count()  # noqa: E712
+        if admin_count <= 1:
+            raise HTTPException(
+                status_code=400,
+                detail="لا يمكن حذف آخر حساب مدير في النظام",
+            )
+
+    email = user.email
+
+    # 1) Invalidate all sessions FIRST (fail-closed: if Redis fails, abort before DB changes)
+    await invalidate_all_sessions(user_id)
+
+    # 2) Delete all FK-dependent data, then the user — single transaction
+    try:
+        delete_user_related_data(db, user_id)
+        db.delete(user)
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+
+    return {"message": f"User {email} has been revoked and deleted successfully"}
+
+
 @router.delete("/users/{user_id}")
 @limiter.limit("5/minute")
 async def delete_user(
@@ -85,7 +128,7 @@ async def delete_user(
     current_admin: User = Depends(get_current_admin),
     db: Session = Depends(get_db),
 ):
-    """حذف مستخدم معين (للمدير فقط)"""
+    """حذف مستخدم وجميع بياناته بالكامل (للمدير فقط)"""
     _ = request
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
@@ -103,9 +146,19 @@ async def delete_user(
             )
 
     email = user.email
-    db.delete(user)
-    db.commit()
+
+    # Invalidate sessions first (no-op if user had no active sessions)
     await invalidate_all_sessions(user_id)
+
+    # Delete all FK-dependent data, then the user
+    try:
+        delete_user_related_data(db, user_id)
+        db.delete(user)
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+
     return {"message": f"تم حذف المستخدم {email} بنجاح"}
 
 

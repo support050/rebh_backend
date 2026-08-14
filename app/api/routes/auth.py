@@ -48,6 +48,7 @@ from app.core.redis import (
     store_verification_token,
 )
 from app.models.user import User
+from app.services.user_cleanup import delete_user_related_data
 from app.schemas.auth import (
     ForgetPasswordRequest,
     OAuthConfirmLinkRequest,
@@ -599,11 +600,18 @@ async def delete_account(
         if admin_count <= 1:
             raise HTTPException(status_code=400, detail="لا يمكن حذف آخر حساب مدير")
 
-    db.delete(db_user)
-    db.commit()
-
+    # Invalidate sessions first
     await invalidate_all_sessions(current_user.id)
     clear_auth_cookies(response)
+
+    try:
+        delete_user_related_data(db, current_user.id)
+        db.delete(db_user)
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+
     return {"message": "تم حذف الحساب بنجاح"}
 
 
