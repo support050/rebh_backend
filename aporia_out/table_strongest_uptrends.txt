@@ -1,11 +1,11 @@
 ticker	name	sector	market_cap	val_avg_3mo	trailingPE	last	mtd_rtn	mo3_rtn	year_rtn	daily_trend	weekly_trend	monthly_trend	trend_rank	pfh_250	days_since_high_250	breakout	longest_consolidation_window	position	price_extreme	vol_5_day_chng	vol_20_day_chng
-7200	Al Moammar Information Systems Co.	Software & Services	60	59	98.0	279.2	15.8%	55.1%	109.1%	up:83,60	up:156,60	up:165,60	1	0.4%	1	-	-	-	-	+81%	-18%
-2300	Saudi Paper Manufacturing Co.	Materials	108	108	34.5	67.35	-2.4%	16.1%	19.4%	up:23,2	up:12,2	up:84,65	2	2.4%	2	-	-	-	-	-9%	-10%
-1831	Maharah Human Resources Co.	Commercial & Professional Svc	99	66	10.3	5.33	1.3%	11.3%	40.6%	up:19,15	up:137,60	up:22,15	3	3.4%	15	-	-	-	-	-2%	+29%
-4280	Kingdom Holding Co.	Financial Services	18	45	22.9	12.82	5.5%	20.3%	62.3%	up:9,*	up:100,55	up:69,55	4	20.0%	47	-	-	-	-	-16%	-29%
-2370	Middle East Specialized Cables Co.	Capital Goods	158	106	10.8	32.8	6.3%	10.4%	-4.2%	up:1,*	up:21,17	up:8,*	5	5.0%	62	-	-	-	-	-5%	+73%
-4300	Dar Alarkan Real Estate Development Co.	Real Estate Mgmt & Dev't	28	74	16.7	18.96	3.1%	9.2%	0.7%	up:27,11	up:24,11	up:484,328	6	7.3%	328	-	288	74%	-	+85%	-28%
-4347	Bonyan REIT Fund	REITs	138	230	15.9	9.77	-3.7%	1.8%	4.0%	flat	up:98,57	up:39,22	7	4.1%	22	-	-	-	-	+54%	+2%
-2190	Sustained Infrastructure Holding Co.	Transportation	101	87	29.6	34.48	-3.7%	-1.2%	-0.4%	flat	up:61,60	up:90,69	8	9.5%	45	-	663	62%	-	+104%	+44%
-2380	Rabigh Refining and Petrochemical Co.	Energy	23	4	-	16.12	8.4%	19.0%	119.0%	up:19,2	up:93,56	flat	9	5.4%	2	-	-	-	-	-28%	+103%
-8250	Gulf Insurance Group	Insurance	137	146	11.7	33.14	4.1%	21.6%	33.6%	up:96,62	up:40,8	flat	10	3.8%	8	-	-	-	-	-18%	-5%
+7200	Al Moammar Information Systems Co.	Software & Services	60	56	98.0	306.0	26.9%	62.8%	135.4%	up:83,*	up:156,*	up:165,*	1	0.0%	0	All-Time High	-	-	green,green	+17%	+45%
+2300	Saudi Paper Manufacturing Co.	Materials	108	110	34.5	61.5	-10.9%	6.0%	9.9%	up:28,7	up:17,7	up:84,7	2	12.2%	7	-	-	-	-	-6%	+8%
+4280	Kingdom Holding Co.	Financial Services	18	46	22.9	13.25	9.0%	23.5%	68.6%	up:14,3	up:100,52	up:69,52	3	16.1%	52	-	-	-	-	+15%	+59%
+4300	Dar Alarkan Real Estate Development Co.	Real Estate Mgmt & Dev't	28	81	16.7	19.45	5.8%	12.8%	7.8%	up:31,16	up:30,16	up:484,328	4	4.6%	328	-	293	83%	-	-46%	-25%
+2190	Sustained Infrastructure Holding Co.	Transportation	101	86	29.6	34.4	-3.9%	-4.4%	-3.6%	flat	up:61,50	up:90,50	5	9.8%	50	-	668	62%	-	-42%	+80%
+2370	Middle East Specialized Cables Co.	Capital Goods	158	92	10.8	30.64	-0.7%	-9.9%	-7.9%	flat	up:25,22	up:10,3	6	12.4%	62	-	-	-	-	+156%	-7%
+1303	Electrical Industries Co.	Capital Goods	36	18	20.5	15.45	9.2%	-3.0%	66.5%	flat	up:310,79	up:868,79	7	23.8%	78	-	-	-	-	+54%	+3%
+1150	Alinma Bank	Banks	11	6	11.7	24.24	3.8%	2.7%	14.4%	flat	up:86,81	up:41,37	8	5.1%	81	-	-	-	-	-43%	+52%
+7010	Saudi Telecom Co.	Telecommunication Services	5	8	14.4	43.58	1.0%	1.1%	2.8%	flat	up:54,41	up:394,323	9	3.7%	323	-	222	60%	-	-35%	+34%
+1322	Almasane Alkobra Mining Co.	Materials	64	44	18.5	86.7	18.1%	8.0%	34.4%	up:2,*	flat	up:88,81	10	34.7%	129	-	-	-	-	+26%	+102%
