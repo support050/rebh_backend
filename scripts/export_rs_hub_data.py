@@ -276,9 +276,16 @@ def export_rs_hub_data(target_date: date = None):
             else:
                 weekly_mom = 0.0
 
-            m1 = rs_row[4] if rs_row[4] is not None else 50
-            m12 = rs_row[8] if rs_row[8] is not None else 50
-            age = int(m1) - int(m12)
+            m1 = rs_row[4]
+            m3 = rs_row[5]
+            m6 = rs_row[6]
+            m9 = rs_row[7]
+            m12 = rs_row[8]
+            
+            # Age calculation safely uses m12 or fallback if None
+            effective_m12 = m12 if m12 is not None else 50
+            effective_m1 = m1 if m1 is not None else 50
+            age = int(effective_m1) - int(effective_m12)
             if age >= 15:
                 age_tag = "YOUNG"
             elif age <= -15:
@@ -286,18 +293,42 @@ def export_rs_hub_data(target_date: date = None):
             else:
                 age_tag = "STEADY"
 
+            # Fallback classifications for new listings / unclassified symbols
+            STATIC_GROUP_MAP = {
+                "4148": ("Capital Goods", "Industrials", "Capital Goods", "Industrial Machinery"),
+                "2288": ("Consumer Staples", "Consumer Staples", "Food & Staples Retailing", "Food Retail"),
+                "1324": ("Capital Goods", "Industrials", "Capital Goods", "Building Products"),
+            }
+
+            raw_grp = rs_row[3] or pm.get("sec")
+            raw_sec = pm.get("sec")
+            raw_ind = pm.get("ind")
+            raw_sub = pm.get("sub")
+
+            if not raw_grp and sym in STATIC_GROUP_MAP:
+                fallback_grp, fallback_sec, fallback_ind, fallback_sub = STATIC_GROUP_MAP[sym]
+                grp_val = fallback_grp
+                sec_val = fallback_sec
+                ind_val = fallback_ind
+                sub_val = fallback_sub
+            else:
+                grp_val = raw_grp or "Other"
+                sec_val = raw_sec or "Other"
+                ind_val = raw_ind or "Other"
+                sub_val = raw_sub or "Other"
+
             stocks_data.append({
                 "s": sym,
                 "c": rs_row[2] or sym,
-                "grp": rs_row[3] or pm.get("sec", "Other"),
+                "grp": grp_val,
                 "rs": rs_val if rs_val is not None else 1,
                 "rs1w": prev_rs if prev_rs is not None else (rs_val if rs_val is not None else 1),
                 "cat": cat,
                 "sig": list(set(signals)),
                 "m1": m1,
-                "m3": rs_row[5] if rs_row[5] is not None else 50,
-                "m6": rs_row[6] if rs_row[6] is not None else 50,
-                "m9": rs_row[7] if rs_row[7] is not None else 50,
+                "m3": m3,
+                "m6": m6,
+                "m9": m9,
                 "m12": m12,
                 "ad": ad_rating,
                 "price": close_val,
