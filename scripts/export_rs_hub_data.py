@@ -165,8 +165,18 @@ def export_rs_hub_data(target_date: date = None):
             nm_rows = conn.execute(text(
                 "SELECT symbol, rs_rating FROM rs_daily_v2 WHERE date = :d"
             ), {"d": now_mom_ref_date}).fetchall()
-            now_mom_ref_map = {r[0]: r[1] for r in nm_rows}
-                
+            # 8b. حساب متوسط الـ RS لآخر 10 جلسات تداول لكل سهم (Schwartz Wizard Check)
+        rs10_rows = conn.execute(text("""
+            WITH last10_dates AS (
+                SELECT DISTINCT date FROM rs_daily_v2 WHERE date <= :d ORDER BY date DESC LIMIT 10
+            )
+            SELECT symbol, AVG(rs_rating) as rs_avg10
+            FROM rs_daily_v2
+            WHERE date IN (SELECT date FROM last10_dates) AND rs_rating IS NOT NULL
+            GROUP BY symbol
+        """), {"d": target_date}).fetchall()
+        rs_avg10_map = {r[0]: round(float(r[1]), 1) for r in rs10_rows}
+
         # 9. تجميع البيانات النهائية
         stocks_data = []
         for rs_row in rs_rows:
@@ -184,6 +194,11 @@ def export_rs_hub_data(target_date: date = None):
             # 🔵 RS line led price (RS New High Before Price)
             if rlm.get("rsnhbp_today", False):
                 signals.append("blue")
+                signals.append("blue52")
+                # Also include 13W (Early) signal if RS line is at 13W high ahead of price
+                t_3m_rs = trail_data.get("3M", {}).get(sym)
+                if t_3m_rs is None or rs_val >= t_3m_rs:
+                    signals.append("blue13")
             
             # 🏔 RS at 1-year high — RS الحالي أعلى من جميع الـ Trail values
             if rs_val is not None:
@@ -352,6 +367,7 @@ def export_rs_hub_data(target_date: date = None):
                 "sub": pm.get("sub", "Other"),
                 "age": age,
                 "ageTag": age_tag,
+                "rs_avg10": rs_avg10_map.get(sym, rs_val),
             })
 
         # ── Pass 2: REBH reference championship rules (same as REBH-RS-Rating-MOBILE.html) ──
