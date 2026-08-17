@@ -46,8 +46,8 @@ def _run(name: str, fn, *args, **kwargs) -> bool:
 # ── Individual runner wrappers ────────────────────────────────────────────────
 
 def run_fred(indicators: Optional[list[str]] = None) -> dict:
-    from app.scrapers.fred_scraper import scrape_fred_indicator, FRED_CSV_CONFIG
-    codes = indicators or list(FRED_CSV_CONFIG.keys())
+    from app.scrapers.fred_scraper import scrape_fred_indicator, FRED_SERIES_CONFIG
+    codes = indicators or list(FRED_SERIES_CONFIG.keys())
     results = {}
     for code in codes:
         results[code] = _run(f"fred:{code}", scrape_fred_indicator, code)
@@ -74,11 +74,6 @@ def run_treasury_gov(mode: str = "incremental") -> bool:
     return _run("treasury_gov", scrape_treasury_gov, mode=mode)
 
 
-def run_treasury_fred(mode: str = "incremental") -> bool:
-    from app.scrapers.treasury_scraper import scrape_treasury_yield_curve
-    return _run("treasury_fred", scrape_treasury_yield_curve, mode=mode)
-
-
 def run_tasi_components(symbols: Optional[list[str]] = None) -> bool:
     from app.scrapers.tasi_components_scraper import scrape_tasi_components
     result = scrape_tasi_components(symbols=symbols)
@@ -92,7 +87,7 @@ def run_tasi_components(symbols: Optional[list[str]] = None) -> bool:
 def run_daily_scrapers() -> dict:
     """
     Full daily scrape sequence. Order matters:
-      1. Treasury data  — needed by Bond dashboard and TYC
+      1. Treasury data  — needed by Bond dashboard and TYC (from Treasury.gov)
       2. FRED indicators — needed by Bond dashboard and Economy assessment
       3. S&P 500 price  — needed by all valuation scenarios
       4. S&P 500 P/E    — needed by historical PE and scenarios
@@ -105,7 +100,6 @@ def run_daily_scrapers() -> dict:
 
     results = {
         "treasury_gov":      run_treasury_gov(mode="incremental"),
-        "treasury_fred":     run_treasury_fred(mode="incremental"),
         "fred_indicators":   run_fred(),
         "sp500_price":       run_sp500_price(mode="incremental"),
         "sp500_pe":          run_sp500_pe(),
@@ -129,12 +123,11 @@ def run_full_backfill() -> dict:
     logger.info("🔄 Starting full historical backfill — this may take a while...")
 
     return {
-        "treasury_gov":  run_treasury_gov(mode="full"),
-        "treasury_fred": run_treasury_fred(mode="full"),
+        "treasury_gov":    run_treasury_gov(mode="full"),
         "fred_indicators": run_fred(),
-        "sp500_price":   run_sp500_price(mode="full"),
-        "sp500_pe":      run_sp500_pe(),
-        "sp500_ey":      run_sp500_ey(force=True),
+        "sp500_price":     run_sp500_price(mode="full"),
+        "sp500_pe":        run_sp500_pe(),
+        "sp500_ey":        run_sp500_ey(force=True),
     }
 
 

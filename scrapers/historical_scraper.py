@@ -29,74 +29,71 @@ class HistoricalScraper(BaseScraper):
         sub_tabs = ["Balance Sheet", "Statement Of Income", "Cash Flows"]
         periods = ["Annually", "Quarterly"]
         
-        # --- Phase 1: Collect Recent Years ---
-        print("    → Phase 1: Collecting recent years...")
-        recent_data = {}
+        # --- Phase 1: Collect Recent Years (current periods on page) ---
+        print("    → Phase 1: Collecting recent/current periods...")
         for tab_name in sub_tabs:
             print(f"      → Sub-tab: {tab_name} (Recent)...")
             if not await self.click_tab(tab_name):
                 continue
             await self.page.wait_for_timeout(2500)
             for period in periods:
-                await self.click_tab(period)
-                await self.page.wait_for_timeout(2500)
-                key = f"{tab_name.replace(' ', '_')}_{period}"
-                recent_data[key] = await self.get_visible_tables()
-        
-        # --- Activate history mode ---
-        print("    → Activating History Mode (Clicking 'Display Previous Periods')...")
-        await self.click_display_previous_periods()
-        print("      → Waiting for history headers to appear...")
-        for _ in range(15):
-            await self.page.wait_for_timeout(1000)
-            if await self.table_has_history():
-                print("      → History headers appeared!")
-                break
-                
-        # --- Phase 2: Collect Historical Years & Merge ---
-        print("    → Phase 2: Collecting historical years and merging...")
-        for tab_name in sub_tabs:
-            print(f"      → Sub-tab: {tab_name} (Historical)...")
-            if not await self.click_tab(tab_name):
-                continue
-            await self.page.wait_for_timeout(2500)
-            
-            for period in periods:
                 print(f"        → Period: {period}...")
                 await self.click_tab(period)
                 await self.page.wait_for_timeout(2500)
-                
                 key = f"{tab_name.replace(' ', '_')}_{period}"
-                historical_tables = await self.get_visible_tables()
-                
-                # Combine tables from Phase 1 and Phase 2
-                all_tables = recent_data.get(key, []) + historical_tables
-                
-                merged_table_dict = {}
-                for tbl in all_tables:
-                    if not tbl:
-                        continue
-                    headers = str(list(tbl[0].keys())).lower()
-                    if not any(y in headers for y in ["2026", "2025", "2024", "2023", "2022", "2021", "2020", "2019", "2018", "2017"]):
-                        continue
-                        
-                    first_col = list(tbl[0].keys())[0]
-                    for row in tbl:
-                        metric = row.get(first_col, "").strip()
-                        if not metric:
-                            continue
-                        if metric not in merged_table_dict:
-                            merged_table_dict[metric] = {first_col: metric}
-                        
-                        # Merge columns
-                        for k, v in row.items():
-                            if k != first_col and k not in merged_table_dict[metric]:
-                                merged_table_dict[metric][k] = v
-
-                if merged_table_dict:
-                    target_table = list(merged_table_dict.values())
-                    history_data[key] = [target_table]
-                    print(f"          ✅ Captured {len(target_table)} rows (Merged Recent + Historical)")
+                tables = await self.get_visible_tables()
+                if tables:
+                    history_data[key] = tables
+                    total_rows = sum(len(t) for t in tables)
+                    print(f"          ✅ Captured {total_rows} rows")
+                else:
+                    print(f"          ⚠️ No data found")
+        
+        # --- Phase 2: Historical Years (DISABLED - already scraped) ---
+        # Uncomment below to also scrape historical periods by clicking "Display Previous Periods"
+        # print("    → Activating History Mode (Clicking 'Display Previous Periods')...")
+        # await self.click_display_previous_periods()
+        # print("      → Waiting for history headers to appear...")
+        # for _ in range(15):
+        #     await self.page.wait_for_timeout(1000)
+        #     if await self.table_has_history():
+        #         print("      → History headers appeared!")
+        #         break
+        # 
+        # print("    → Phase 2: Collecting historical years and merging...")
+        # for tab_name in sub_tabs:
+        #     print(f"      → Sub-tab: {tab_name} (Historical)...")
+        #     if not await self.click_tab(tab_name):
+        #         continue
+        #     await self.page.wait_for_timeout(2500)
+        #     for period in periods:
+        #         print(f"        → Period: {period}...")
+        #         await self.click_tab(period)
+        #         await self.page.wait_for_timeout(2500)
+        #         key = f"{tab_name.replace(' ', '_')}_{period}"
+        #         historical_tables = await self.get_visible_tables()
+        #         all_tables = history_data.get(key, []) + historical_tables
+        #         merged_table_dict = {}
+        #         for tbl in all_tables:
+        #             if not tbl:
+        #                 continue
+        #             headers = str(list(tbl[0].keys())).lower()
+        #             if not any(y in headers for y in ["2026", "2025", "2024", "2023", "2022", "2021", "2020", "2019", "2018", "2017"]):
+        #                 continue
+        #             first_col = list(tbl[0].keys())[0]
+        #             for row in tbl:
+        #                 metric = row.get(first_col, "").strip()
+        #                 if not metric:
+        #                     continue
+        #                 if metric not in merged_table_dict:
+        #                     merged_table_dict[metric] = {first_col: metric}
+        #                 for k, v in row.items():
+        #                     if k != first_col and k not in merged_table_dict[metric]:
+        #                         merged_table_dict[metric][k] = v
+        #         if merged_table_dict:
+        #             target_table = list(merged_table_dict.values())
+        #             history_data[key] = [target_table]
+        #             print(f"          ✅ Captured {len(target_table)} rows (Merged Recent + Historical)")
         
         return history_data
     

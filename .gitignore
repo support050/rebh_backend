@@ -31,3 +31,5 @@ scratch_*.py
 _map_dump.json
 *.dump
 app/static/rs_data.json
+
+architecture.json

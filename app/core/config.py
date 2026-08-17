@@ -49,6 +49,7 @@ class Settings(BaseSettings):
 
     # ── External APIs ────────────────────────────────────────────────────
     TWELVE_DATA_API_KEY: str | None = None
+    FRED_API_KEY: str | None = None
     INTERNAL_API_KEY: str | None = None
     BASE_URL: str = "https://api.twelvedata.com"
 

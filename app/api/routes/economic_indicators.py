@@ -120,18 +120,18 @@ async def get_yield_curve(
 
 @router.get("/scrape/yield-curve")
 def trigger_scrape_yield_curve(_: bool = Depends(verify_internal_key)):
-    from app.scrapers.treasury_scraper import scrape_treasury_yield_curve
+    from app.scrapers.treasury_gov_scraper import scrape_treasury_gov
     
     def scrape_with_error_handling():
         try:
-            scrape_treasury_yield_curve()
-            logger.info("Treasury yield curve scraping completed successfully")
+            scrape_treasury_gov(mode="incremental")
+            logger.info("Treasury yield curve scraping completed successfully (Treasury.gov)")
         except Exception as e:
             logger.error(f"Treasury yield curve scraping failed: {e}")
     
     thread = threading.Thread(target=scrape_with_error_handling, daemon=True)
     thread.start()
-    return {"message": "Scraping started for US Treasury Yield Curve (FRED) in background"}
+    return {"message": "Scraping started for US Treasury Yield Curve (Treasury.gov) in background"}
 
 @router.get("/scrape/treasury-gov")
 def trigger_scrape_treasury_gov(mode: str = Query("incremental", description="incremental | backfill_recent | backfill"), _: bool = Depends(verify_internal_key)):

@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.api.routes import stocks, cache, auth, contact, rs, rs_v2, admin, scraper, official_filings, prices, technical_screener, screeners, market_breadth, market_reports, economic_indicators, xbrl_companies, xbrl_financials, xbrl_upload, weekly_market_update
+from app.api.routes import stocks, cache, auth, contact, rs, rs_v2, admin, scraper, official_filings, prices, technical_screener, screeners, market_breadth, market_reports, economic_indicators, xbrl_companies, xbrl_financials, xbrl_upload
 from app.api.routes import naaim as naaim_router
 from app.api.routes import market_pulse as market_pulse_router
 from app.api.routes import rs_line as rs_line_router
@@ -134,7 +134,6 @@ app.include_router(screeners.router, prefix="/api")  # Stock Screeners (PUBLIC)
 
 app.include_router(market_breadth.router, prefix="/api")  # /api/market-breadth/*
 app.include_router(market_reports.router, prefix="/api/market-reports", tags=["Market Reports"])
-app.include_router(weekly_market_update.router, prefix="/api", tags=["Weekly Market Update"])
 app.include_router(economic_indicators.router, prefix="/api/economic-indicators", tags=["Economic Indicators"])
 app.include_router(naaim_router.router, prefix="/api/naaim", tags=["NAAIM Exposure Index"])
 app.include_router(xbrl_companies.router, dependencies=protected_dependencies)

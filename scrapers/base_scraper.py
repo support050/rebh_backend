@@ -361,10 +361,24 @@ class BaseScraper(ABC):
         reports = []
         
         for key, table_data_list in financial_info.items():
-            if not table_data_list or not table_data_list[0]:
+            if not table_data_list:
                 continue
             
-            table_data = table_data_list[0]
+            # Find the financial table (the one with date columns like 2025-12-31)
+            # get_visible_tables returns ALL visible tables on the page, including
+            # price tickers, shareholder tables, etc. We need the one with year headers.
+            year_patterns = ["2019", "2020", "2021", "2022", "2023", "2024", "2025", "2026", "2027"]
+            table_data = None
+            for candidate in table_data_list:
+                if not candidate:
+                    continue
+                candidate_headers = " ".join(list(candidate[0].keys()))
+                if any(y in candidate_headers for y in year_patterns):
+                    table_data = candidate
+                    break
+            
+            if not table_data:
+                continue
             
             # Determine period type and report name
             period_type = None
@@ -390,11 +404,15 @@ class BaseScraper(ABC):
             if not report_type:
                 continue
             
+            # The Saudi Exchange page often shows a single combined table with
+            # Balance Sheet + Statement Of Income + Cash Flows. Slice to get
+            # only the section we need for this report_name.
+            table_data = self.slice_mixed_table(table_data, report_name)
             if not table_data:
                 continue
             
             headers = list(table_data[0].keys())
-            date_columns = [h for h in headers if any(year in h for year in ["2019", "2020", "2021", "2022", "2023", "2024", "2025"])]
+            date_columns = [h for h in headers if any(year in h for year in ["2019", "2020", "2021", "2022", "2023", "2024", "2025", "2026", "2027"])]
             
             for date_col in date_columns:
                 period_end_date = self.parse_date_column(date_col)

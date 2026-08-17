@@ -103,11 +103,17 @@ async def ingest_scraped_data(
         db.commit()
         
         # 3. Invalidate Redis cache for this symbol
-        await redis_cache.delete(f"scraper:financials:{request.company_symbol}")
+        fin_key = f"scraper:financials:{request.company_symbol}"
+        deleted = await redis_cache.delete(fin_key)
+        print(f"🗑️ Cache delete '{fin_key}': {'found & deleted' if deleted else 'key not found (already expired or never cached)'}")
         
         table_keys = await redis_cache.keys(f"scraper:table:{request.company_symbol}:*")
-        for k in table_keys:
-            await redis_cache.delete(k)
+        if table_keys:
+            print(f"🗑️ Deleting {len(table_keys)} table cache keys for {request.company_symbol}")
+            for k in table_keys:
+                await redis_cache.delete(k)
+        else:
+            print(f"🗑️ No table cache keys found for {request.company_symbol}")
             
         from app.core.cache_helpers import (
             invalidate_prices_latest,
