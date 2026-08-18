@@ -498,13 +498,13 @@ def update_daily(target_date_str=None):
             asyncio.run(redis_cache.flush_all())
             logger.info("🧹 Application caches cleared successfully. New data is now live.")
             
-            # --- Re-build NAAIM page metadata ---
-            try:
-                logger.info("🔄 Re-caching NAAIM metadata after cache wipe...")
-                from app.scrapers.naaim_scraper import scrape_naaim
-                scrape_naaim(mode="incremental")
-            except Exception as naaim_err:
-                logger.error(f"⚠️ Failed to restore NAAIM metadata: {naaim_err}")
+            # # --- Re-build NAAIM page metadata ---
+            # try:
+            #     logger.info("🔄 Re-caching NAAIM metadata after cache wipe...")
+            #     from app.scrapers.naaim_scraper import scrape_naaim
+            #     scrape_naaim(mode="incremental")
+            # except Exception as naaim_err:
+            #     logger.error(f"⚠️ Failed to restore NAAIM metadata: {naaim_err}")
                 
         except Exception as cache_err:
             logger.error(f"⚠️ Failed to invalidate caches: {cache_err}")
