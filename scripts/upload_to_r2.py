@@ -6,11 +6,15 @@ import boto3
 from botocore.config import Config
 from tqdm import tqdm
 
+from dotenv import load_dotenv
+
 # Add backend directory to path
-sys.path.append(str(Path(__file__).parent.parent))
+backend_dir = Path(__file__).parent.parent
+sys.path.append(str(backend_dir))
+load_dotenv(backend_dir / ".env")
 
 # Configuration
-OUTPUT_DIR = Path("output")
+OUTPUT_DIR = backend_dir / "output"
 R2_ACCOUNT_ID = os.getenv("R2_ACCOUNT_ID")
 R2_ACCESS_KEY_ID = os.getenv("R2_ACCESS_KEY_ID")
 R2_SECRET_ACCESS_KEY = os.getenv("R2_SECRET_ACCESS_KEY")

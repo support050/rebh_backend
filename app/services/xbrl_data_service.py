@@ -6,7 +6,10 @@ from botocore.config import Config
 
 from app.schemas.xbrl_financials import CompanyFinancials, CompanyListItem
 
-OUTPUT_DIR = Path(os.getenv("OUTPUT_DIR", "output"))
+_DEFAULT_OUTPUT = Path(__file__).resolve().parent.parent.parent / "output"
+OUTPUT_DIR = Path(os.getenv("OUTPUT_DIR", str(_DEFAULT_OUTPUT)))
+if not OUTPUT_DIR.exists() and _DEFAULT_OUTPUT.exists():
+    OUTPUT_DIR = _DEFAULT_OUTPUT
 
 # R2 Configuration
 R2_ACCOUNT_ID = os.getenv("R2_ACCOUNT_ID")
@@ -84,9 +87,18 @@ def get_company(symbol: str) -> CompanyFinancials | None:
     fp = OUTPUT_DIR / f"{symbol}_financials.json"
     if not fp.exists():
         return None
-    with open(fp, encoding="utf-8") as f:
-        raw = json.load(f)
-    return CompanyFinancials(**raw)
+    try:
+        with open(fp, encoding="utf-8") as f:
+            raw = json.load(f)
+        if "meta" not in raw:
+            raw["meta"] = {}
+        if not raw["meta"].get("symbol"):
+            raw["meta"]["symbol"] = symbol
+        if not raw["meta"].get("company_name"):
+            raw["meta"]["company_name"] = symbol
+        return CompanyFinancials(**raw)
+    except Exception:
+        return None
 
 
 def save_company(symbol: str, data: dict) -> Path:

@@ -253,6 +253,7 @@ PARAM_MAPPING = {
     'income tax expenses': ('IS-125', -1),
     'income tax on continuing operations for period': ('IS-125', -1),
     'income tax payable': ('BS-120', 1),
+    'income taxes and zakat': ('IS-120', -1),
     'income taxes paid (refund), classified as operating activities': ('CF-050', -1),
     'increase (decrease) in cash and cash equivalents before effect of exchange rate changes': ('BS-010', 1),
     'increase (decrease) in operating liabilities': ('CF-040', 1),
@@ -276,6 +277,9 @@ PARAM_MAPPING = {
     'investments in joint ventures and associates': ('BS-075', 1),
     'investments income': ('IS-090', 1),
     'investments, net': ('BS-060', 1),
+    'islamic financing, current': ('BS-110', 1),
+    'islamic financing, non-current': ('BS-140', 1),
+    'ijara financing': ('BS-140', 1),
     'lease receivable, non current': ('BS-080', 1),
     'loans, financing and advances, net': ('BS-020', 1),
     'loans,financing and advances, net': ('BS-020', 1),
@@ -283,6 +287,11 @@ PARAM_MAPPING = {
     'long-term borrowings': ('BS-140', 1),
     'long-term debt': ('BS-140', 1),
     'marketing expenses': ('IS-040', -1),
+    'murabaha and sukuk': ('BS-140', 1),
+    'murabaha financing, current': ('BS-110', 1),
+    'murabaha financing, non-current': ('BS-140', 1),
+    'murabahas, current': ('BS-110', 1),
+    'murabahas, non-current': ('BS-140', 1),
     'net amount transferred to retained earnings on disposal of equity investments held at fair value through other comprehensive income': ('BS-180', 1),
     'net cash flows from (used in) financing activities': ('CF-130', 1),
     'net cash flows from (used in) financing activities, insurance operations': ('CF-130', 1),
@@ -363,20 +372,20 @@ PARAM_MAPPING = {
     'proceeds from sale of financial assets': ('CF-080', 1),
     'proceeds from sale of property and equipment': ('CF-080', 1),
     'profit (loss) attributable to owners of parent': ('IS-150', 1),
-    # CF-010: keep the continuing-operations opening line only (synonyms are blocklisted)
-    'profit (loss) before zakat and income tax from continuing operations': ('CF-010', 1),
+    'profit (loss) before zakat and tax': ('IS-110', 1),
+    'profit (loss) before zakat and income tax': ('IS-110', 1),
+    'profit (loss) before zakat and tax from continuing operations': ('IS-110', 1),
+    'profit (loss) before zakat and income tax from continuing operations': ('IS-110', 1),
+    'profit before zakat and tax': ('IS-110', 1),
+    'profit before zakat and income tax': ('IS-110', 1),
     'profit (loss) for period': ('IS-140', 1),
     'profit (loss) for period from continuing operations': ('IS-130', 1),
     'profit (loss) for period from discontinued operations': ('IS-135', 1),
-    'profit (loss) for the period': ('IS-140', 1),
     'profit (loss) from continuing operations': ('IS-130', 1),
-    'profit (loss) from continuing operations before zakat and income tax': ('IS-110', 1),
     'profit (loss) from discontinued operations': ('IS-135', 1),
-    'profit (loss) from operating activities': ('IS-070', 1),
     'profit (loss) from operations': ('IS-070', 1),
-    # Parent share → IS-150 (was wrongly IS-140 and doubled Net Profit)
+    'profit (loss) of discontinued operations': ('IS-135', 1),
     'profit (loss), attributable to equity holders of parent company': ('IS-150', 1),
-    'profit attributable to shareholders of parent': ('IS-150', 1),
     'profit before zakat': ('IS-110', 1),
     'profit for period': ('IS-140', 1),
     'profit for the period': ('IS-140', 1),
@@ -431,6 +440,12 @@ PARAM_MAPPING = {
     'special commission expenses / return on deposits': ('IS-020', -1),
     'special commission income/ gross financing and investment income': ('IS-010', 1),
     'statutory reserve': ('BS-175', 1),
+    'sukuk, current': ('BS-110', 1),
+    'sukuk, non-current': ('BS-140', 1),
+    'sukuks, current': ('BS-110', 1),
+    'sukuks, non-current': ('BS-140', 1),
+    'tawarruq, current': ('BS-110', 1),
+    'tawarruq, non-current': ('BS-140', 1),
     'the general and administrative expenses': ('IS-050', -1),
     'the selling and marketing expenses': ('IS-040', -1),
     'time deposits': ('BS-015', 1),
@@ -451,8 +466,6 @@ PARAM_MAPPING = {
     'total equity attributable to equity holders of bank': ('BS-185', 1),
     'total liabilities': ('BS-160', 1),
     'total liabilities and equity': ('BS-200', 1),
-    'total non-current assets': ('BS-090', 1),
-    'total non-current liabilities': ('BS-160', 1),
     'total operating revenue': ('IS-010', 1),
     'total other reserves': ('BS-182', 1),
     'total revenue': ('IS-010', 1),
@@ -480,6 +493,7 @@ PARAM_MAPPING = {
     'weighted average number of shares': ('IS-170', 1),
     'zakat': ('IS-120', -1),
     'zakat and income tax': ('IS-120', -1),
+    'zakat and income tax expenses': ('IS-120', -1),
     'zakat and income tax liabilities': ('BS-120', 1),
     'zakat and income tax paid': ('CF-050', -1),
     'zakat expense': ('IS-120', -1),
@@ -536,6 +550,11 @@ MAPPING_BLOCKLIST = {
     # BS-175 / BS-155 hygiene
     'general reserve',
     'finance leases, non-current',
+    # Prevent non-current totals from mapping to total assets/liabilities
+    'total non-current assets',
+    'total non current assets',
+    'total non-current liabilities',
+    'total non current liabilities',
 }
 
 FUZZY_THRESHOLD = 0.92
@@ -613,34 +632,56 @@ def _build_lookup_indexes():
 _NORM_MAP, _TOKEN_MAP = _build_lookup_indexes()
 
 
-def resolve_mapping(label: str):
+def resolve_mapping(label: str, statement: str = None):
     if not label:
         return None
     if _is_blocklisted(label):
         return None
+    
+    def _is_valid_for_stmt(m):
+        if not m or not statement:
+            return True
+        code = m[0]
+        expected_stmt = STANDARD_TEMPLATE.get(code, {}).get('statement')
+        return expected_stmt is None or expected_stmt == statement
+
     raw = str(label).lower().strip()
     if raw in PARAM_MAPPING:
-        return PARAM_MAPPING[raw]
+        m = PARAM_MAPPING[raw]
+        if _is_valid_for_stmt(m):
+            return m
     norm = normalize_label(label)
     if not norm:
         return None
     if norm in PARAM_MAPPING:
-        return PARAM_MAPPING[norm]
+        m = PARAM_MAPPING[norm]
+        if _is_valid_for_stmt(m):
+            return m
     if norm in _NORM_MAP:
-        return _NORM_MAP[norm]
+        m = _NORM_MAP[norm]
+        if _is_valid_for_stmt(m):
+            return m
     for a, b in _SWAP_PHRASES:
         if a in norm:
             swapped = norm.replace(a, b)
             if swapped in _NORM_MAP:
-                return _NORM_MAP[swapped]
+                m = _NORM_MAP[swapped]
+                if _is_valid_for_stmt(m):
+                    return m
             if swapped in PARAM_MAPPING:
-                return PARAM_MAPPING[swapped]
+                m = PARAM_MAPPING[swapped]
+                if _is_valid_for_stmt(m):
+                    return m
     tk = _token_key(label)
     if tk in _TOKEN_MAP:
-        return _TOKEN_MAP[tk]
+        m = _TOKEN_MAP[tk]
+        if _is_valid_for_stmt(m):
+            return m
     best = None
     best_ratio = 0.0
     for nk, mapping in _NORM_MAP.items():
+        if not _is_valid_for_stmt(mapping):
+            continue
         if abs(len(nk) - len(norm)) > max(8, int(len(norm) * 0.25)):
             continue
         ratio = SequenceMatcher(None, norm, nk).ratio()

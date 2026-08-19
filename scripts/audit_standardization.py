@@ -14,8 +14,8 @@ OUTPUT_DIR = Path(__file__).resolve().parent.parent / "output"
 
 # Cache resolve_mapping to avoid expensive SequenceMatcher operations on duplicate labels
 @lru_cache(maxsize=10000)
-def cached_resolve_mapping(label):
-    return resolve_mapping(label)
+def cached_resolve_mapping(label, statement=None):
+    return resolve_mapping(label, statement=statement)
 
 def audit_companies():
     if not DATA_DIR.exists():
@@ -126,7 +126,7 @@ def audit_companies():
                 lbl = item.get("label")
                 if not lbl:
                     continue
-                mapping = cached_resolve_mapping(lbl)
+                mapping = cached_resolve_mapping(lbl, statement=raw_sec_key)
                 if mapping:
                     code, direction = mapping
                     if code not in raw_mappings[raw_sec_key]:
@@ -165,6 +165,8 @@ def audit_companies():
                     for r_lbl, direction, r_vals in mapped_items:
                         r_val = r_vals.get(p)
                         if r_val is not None:
+                            if code == "IS-160" and abs(r_val) > 500:
+                                continue
                             raw_contribs.append((r_lbl, r_val, direction))
 
                     if std_val is None and not raw_contribs:

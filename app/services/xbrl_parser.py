@@ -21,11 +21,13 @@ UNMAPPED_HEADER_AR = "أخرى / غير موحدة"
 CANONICAL = {
     # "100010": "filing_info",
     # "200100": "auditors_report",
+    "200110": "balance_sheet",
     "300100": "balance_sheet",
+    "300110": "income_statement",
     "300200": "balance_sheet",
-    "300300": "other_comprehensive_income",
+    "300300": "income_statement",
     "300400": "income_statement",
-    "300500": "equity_changes",
+    "300500": "other_comprehensive_income",
     "300600": "equity_changes",
     "300700": "cash_flow",
     "300800": "cash_flow",
@@ -75,6 +77,21 @@ def period_sort_key(key):
 def make_period_key(start, end, is_snapshot):
     if is_snapshot or not start: return end[:7]
     return f"{start[:7]}_{end[:7]}"
+
+def classify_canonical_section(code: str, title: str) -> str:
+    """Classify section canonical key based on title semantics and block code."""
+    tl = (title or "").lower().strip()
+    if any(k in tl for k in ["comprehensive", "الشامل"]):
+        return "other_comprehensive_income"
+    if any(k in tl for k in ["income", "profit", "loss", "operations", "الدخل", "الأرباح والخسائر", "الارباح والخسائر"]):
+        return "income_statement"
+    if any(k in tl for k in ["financial position", "balance sheet", "المركز المالي", "الميزانية"]):
+        return "balance_sheet"
+    if any(k in tl for k in ["cash flow", "cash flows", "التدفقات النقدية", "التدفقات"]):
+        return "cash_flow"
+    if any(k in tl for k in ["changes in equity", "equity", "حقوق الملكية", "التغيرات في حقوق"]):
+        return "equity_changes"
+    return CANONICAL.get(code)
 
 # ── File structure ────────────────────────────────────────────────────────
 
@@ -303,11 +320,8 @@ def parse_xbrl_file(filepath):
     sections = {}
     for i, (row_idx, code, title) in enumerate(boundaries[:-1]):
         next_row = boundaries[i + 1][0]
-        canonical = CANONICAL.get(code)
+        canonical = classify_canonical_section(code, title)
         if not canonical: continue
-        tl = title.lower()
-        if code == "300200": canonical = "income_statement" if ("income" in tl or "الدخل" in tl) else "balance_sheet"
-        elif code == "300400": canonical = "cash_flow" if ("cash" in tl or "النقد" in tl or "التدفقات" in tl) else "income_statement"
 
         # use dedicated equity parser
         if canonical == "equity_changes":
@@ -410,7 +424,7 @@ def merge_files(file_results):
             has_numeric = any(isinstance(v, (int, float)) for v in item["values"].values())
             if item.get("is_header") and not has_numeric:
                 continue
-            mapping = resolve_mapping(item["label"])
+            mapping = resolve_mapping(item["label"], statement=raw_key)
             if mapping:
                 code, direction = mapping
                 if code in std_items_map:
@@ -418,6 +432,8 @@ def merge_files(file_results):
                     for p in periods:
                         raw_val = item["values"].get(p)
                         if isinstance(raw_val, (int, float)):
+                            if code == "IS-160" and abs(raw_val) > 500:
+                                continue
                             pending[code][p].append(raw_val * direction)
                 else:
                     unmapped_items.append(_make_unmapped_item(item, periods))
