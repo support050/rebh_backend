@@ -37,15 +37,24 @@ def _all_json_files() -> list[Path]:
 
 
 def list_companies() -> list[CompanyListItem]:
+    # 1. Local compiled index first
+    local_index = OUTPUT_DIR / "companies_list.json"
+    if local_index.exists():
+        try:
+            with open(local_index, encoding="utf-8") as f:
+                data = json.load(f)
+            return [CompanyListItem(**item) for item in data]
+        except Exception:
+            pass
+
+    # 2. Remote R2 index
     client = _get_r2_client()
     if client:
         try:
-            # Try to fetch compiled index from R2
             obj = client.get_object(Bucket=R2_BUCKET_NAME, Key="companies_list.json")
             data = json.loads(obj["Body"].read().decode("utf-8"))
             return [CompanyListItem(**item) for item in data]
         except Exception:
-            # Fallback to local index build if R2 read fails
             pass
 
     # Local fallback
@@ -73,6 +82,23 @@ def list_companies() -> list[CompanyListItem]:
 
 
 def get_company(symbol: str) -> CompanyFinancials | None:
+    # 1. Local fallback first (fastest)
+    fp = OUTPUT_DIR / f"{symbol}_financials.json"
+    if fp.exists():
+        try:
+            with open(fp, encoding="utf-8") as f:
+                raw = json.load(f)
+            if "meta" not in raw:
+                raw["meta"] = {}
+            if not raw["meta"].get("symbol"):
+                raw["meta"]["symbol"] = symbol
+            if not raw["meta"].get("company_name"):
+                raw["meta"]["company_name"] = symbol
+            return CompanyFinancials(**raw)
+        except Exception:
+            pass
+
+    # 2. Remote R2 fallback
     client = _get_r2_client()
     if client:
         try:
@@ -81,24 +107,9 @@ def get_company(symbol: str) -> CompanyFinancials | None:
             raw = json.loads(obj["Body"].read().decode("utf-8"))
             return CompanyFinancials(**raw)
         except Exception:
-            pass  # Fall through to local fallback
+            pass
 
-    # Local fallback
-    fp = OUTPUT_DIR / f"{symbol}_financials.json"
-    if not fp.exists():
-        return None
-    try:
-        with open(fp, encoding="utf-8") as f:
-            raw = json.load(f)
-        if "meta" not in raw:
-            raw["meta"] = {}
-        if not raw["meta"].get("symbol"):
-            raw["meta"]["symbol"] = symbol
-        if not raw["meta"].get("company_name"):
-            raw["meta"]["company_name"] = symbol
-        return CompanyFinancials(**raw)
-    except Exception:
-        return None
+    return None
 
 
 def save_company(symbol: str, data: dict) -> Path:

@@ -249,6 +249,18 @@ def get_company_signals(symbol: str) -> Dict[str, Any]:
     }
 
 
+def get_all_company_signals() -> Dict[str, List[Dict[str, Any]]]:
+    """Batch fetch all signals for all companies."""
+    from app.services.xbrl_data_service import list_companies
+    companies = list_companies()
+    results = {}
+    for c in companies:
+        s = get_company_signals(c.symbol)
+        if s.get("signals"):
+            results[c.symbol] = s.get("signals")
+    return results
+
+
 # --- 4. FINANCIAL VALUATION MODELS (BUFFETT, GRAHAM, MAGIC FORMULA, LYNCH) ---
 
 def calculate_valuation_models(symbol: str, price: Optional[float] = None, market_cap_m: Optional[float] = None) -> Dict[str, Any]:
@@ -350,12 +362,41 @@ def calculate_valuation_models(symbol: str, price: Optional[float] = None, marke
 _MODELS_CACHE: Optional[List[Dict[str, Any]]] = None
 
 def get_all_valuation_models() -> List[Dict[str, Any]]:
-    """Batch calculate models for all available companies with fast in-memory cache."""
+    """
+    Batch calculate or fetch pre-compiled models for all available companies.
+    1. Memory Cache (Instant)
+    2. Local all_models_summary.json (Fast)
+    3. Remote R2 all_models_summary.json (Production Fast - 1 network request instead of 240)
+    4. On-the-fly calculation fallback
+    """
     global _MODELS_CACHE
     if _MODELS_CACHE is not None:
         return _MODELS_CACHE
 
-    from app.services.xbrl_data_service import list_companies
+    import json
+    from app.services.xbrl_data_service import OUTPUT_DIR, _get_r2_client, R2_BUCKET_NAME, list_companies
+
+    # 1. Try local summary file
+    summary_file = OUTPUT_DIR / "all_models_summary.json"
+    if summary_file.exists():
+        try:
+            with open(summary_file, encoding="utf-8") as f:
+                _MODELS_CACHE = json.load(f)
+                return _MODELS_CACHE
+        except Exception:
+            pass
+
+    # 2. Try remote R2 summary file (For Production Deployments)
+    client = _get_r2_client()
+    if client:
+        try:
+            obj = client.get_object(Bucket=R2_BUCKET_NAME, Key="all_models_summary.json")
+            _MODELS_CACHE = json.loads(obj["Body"].read().decode("utf-8"))
+            return _MODELS_CACHE
+        except Exception:
+            pass
+
+    # 3. Fallback: calculate on-the-fly and save cache
     companies = list_companies()
     results = []
     for c in companies:

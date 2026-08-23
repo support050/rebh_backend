@@ -16,7 +16,7 @@ class S3Storage:
         
         # Log warning if config missing (but don't crash app startup)
         if not (self.endpoint_url and self.access_key and self.secret_key and self.bucket_name):
-             print("⚠️ S3 Configuration missing. Storage service will not work.")
+             print("[INFO] S3 Configuration missing. Storage service will not work.")
         
         try:
             self.s3_client = boto3.client(

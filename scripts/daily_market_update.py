@@ -474,6 +474,45 @@ def update_daily(target_date_str=None):
         except Exception as exp_err:
             logger.error(f"⚠️ RS Hub data export failed: {exp_err}")
 
+        # 8.8 Pre-calculate and Upload Valuation Models Summary to R2
+        # -------------------------------------------------------------------
+        try:
+            logger.info("☁️ Pre-calculating valuation models summary & uploading to R2...")
+            from app.services.xbrl_data_service import OUTPUT_DIR, _get_r2_client, R2_BUCKET_NAME, list_companies
+            from app.services.rebh_engine_service import calculate_valuation_models
+
+            companies = list_companies()
+            all_models = []
+            for c in companies:
+                try:
+                    m = calculate_valuation_models(c.symbol)
+                    all_models.append({
+                        "symbol": c.symbol,
+                        "company_name": c.company_name,
+                        "sector": c.sector,
+                        "models": m.get("models")
+                    })
+                except Exception as model_err:
+                    logger.warning(f"⚠️ Error compiling model for {c.symbol}: {model_err}")
+
+            models_summary_path = OUTPUT_DIR / "all_models_summary.json"
+            with open(models_summary_path, "w", encoding="utf-8") as f:
+                json.dump(all_models, f, ensure_ascii=False, indent=2)
+
+            r2_client = _get_r2_client()
+            if r2_client:
+                r2_client.upload_file(
+                    Filename=str(models_summary_path),
+                    Bucket=R2_BUCKET_NAME,
+                    Key="all_models_summary.json",
+                    ExtraArgs={"ContentType": "application/json"}
+                )
+                logger.info(f"✅ Pre-compiled models summary ({len(all_models)} companies) uploaded to R2.")
+            else:
+                logger.info(f"✅ Pre-compiled models summary saved locally ({len(all_models)} companies).")
+        except Exception as models_err:
+            logger.error(f"⚠️ Valuation models summary sync failed: {models_err}")
+
         # 9. Finalize Update Status (Atomic Switch)
         # -------------------------------------------------------------------
         try:

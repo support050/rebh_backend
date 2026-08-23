@@ -25,3 +25,4 @@ from app.models.system_config import SystemConfig
 from app.models.valuation_zones import ValuationZone
 from app.models.tasi_components import TasiComponent
 from app.models.aporia import AporiaAnalytics
+from app.models.Corporate_actions import CorporateAction

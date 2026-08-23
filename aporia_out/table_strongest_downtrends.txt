@@ -1,11 +1,11 @@
 ticker	name	sector	market_cap	val_avg_3mo	trailingPE	last	mtd_rtn	mo3_rtn	year_rtn	daily_trend	weekly_trend	monthly_trend	trend_rank	pfh_250	days_since_high_250	breakout	longest_consolidation_window	position	price_extreme	vol_5_day_chng	vol_20_day_chng
-3050	Southern Province Cement Co.	Materials	107	231	-	19.06	2.6%	-6.5%	-26.2%	down:87,11	down:773,11	down:939,11	273	44.6%	1390	-	-	-	-	+88%	-26%
-3002	Najran Cement Co.	Materials	173	220	34.2	5.34	-2.6%	-9.5%	-33.2%	down:126,*	down:752,*	down:837,*	272	54.7%	1284	All-Time Low	-	-	red	+42%	-23%
-3004	Northern Region Cement Co.	Materials	162	246	19.4	6.6	3.1%	-5.4%	-15.3%	down:58,10	down:345,10	down:900,10	271	24.8%	1272	-	-	-	-	+120%	-5%
-2220	National Metal Manufacturing and Casting Co.	Materials	239	223	-	11.87	2.2%	-0.1%	-25.2%	down:19,11	down:181,109	down:871,109	270	51.1%	1272	-	-	-	-	-17%	-63%
-4336	Mulkia Gulf Real Estate REIT	REITs	227	268	-	4.5	-1.5%	-2.0%	-2.8%	down:5,*	down:1038,108	down:924,108	269	8.9%	1271	-	-	-	-	+6%	+11%
-1201	Takween Advanced Industries Co.	Materials	245	213	-	4.62	-6.7%	-10.5%	-37.8%	down:2,1	down:554,12	down:926,12	268	68.8%	1268	-	-	-	-	-33%	+130%
-4141	Al-Omran Industrial Trading Co.	Capital Goods	262	239	-	20.04	0.9%	-3.3%	-24.4%	down:21,10	down:367,10	down:511,10	267	62.2%	1268	-	114	6%	-	-26%	-79%
-4335	Musharaka REIT Fund	REITs	254	264	-	3.49	2.1%	-14.9%	-16.5%	down:92,2	down:113,2	down:898,2	266	28.9%	1266	-	-	-	red	+88%	+118%
-4340	Al Rajhi REIT Fund	REITs	121	234	14.9	8.0	-0.9%	-3.4%	-2.0%	down:16,2	down:6,2	down:734,139	265	4.8%	1254	-	-	-	-	+200%	+74%
-3010	Arabian Cement Co.	Materials	122	202	11.4	22.11	-0.1%	-3.4%	2.2%	down:13,11	down:2,*	down:722,257	264	9.6%	1245	-	-	-	-	-39%	+61%
+3050	Southern Province Cement Co.	Materials	107	233	-	19.11	2.8%	-5.0%	-26.5%	down:92,16	down:778,16	down:944,16	273	44.2%	1395	-	-	-	-	-68%	-8%
+4700	Al Khabeer Diversified Income Traded Fund	Closed-End Fund	-	272	-	4.74	-1.0%	-1.7%	-17.0%	down:5,*	down:373,*	down:392,*	272	21.9%	1390	All-Time Low	-	-	-	-8%	-49%
+3002	Najran Cement Co.	Materials	173	221	34.2	5.53	0.9%	-5.1%	-31.9%	down:131,5	down:757,5	down:842,5	271	49.4%	1289	-	-	-	red	-25%	-7%
+4348	Alkhabeer REIT Fund	REITs	187	255	21.3	5.62	-2.1%	-1.9%	-0.5%	down:12,1	down:4,1	down:849,112	270	3.9%	1277	-	311	31%	-	-67%	-18%
+4336	Mulkia Gulf Real Estate REIT	REITs	227	268	-	4.48	-2.0%	-2.0%	-4.5%	down:10,1	down:1043,113	down:929,113	269	9.4%	1276	-	-	-	-	-21%	-39%
+4141	Al-Omran Industrial Trading Co.	Capital Goods	262	239	-	19.35	-2.6%	-3.5%	-28.9%	down:26,1	down:372,1	down:516,1	268	68.0%	1273	-	-	-	-	+92%	-55%
+4335	Musharaka REIT Fund	REITs	254	266	-	3.44	0.6%	-13.8%	-18.7%	down:97,7	down:118,7	down:903,7	267	30.8%	1271	-	-	-	red	-73%	+77%
+4340	Al Rajhi REIT Fund	REITs	121	235	14.9	7.91	-2.0%	-3.8%	-3.1%	down:21,1	down:11,1	down:739,144	266	5.9%	1259	-	-	-	-	-34%	+57%
+4339	Derayah REIT Fund	REITs	213	250	66.1	5.26	-0.6%	-0.8%	-4.4%	down:17,1	down:3,1	down:758,144	265	9.1%	1255	-	-	-	-	+207%	+2%
+3010	Arabian Cement Co.	Materials	122	200	11.4	21.74	-1.8%	-4.1%	0.1%	down:18,3	down:7,3	down:727,262	264	11.5%	1250	-	-	-	-	+69%	+105%

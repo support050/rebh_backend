@@ -1,27 +1,6 @@
 ticker	name	sector	market_cap	val_avg_3mo	trailingPE	last	mtd_rtn	mo3_rtn	year_rtn	daily_trend	weekly_trend	monthly_trend	trend_rank	pfh_250	days_since_high_250	breakout	longest_consolidation_window	position	price_extreme	vol_5_day_chng	vol_20_day_chng
-7200	Al Moammar Information Systems Co.	Software & Services	60	56	98.0	306.0	26.9%	62.8%	135.4%	up:83,*	up:156,*	up:165,*	1	0.0%	0	All-Time High	-	-	green,green	+17%	+45%
-2380	Rabigh Refining and Petrochemical Co.	Energy	23	4	-	17.7	19.0%	10.6%	151.4%	up:24,*	up:93,*	flat	13	0.0%	0	3-Year High	-	-	green	-15%	+101%
-4310	Knowledge Economic City	Real Estate Mgmt & Dev't	79	125	-	17.12	14.5%	47.3%	37.5%	up:37,*	up:6,*	down:255,100	40	0.0%	0	2-Year High	-	-	green,green	+57%	+272%
-6015	Americana Restaurants International PLC - Foreign Company	Consumer Services	30	22	20.4	2.4	7.1%	29.0%	14.3%	up:54,*	flat	flat	30	0.0%	0	1-Year High	-	-	green	+13%	+41%
-2287	Arabian Company for Agricultural and Industrial Investment	Food & Beverages	199	128	-	22.8	-1.5%	-12.5%	-43.7%	down:12,*	down:57,*	flat	141	83.2%	305	All-Time Low	-	-	red	+40%	-16%
-2084	Miahona Co.	Utilities	131	130	135.0	11.19	-7.9%	-27.2%	-55.6%	down:73,*	down:191,*	flat	160	134.1%	517	All-Time Low	-	-	red,red	+27%	+104%
-4322	Retal Urban Development Co.	Real Estate Mgmt & Dev't	77	71	17.8	9.02	-11.2%	-31.7%	-30.6%	down:57,*	down:45,*	flat	156	67.5%	420	2-Year Low	-	-	red,red	-25%	+264%
-2080	Alghaz Waltsnae Company Eligibility Alqabida	Utilities	81	112	17.8	60.2	-5.7%	-23.1%	-19.5%	down:77,*	down:104,*	flat	146	57.5%	370	2-Year Low	-	-	red,red	+18%	+46%
-4004	Dallah Healthcare Co.	Health Care Equipment & Svc	44	80	23.0	97.05	-7.8%	-12.9%	-27.3%	down:34,*	down:165,*	flat	165	61.5%	614	4-Year Low	-	-	-	-50%	+166%
-1111	Saudi Tadawul Group Holding Co.	Financial Services	39	34	43.6	115.9	-2.3%	-14.2%	-30.1%	down:39,*	down:172,*	down:78,*	229	83.4%	583	All-Time Low	-	-	red,red	-45%	+74%
-4071	Arabian Contracting Services Co.	Media and Entertainment	86	108	129.3	64.95	-19.0%	-32.9%	-25.3%	down:79,*	down:72,*	down:183,*	243	101.2%	620	All-Time Low	-	-	red,red	+246%	+124%
-4261	Theeb Rent a Car Co.	Transportation	141	66	8.5	20.2	-8.8%	-22.7%	-51.8%	down:182,*	down:317,*	down:121,*	215	115.2%	435	All-Time Low	-	-	red,red	+3%	+26%
-6070	Al-Jouf Agricultural Development Co.	Food & Beverages	155	190	25.6	38.22	-7.7%	-14.1%	-12.3%	down:26,*	down:56,*	down:170,*	195	38.5%	92	5-Year Low	-	-	-	+28%	-9%
-2210	Nama Chemicals Co.	Materials	232	273	5.6	18.74	0.0%	0.0%	-26.1%	down:137,71	down:319,71	down:579,71	254	46.2%	973	5-Year Low	-	-	-	-	-
-4003	United Electronics Co.	Consumer Discretionary Distribution & Retail	74	61	10.5	62.5	-5.5%	-22.1%	-29.3%	down:73,*	down:172,*	down:82,*	216	48.7%	437	5-Year Low	-	-	-	+28%	+63%
-4150	Arriyadh Development Co.	Real Estate Mgmt & Dev't	92	141	12.3	15.5	-4.2%	-15.5%	-51.6%	down:18,*	down:177,*	down:5,*	212	119.0%	383	6-Year Low	-	-	red,red	-32%	+3%
-1214	Al Hassan Ghazi Ibrahim Shaker Co.	Capital Goods	180	109	11.0	11.53	-11.0%	-23.2%	-57.9%	down:75,*	down:292,*	down:109,*	233	148.2%	593	6-Year Low	-	-	red	-46%	+138%
-4210	Saudi Research and Media Group	Media and Entertainment	83	69	-	56.5	-4.3%	-24.0%	-67.7%	down:39,*	down:345,*	down:111,*	230	240.2%	589	6-Year Low	-	-	red	+3%	+32%
-4342	Jadwa REIT Saudi Fund	REITs	132	197	34.0	9.83	-3.5%	-11.9%	-3.9%	down:44,*	down:8,*	down:479,*	196	19.0%	110	6-Year Low	-	-	red,red	+67%	+96%
-4346	MEFIC REIT Fund	REITs	261	269	-	3.28	-1.2%	-6.0%	-10.6%	down:87,*	down:569,*	down:935,*	235	16.5%	595	All-Time Low	-	-	red	-8%	+24%
-4001	Abdullah Al Othaim Markets Co.	Consumer Staples Distribution & Retail	84	155	19.8	4.85	-5.6%	-18.1%	-33.6%	down:116,*	down:556,*	down:306,*	249	62.5%	762	9-Year Low	-	-	red	+258%	+18%
-4008	Saudi Company for Hardware	Consumer Discretionary Distribution & Retail	190	222	18.5	20.42	-7.2%	-13.0%	-29.0%	down:71,*	down:179,*	down:1147,*	247	62.7%	643	All-Time Low	-	-	red	+47%	-25%
-3002	Najran Cement Co.	Materials	173	220	34.2	5.34	-2.6%	-9.5%	-33.2%	down:126,*	down:752,*	down:837,*	272	54.7%	1284	All-Time Low	-	-	red	+42%	-23%
-2140	AYYAN Investment Co.	Health Care Equipment & Svc	174	208	36.8	9.1	-1.2%	-16.2%	-26.4%	down:25,*	down:326,*	down:326,*	242	51.5%	607	15-Year Low	-	-	red,red	-23%	+26%
-2010	Saudi Basic Industries Corp.	Materials	6	9	-	49.2	-0.8%	-20.1%	-14.3%	down:51,*	down:41,*	down:905,*	261	27.6%	1102	17-Year Low	-	-	-	-1%	+16%
-3090	Tabuk Cement Co.	Materials	200	250	23.9	7.27	-1.9%	-8.3%	-30.3%	down:91,*	down:330,*	down:748,*	211	49.9%	376	All-Time Low	-	-	red	+10%	-18%
+2084	Miahona Co.	Utilities	131	113	135.0	11.16	-8.2%	-26.8%	-56.3%	down:78,*	down:196,*	flat	165	134.8%	522	All-Time Low	-	-	red,red	+102%	+161%
+4071	Arabian Contracting Services Co.	Media and Entertainment	86	104	129.3	63.5	-20.8%	-32.2%	-27.0%	down:84,*	down:77,*	down:188,*	246	105.8%	625	All-Time Low	-	-	red,red	-35%	+179%
+4700	Al Khabeer Diversified Income Traded Fund	Closed-End Fund	-	272	-	4.74	-1.0%	-1.7%	-17.0%	down:5,*	down:373,*	down:392,*	272	21.9%	1390	All-Time Low	-	-	-	-8%	-49%
+2210	Nama Chemicals Co.	Materials	232	273	5.6	18.74	0.0%	0.0%	-29.9%	down:142,76	down:324,76	down:584,76	256	45.7%	978	5-Year Low	-	-	-	-	-
+3008	Al Kathiri Holding Co.	Materials	253	170	-	1.15	-14.2%	-34.7%	-46.5%	down:113,*	down:451,*	down:360,*	254	92.2%	830	All-Time Low	-	-	-	+1241%	+9%

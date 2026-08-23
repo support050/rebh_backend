@@ -139,6 +139,8 @@ app.include_router(naaim_router.router, prefix="/api/naaim", tags=["NAAIM Exposu
 app.include_router(xbrl_companies.router, dependencies=protected_dependencies)
 app.include_router(xbrl_financials.router, dependencies=protected_dependencies)
 app.include_router(xbrl_upload.router, dependencies=protected_dependencies)
+from app.api.routes import terminal as terminal_router
+app.include_router(terminal_router.router, dependencies=protected_dependencies)
 app.include_router(market_pulse_router.router, prefix="/api/market-pulse", tags=["Market Pulse"])
 app.include_router(rs_line_router.router, tags=["RS Line Indicators"], dependencies=protected_dependencies)
 app.include_router(mansfield_rs_router.router, prefix="/api/indicators/mansfield-rs", tags=["Indicators"], dependencies=protected_dependencies)

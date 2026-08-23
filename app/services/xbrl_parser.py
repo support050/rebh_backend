@@ -451,6 +451,23 @@ def merge_files(file_results):
                 else:
                     std_items_map[code]["values"][p] = sum(vals)
 
+        # Balance sheet post-processing: auto-repair double-counted Total Assets if TA = Total + Current
+        if std_key == "standardized_balance_sheet":
+            for p in periods:
+                ta = std_items_map.get("BS-100", {}).get("values", {}).get(p)
+                ca = std_items_map.get("BS-040", {}).get("values", {}).get(p)
+                nca = std_items_map.get("BS-090", {}).get("values", {}).get(p)
+                tl = std_items_map.get("BS-200", {}).get("values", {}).get(p)
+                te = std_items_map.get("BS-300", {}).get("values", {}).get(p)
+                
+                # Check if double-counted: TA reported ≈ CA + NCA + CA
+                if ta is not None and ca is not None and tl is not None and te is not None:
+                    target_le = tl + te
+                    if target_le > 0 and abs(ta - target_le) / target_le > 0.15:
+                        recovered_ta = (ta + (ca or 0.0)) / 2.0
+                        if abs(recovered_ta - target_le) / target_le <= 0.05:
+                            std_items_map["BS-100"]["values"][p] = recovered_ta
+
         items_out = [
             {
                 "label": it["label"],

@@ -20,6 +20,12 @@ def get_all_valuation_models():
     return rebh_engine_service.get_all_valuation_models()
 
 
+@router.get("/signals/all")
+@router.get("/signals/all/")
+def get_all_signals():
+    return rebh_engine_service.get_all_company_signals()
+
+
 @router.get("/{symbol}", response_model=CompanyFinancials)
 def get_company(symbol: str):
     company = xbrl_data_service.get_company(symbol)

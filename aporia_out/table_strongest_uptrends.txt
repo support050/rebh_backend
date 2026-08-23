@@ -1,11 +1,11 @@
 ticker	name	sector	market_cap	val_avg_3mo	trailingPE	last	mtd_rtn	mo3_rtn	year_rtn	daily_trend	weekly_trend	monthly_trend	trend_rank	pfh_250	days_since_high_250	breakout	longest_consolidation_window	position	price_extreme	vol_5_day_chng	vol_20_day_chng
-7200	Al Moammar Information Systems Co.	Software & Services	60	56	98.0	306.0	26.9%	62.8%	135.4%	up:83,*	up:156,*	up:165,*	1	0.0%	0	All-Time High	-	-	green,green	+17%	+45%
-2300	Saudi Paper Manufacturing Co.	Materials	108	110	34.5	61.5	-10.9%	6.0%	9.9%	up:28,7	up:17,7	up:84,7	2	12.2%	7	-	-	-	-	-6%	+8%
-4280	Kingdom Holding Co.	Financial Services	18	46	22.9	13.25	9.0%	23.5%	68.6%	up:14,3	up:100,52	up:69,52	3	16.1%	52	-	-	-	-	+15%	+59%
-4300	Dar Alarkan Real Estate Development Co.	Real Estate Mgmt & Dev't	28	81	16.7	19.45	5.8%	12.8%	7.8%	up:31,16	up:30,16	up:484,328	4	4.6%	328	-	293	83%	-	-46%	-25%
-2190	Sustained Infrastructure Holding Co.	Transportation	101	86	29.6	34.4	-3.9%	-4.4%	-3.6%	flat	up:61,50	up:90,50	5	9.8%	50	-	668	62%	-	-42%	+80%
-2370	Middle East Specialized Cables Co.	Capital Goods	158	92	10.8	30.64	-0.7%	-9.9%	-7.9%	flat	up:25,22	up:10,3	6	12.4%	62	-	-	-	-	+156%	-7%
-1303	Electrical Industries Co.	Capital Goods	36	18	20.5	15.45	9.2%	-3.0%	66.5%	flat	up:310,79	up:868,79	7	23.8%	78	-	-	-	-	+54%	+3%
-1150	Alinma Bank	Banks	11	6	11.7	24.24	3.8%	2.7%	14.4%	flat	up:86,81	up:41,37	8	5.1%	81	-	-	-	-	-43%	+52%
-7010	Saudi Telecom Co.	Telecommunication Services	5	8	14.4	43.58	1.0%	1.1%	2.8%	flat	up:54,41	up:394,323	9	3.7%	323	-	222	60%	-	-35%	+34%
-1322	Almasane Alkobra Mining Co.	Materials	64	44	18.5	86.7	18.1%	8.0%	34.4%	up:2,*	flat	up:88,81	10	34.7%	129	-	-	-	-	+26%	+102%
+4300	Dar Alarkan Real Estate Development Co.	Real Estate Mgmt & Dev't	28	77	16.7	20.51	11.5%	19.6%	3.2%	up:36,1	up:35,1	up:489,333	1	0.1%	1	-	-	-	-	+65%	-13%
+7200	Al Moammar Information Systems Co.	Software & Services	60	55	98.0	301.0	24.8%	63.3%	131.4%	up:88,5	up:161,5	up:170,5	2	1.7%	4	-	-	-	green,green	-68%	+99%
+2190	Sustained Infrastructure Holding Co.	Transportation	101	84	29.6	37.4	4.5%	9.0%	9.0%	up:2,*	up:66,55	up:95,55	3	1.0%	55	-	673	82%	-	-26%	+94%
+4280	Kingdom Holding Co.	Financial Services	18	45	22.9	14.04	15.6%	23.2%	83.0%	up:19,2	up:105,57	up:74,57	4	9.5%	57	-	-	-	-	-22%	+75%
+1150	Alinma Bank	Banks	11	5	11.7	24.86	6.4%	4.2%	16.6%	up:3,*	up:91,86	up:46,42	5	2.4%	86	-	-	-	-	+63%	+19%
+1180	The Saudi National Bank	Banks	3	3	9.4	41.66	6.3%	8.0%	15.7%	up:9,3	up:4,3	up:102,87	6	8.0%	135	-	-	-	-	-18%	-12%
+7010	Saudi Telecom Co.	Telecommunication Services	5	7	14.4	44.14	2.3%	0.7%	2.9%	up:5,*	up:59,46	up:399,328	7	2.4%	328	-	227	74%	-	+0%	+50%
+2300	Saudi Paper Manufacturing Co.	Materials	108	110	34.5	61.25	-11.2%	7.6%	8.2%	flat	up:22,12	up:89,12	8	12.6%	12	-	-	-	-	-58%	-4%
+8010	The Company for Cooperative Insurance	Insurance	32	25	16.3	137.9	12.5%	1.4%	9.1%	flat	up:53,45	up:53,45	9	16.3%	45	-	606	44%	-	-26%	+83%
+2370	Middle East Specialized Cables Co.	Capital Goods	158	92	10.8	30.46	-1.3%	-7.0%	-8.2%	flat	up:30,27	up:15,8	10	13.1%	67	-	64	24%	-	-79%	-26%
