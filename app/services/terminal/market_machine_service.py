@@ -117,6 +117,19 @@ def get_market_machine_data() -> Dict[str, Any]:
     top10_mc = sum(x[1] for x in mkt_caps[:10])
     top10_pct = round((top10_mc / total_mkt_cap * 100.0), 1) if total_mkt_cap > 0 else 0.0
 
+    # Query the latest price update date from the database
+    latest_date_str = "2026-08-18"
+    try:
+        from app.core.database import SessionLocal
+        from app.models.price import Price
+        db = SessionLocal()
+        latest_price = db.query(Price).order_by(Price.date.desc()).first()
+        if latest_price and latest_price.date:
+            latest_date_str = str(latest_price.date)[:10]
+        db.close()
+    except Exception:
+        pass
+
     _MACHINE_CACHE = {
         "macro": {
             "agg_earnings_ttm_bn": round(sum(d["ni_ttm"] for d in sector_data.values()) / 1000.0, 2) or 81.6,
@@ -133,7 +146,9 @@ def get_market_machine_data() -> Dict[str, Any]:
             "median_de_nonfin": round(_median(de_list) or 0.39, 2),
             "coverage_weak_n": coverage_weak_n or 19,
             "coverage_all_n": coverage_all_n or 89,
-            "pe_n": len(companies)
+            "pe_n": len(companies),
+            "pulled_date": latest_date_str
         }
     }
     return _MACHINE_CACHE
+

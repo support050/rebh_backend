@@ -7,6 +7,13 @@ from botocore.exceptions import ClientError
 
 class S3Storage:
     def __init__(self):
+        # Ensure .env is loaded before reading S3 config
+        from pathlib import Path
+        _env_path = Path(__file__).resolve().parent.parent.parent / ".env"
+        if _env_path.exists():
+            from dotenv import load_dotenv
+            load_dotenv(_env_path, override=False)
+
         self.endpoint_url = os.getenv("S3_ENDPOINT")
         self.access_key = os.getenv("S3_ACCESS_KEY")
         self.secret_key = os.getenv("S3_SECRET_KEY")

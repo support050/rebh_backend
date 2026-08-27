@@ -3,8 +3,15 @@ import json
 import os
 import sys
 import argparse
+from pathlib import Path
 from typing import Dict, List, Any
 from playwright.async_api import async_playwright, Page, Locator
+
+# Auto-load .env from backend root so INTERNAL_API_KEY is available
+_env_path = Path(__file__).resolve().parent.parent / ".env"
+if _env_path.exists():
+    from dotenv import load_dotenv
+    load_dotenv(_env_path, override=False)
 
 # --- Configuration ---
 TIMEOUT_MS = 120000

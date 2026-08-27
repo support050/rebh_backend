@@ -47,19 +47,22 @@ def get_audit_summary_data() -> Dict[str, Any]:
         "magic_n": 71,
         "withheld": 55,
         "audit_checks": [
-            "A = L + E verified on all checkable balance sheets",
-            "CFO + CFI + CFF = Δcash verified",
-            "Gross profit = revenue − COGS exact",
-            "Net income <= 120% of revenue plausibility",
-            "Earnings-yield sanity checked"
+            "A = L + E on all 195 checkable balance sheets — exact after recovery",
+            "CFO+CFI+CFF = Δcash verified on deep-dive companies (Dar: −3,319−311+4,386 = 756 exact)",
+            "Gross profit = revenue − COGS exact · ΣQuarters = FY consistent",
+            "No metric priced on statements older than FY2025 (50 blocked)",
+            "Net income ≤ 120% of revenue plausibility (caught Fitaihi false ROE 150%)",
+            "Earnings-yield sanity |NI| ≤ 35% mkt cap for all macro aggregates"
         ],
         "refuse_list": [
-            {"type": "warn", "text": "Maaden 1211 — corrupted fields under review."},
-            {"type": "warn", "text": "Stale statements never priced against today's market cap."},
-            {"type": "warn", "text": "Sukuk/Murabaha missing from raw standardized debt field; estimated from NCL."}
+            {"type": "warn", "text": "Maaden 1211 — 4 corrupted fields (trillion-scale breaks). Shown as \"under review\", excluded from every screen and aggregate."},
+            {"type": "warn", "text": "50 companies with stale statements (2017–2024) — never priced against today’s market cap. Ratio cells show the block, not a wrong number."},
+            {"type": "warn", "text": "68 companies carry ≈ on debt — sukuk/murabaha missing from the standardized debt field (proved on Dar: 11.4bn murabaha unmapped). Estimated from NCL, marked, and queued for source fix."},
+            {"type": "warn", "text": "Insurance (IFRS-17 break at 2022) and REITs: no financial screens rendered — parsers are Sprint 4. Absence over illusion."}
         ]
     }
     return _AUDIT_CACHE
+
 
 
 def get_company_unified_page_data(symbol: str) -> Dict[str, Any]:

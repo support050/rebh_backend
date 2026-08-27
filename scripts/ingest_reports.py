@@ -2,6 +2,13 @@ import requests
 import json
 import sys
 import os
+from pathlib import Path
+
+# Auto-load .env from backend root
+_env_path = Path(__file__).resolve().parent.parent / ".env"
+if _env_path.exists():
+    from dotenv import load_dotenv
+    load_dotenv(_env_path, override=False)
 
 # API Configuration
 API_URL = "http://localhost:8000/api/ingest/official-reports"

@@ -12,6 +12,7 @@ Provides specialized financial statement models for:
 from typing import Dict, List, Any, Optional
 from app.services.xbrl_data_service import get_company
 from app.services.terminal.quant_lab_service import get_all_ratios_data
+from app.services.terminal.forensic_service import get_latest_market_price
 
 
 def get_sector_templates_master_data() -> Dict[str, Any]:
@@ -33,9 +34,11 @@ def get_sector_templates_master_data() -> Dict[str, Any]:
         sym = spec["symbol"]
         comp = get_company(sym)
         
-        c_name_ar = getattr(comp.meta, "name_ar", None) if comp and hasattr(comp, "meta") else (comp.name_ar if comp else sym)
-        c_name_en = getattr(comp.meta, "company_name", None) if comp and hasattr(comp, "meta") else (comp.company_name if comp else sym)
-        c_sec = getattr(comp.meta, "sector", "General") if comp and hasattr(comp, "meta") else (comp.sector if comp else "General")
+        c_name_en = getattr(comp.meta, "company_name", None) if comp and hasattr(comp, "meta") else sym
+        c_name_ar = getattr(comp.meta, "name_ar", None) if comp and hasattr(comp, "meta") else None
+        if not c_name_ar:
+            c_name_ar = c_name_en  # fallback: use English name when Arabic is unavailable
+        c_sec = getattr(comp.meta, "sector", "General") if comp and hasattr(comp, "meta") else "General"
 
         r_data = ratios_by_sym.get(sym, {})
         roe_val = r_data.get("roe")
@@ -115,6 +118,7 @@ def get_sector_templates_master_data() -> Dict[str, Any]:
         # Extract real XBRL periods from company filings
         std_is = comp.sections.get("standardized_income_statement") if comp and hasattr(comp, "sections") else None
         std_bs = comp.sections.get("standardized_balance_sheet") if comp and hasattr(comp, "sections") else None
+        std_cf = comp.sections.get("standardized_cash_flow") if comp and hasattr(comp, "sections") else None
         
         raw_periods = std_is.periods if std_is and std_is.periods else []
         selected_periods = raw_periods[-8:] if len(raw_periods) >= 8 else raw_periods
@@ -146,27 +150,51 @@ def get_sector_templates_master_data() -> Dict[str, Any]:
         periods_ar = [_format_p_ar(p) for p in selected_periods]
         periods_en = [_format_p_en(p) for p in selected_periods]
 
-        dyn_rows = []
-        if std_is and std_is.items:
-            for item in std_is.items:
+        def _build_stmt_rows(section, periods: list) -> list:
+            """Build normalized row dicts from a FinancialSection for the given periods."""
+            rows = []
+            if not section or not section.items:
+                return rows
+            for item in section.items:
                 if getattr(item, "is_unmapped", False) or not item.label:
                     continue
-                v_arr = [item.values.get(p, 0.0) or 0.0 for p in selected_periods]
+                v_arr = [item.values.get(p, 0.0) or 0.0 for p in periods]
                 max_v = max([abs(x) for x in v_arr] or [1.0])
                 if max_v > 100_000_000:
                     v_arr = [round(x / 1_000_000.0, 1) for x in v_arr]
                 elif max_v > 100_000:
                     v_arr = [round(x / 1_000.0, 1) for x in v_arr]
-                
-                dyn_rows.append({
-                    "ar": item.label,
+                label_lower = item.label.lower()
+                lbl_ar = getattr(item, "label_ar", None) or item.label
+                rows.append({
+                    "ar": lbl_ar,
                     "en": item.label,
                     "v": v_arr,
-                    "accel": "net" in item.label.lower() or "profit" in item.label.lower() or "ربح" in item.label
+                    "net": "net" in label_lower or "ربح" in str(lbl_ar),
+                    "accel": "net" in label_lower or "profit" in label_lower or "ربح" in str(lbl_ar),
+                    "t": "total" if getattr(item, "is_header", False) and any(
+                        kw in label_lower for kw in ["total", "إجمالي"]
+                    ) else None,
                 })
+            return rows
+
+        dyn_rows = _build_stmt_rows(std_is, selected_periods)
+
+        # Balance Sheet — use its own periods (snapshot dates, not YTD), last 8
+        bs_selected = (std_bs.periods[-8:] if std_bs and std_bs.periods else [])
+        bs_rows = _build_stmt_rows(std_bs, bs_selected)
+        bs_periods_ar = [_format_p_ar(p) for p in bs_selected]
+        bs_periods_en = [_format_p_en(p) for p in bs_selected]
+
+        # Cash Flow — periods share the IS calendar; CF is cumulative YTD within each fiscal year
+        cf_raw = std_cf.periods[-8:] if std_cf and std_cf.periods else []
+        cf_rows = _build_stmt_rows(std_cf, cf_raw)
+        cf_periods_ar = [_format_p_ar(p) for p in cf_raw]
+        cf_periods_en = [_format_p_en(p) for p in cf_raw]
 
         # Dynamic Balance Sheet Verification (A = L + E)
         bs_verified = False
+        sens_params = None
         if std_bs and std_bs.items:
             bs_items = {it.label: it.values for it in std_bs.items}
             ta_vals = bs_items.get("Total Assets") or {}
@@ -180,12 +208,60 @@ def get_sector_templates_master_data() -> Dict[str, Any]:
                     bs_ok.append(abs(ta - (tl + te)) / ta <= 0.05)
             bs_verified = bool(bs_ok and all(bs_ok))
 
+            # Compute interest sensitivity params for banks from real XBRL balance sheet
+            if spec.get("hasSens"):
+                # Look for customer deposits (interest-bearing liabilities)
+                deposits_val = None
+                assets_earning_val = None
+                for label, vals in bs_items.items():
+                    label_lower = label.lower()
+                    if deposits_val is None and ("deposit" in label_lower or "ودائع" in label):
+                        last_p = selected_periods[-1] if selected_periods else None
+                        if last_p:
+                            v = vals.get(last_p)
+                            if v and v > 0:
+                                deposits_val = v
+                    if assets_earning_val is None and (
+                        "total assets" in label_lower or "إجمالي الأصول" in label
+                    ):
+                        last_p = selected_periods[-1] if selected_periods else None
+                        if last_p:
+                            v = vals.get(last_p)
+                            if v and v > 0:
+                                assets_earning_val = v
+
+                # Compute NIM from income statement if available
+                nim_current = None
+                if std_is and std_is.items:
+                    nim_label_hits = [it for it in std_is.items if "nim" in it.label.lower() or "هامش الفائدة" in it.label]
+                    if nim_label_hits and selected_periods:
+                        nim_v = nim_label_hits[0].values.get(selected_periods[-1])
+                        if nim_v is not None:
+                            nim_current = float(nim_v)
+
+                if deposits_val is not None and assets_earning_val is not None:
+                    sens_params = {
+                        "deposits": round(deposits_val, 0),
+                        "assets": round(assets_earning_val, 0),
+                        "betaDeposits": 0.60,
+                        "betaAssets": 0.40,
+                        "nimCurrent": nim_current if nim_current is not None else 2.94,
+                    }
+
+        live_px = get_latest_market_price(sym)
+        px_display = f"{live_px:.2f}" if live_px is not None else "—"
+        g_net_str = f"{'+' if g_net_val and g_net_val > 0 else ''}{g_net_val:.1f}%" if g_net_val is not None else "0.0%"
+        is_chg_down = bool(g_net_val is not None and g_net_val < 0)
+
         companies[k] = {
             "name": c_name_ar or sym,
             "en": c_name_en or sym,
             "symbol": sym,
             "sector": c_sec,
             "tmpl": spec["tmpl"],
+            "price": px_display,
+            "chg": g_net_str,
+            "chgDown": is_chg_down,
             "real": comp is not None,
             "hasSens": spec.get("hasSens", False),
             "periods": periods_ar,
@@ -203,6 +279,21 @@ def get_sector_templates_master_data() -> Dict[str, Any]:
             "ratios": dynamic_ratios,
             "rows": dyn_rows,
             "verified": bs_verified,
+            "sensParams": sens_params,
+            "stmts": {
+                "bs": {
+                    "periods": bs_periods_ar,
+                    "periodsEn": bs_periods_en,
+                    "cumulative": False,   # Balance sheet is a point-in-time snapshot
+                    "rows": bs_rows,
+                } if bs_rows else None,
+                "cf": {
+                    "periods": cf_periods_ar,
+                    "periodsEn": cf_periods_en,
+                    "cumulative": True,    # Cash-flow figures are YTD cumulative within each fiscal year
+                    "rows": cf_rows,
+                } if cf_rows else None,
+            },
             "notes": [
                 {"h": "التحقق الجنائي والمطابقة", "b": "يتم فحص توازن الميزانية A = L + E ومطابقة التدفقات النقدية مع الإجماليات لحظياً."},
                 {"h": "حالة الإفصاحات", "b": f"البيانات مستخرجة ومربوطة مباشرة بسجلات {c_name_ar} الرسمية في قاعدة البيانات."}
@@ -213,6 +304,7 @@ def get_sector_templates_master_data() -> Dict[str, Any]:
                 "° قيمة محسوبة"
             ]
         }
+
 
     # Live Sector Breadth Calculation from all 238 companies
     sector_breadth: Dict[str, Dict[str, Any]] = {}

@@ -79,6 +79,13 @@ def check_quarters_sum_to_fy(quarters: List[Optional[float]], fy: Optional[float
     return abs(sum(quarters) - fy) <= max(tol, abs(fy) * 0.005)
 
 
+def check_cash_flow(cfo: Optional[float], cfi: Optional[float], cff: Optional[float], net_change: Optional[float], tol: float = 50.0) -> bool:
+    """Verify CFO + CFI + CFF == Net Change in Cash within tolerance."""
+    if cfo is None or cfi is None or cff is None or net_change is None:
+        return False
+    return abs((cfo + cfi + cff) - net_change) <= max(tol, abs(net_change) * 0.005)
+
+
 def get_trust_badge_status(symbol: str) -> Dict[str, Any]:
     """Calculate reconciliation status and trust badge for a company."""
     company = get_company(symbol)
@@ -186,17 +193,23 @@ def calculate_provisions_watch(prov_yoy: Optional[float], income_yoy: Optional[f
         return {
             "type": "provisions_warning",
             "neg": True,
-            "rule": "نمو المخصص > نمو الدخل + 5 نقاط",
+            "status": "danger",
+            "rule": "provisions_watch",
             "text": f"المخصصات {_pct(prov_yoy)} مقابل دخل {_pct(income_yoy)} — ضغط على جودة الأرباح"
         }
     if prov_yoy < 0 and income_yoy > 0:
         return {
-            "type": "provisions_easing",
+            "type": "provisions_release",
             "neg": False,
-            "rule": "انخفاض المخصص مع نمو الدخل",
-            "text": f"المخصصات تنخفض ({_pct(prov_yoy)}) مع نمو الدخل"
+            "status": "success",
+            "rule": "provisions_release",
+            "text": "تحرير مخصصات مع نمو الدخل — داعم مؤقت لربح الفترة"
         }
     return None
+
+
+calculate_provisions_signal = calculate_provisions_watch
+provisions_watch = calculate_provisions_watch
 
 
 def get_company_signals(symbol: str) -> Dict[str, Any]:
