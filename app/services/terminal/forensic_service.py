@@ -107,21 +107,42 @@ def get_company_unified_page_data(symbol: str) -> Dict[str, Any]:
         annual_p = all_is_periods[-6:]
     annual_p = annual_p[-6:]
     
-    # 2. Quarterly periods: Select discrete Q1, Q2, Q3 + derive Q4 = FY - 9M
+    # 2. Quarterly periods: Select discrete Q1, Q2, Q3 + derive Q4 = FY - 9M or from cumulative periods
     def _get_discrete_quarter_vals(vals_dict, year):
         q1_key = f"{year}-01_{year}-03"
-        q2_key = f"{year}-04_{year}-06"
-        q3_key = f"{year}-07_{year}-09"
-        fy_key = f"{year}-01_{year}-12"
+        q2_disc = f"{year}-04_{year}-06"
+        q3_disc = f"{year}-07_{year}-09"
+        m6_key = f"{year}-01_{year}-06"
         m9_key = f"{year}-01_{year}-09"
+        fy_key = f"{year}-01_{year}-12"
+
+        q1 = vals_dict.get(q1_key) or vals_dict.get(f"{year}-03") or 0.0
         
-        q1 = vals_dict.get(q1_key, 0.0) or 0.0
-        q2 = vals_dict.get(q2_key, 0.0) or 0.0
-        q3 = vals_dict.get(q3_key, 0.0) or 0.0
+        # Q2: discrete first, else (6M - 3M)
+        q2 = vals_dict.get(q2_disc)
+        if q2 is None or q2 == 0.0:
+            m6 = vals_dict.get(m6_key, 0.0) or 0.0
+            if m6 and q1:
+                q2 = m6 - q1
+            else:
+                q2 = m6 or 0.0
+
+        # Q3: discrete first, else (9M - 6M)
+        q3 = vals_dict.get(q3_disc)
+        if q3 is None or q3 == 0.0:
+            m9 = vals_dict.get(m9_key, 0.0) or 0.0
+            m6 = vals_dict.get(m6_key, 0.0) or (q1 + (q2 or 0.0))
+            if m9 and m6:
+                q3 = m9 - m6
+            else:
+                q3 = m9 or 0.0
+
+        # Q4: FY - 9M
         fy = vals_dict.get(fy_key, 0.0) or 0.0
-        m9 = vals_dict.get(m9_key, 0.0) or 0.0
+        m9 = vals_dict.get(m9_key, 0.0) or (q1 + (q2 or 0.0) + (q3 or 0.0))
         q4 = fy - m9 if (fy and m9) else 0.0
-        return q1, q2, q3, q4
+
+        return float(q1 or 0.0), float(q2 or 0.0), float(q3 or 0.0), float(q4 or 0.0)
 
     rev_vals = is_items.get("Revenue / Turnover") or is_items.get("Special Commission Income") or {}
     net_vals = is_items.get("Net Profit for the Period") or is_items.get("Net Profit Attributable to Shareholders of Parent") or {}
@@ -200,7 +221,8 @@ def get_company_unified_page_data(symbol: str) -> Dict[str, Any]:
     gm_val = round((ttm_gp / ttm_rev) * 100.0, 1) if ttm_rev > 0 else None
     
     # Pure dynamic TTM P/E = Market Cap / TTM Net Profit
-    pe_val = round(mc_val / ttm_net, 1) if ttm_net > 0 else (round(mc_val / latest_annual_net, 1) if latest_annual_net > 0 else None)
+    latest_ann_net = net_annual[-1] if net_annual else 0.0
+    pe_val = round(mc_val / ttm_net, 1) if ttm_net > 0 else (round(mc_val / latest_ann_net, 1) if latest_ann_net > 0 else None)
     
     # Pure dynamic P/B = Market Cap / Total Equity Latest Filing
     latest_bs_equity = _scale_val(float(bs_items.get("Total Equity", {}).get(latest_bs_p) or bs_items.get("Total Equity Attributable to Shareholders", {}).get(latest_bs_p) or te_annual))
