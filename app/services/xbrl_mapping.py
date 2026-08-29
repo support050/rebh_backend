@@ -252,6 +252,8 @@ PARAM_MAPPING = {
     'rental income': ('IS-010', 1),
     'property operating expenses': ('IS-020', -1),
     'management fees': ('IS-050', -1),
+    'management fee': ('IS-050', -1),
+    'management fee, insurance operations': ('IS-050', -1),
     'custody fees': ('IS-050', -1),
     'fund management fees': ('IS-050', -1),
     'gain (loss) on fair value of investment properties': ('IS-060', 1),

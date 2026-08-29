@@ -419,7 +419,8 @@ def merge_files(file_results):
         unmapped_items = []
         mapped_any = False
         # Collect signed contributions first so identical-value synonyms are not double-counted
-        pending: dict[str, dict[str, list[float]]] = {code: {p: [] for p in periods} for code in std_items_map}
+        # Track (value, label) tuples to enable parent/sub-item dedup
+        pending: dict[str, dict[str, list[tuple[float, str]]]] = {code: {p: [] for p in periods} for code in std_items_map}
         for item in raw_sec["items"]:
             has_numeric = any(isinstance(v, (int, float)) for v in item["values"].values())
             if item.get("is_header") and not has_numeric:
@@ -429,27 +430,50 @@ def merge_files(file_results):
                 code, direction = mapping
                 if code in std_items_map:
                     mapped_any = True
+                    lbl_lower = item["label"].lower().strip()
                     for p in periods:
                         raw_val = item["values"].get(p)
                         if isinstance(raw_val, (int, float)):
                             if code == "IS-160" and abs(raw_val) > 500:
                                 continue
-                            pending[code][p].append(raw_val * direction)
+                            pending[code][p].append((raw_val * direction, lbl_lower))
                 else:
                     unmapped_items.append(_make_unmapped_item(item, periods))
             elif has_numeric or item["values"]:
                 unmapped_items.append(_make_unmapped_item(item, periods))
 
+        # Labels that represent a parent/aggregate total and should take precedence
+        # over sub-item labels when both map to the same standardized code.
+        _PARENT_LABELS = {
+            'total revenue', 'revenue', 'total revenues',
+            'total income', 'net revenue', 'net revenues',
+            'gross premiums written',
+            'insurance revenue',
+            'general and administrative expenses',
+            'general and administration expenses',
+        }
+
         for code, by_period in pending.items():
-            for p, vals in by_period.items():
-                if not vals:
+            for p, entries in by_period.items():
+                if not entries:
                     continue
+                vals = [e[0] for e in entries]
+                labels = [e[1] for e in entries]
                 # Synonym overlap: multiple raw lines, same absolute amount → take one
                 abs_set = {abs(v) for v in vals}
                 if len(vals) > 1 and len(abs_set) == 1:
                     std_items_map[code]["values"][p] = vals[0]
+                elif len(vals) > 1:
+                    # Parent/sub-item dedup: if one label is a known parent, use that
+                    parent_vals = [(v, l) for v, l in entries if l in _PARENT_LABELS]
+                    if parent_vals:
+                        # Pick the parent with the largest absolute value (the aggregate)
+                        best = max(parent_vals, key=lambda x: abs(x[0]))
+                        std_items_map[code]["values"][p] = best[0]
+                    else:
+                        std_items_map[code]["values"][p] = sum(vals)
                 else:
-                    std_items_map[code]["values"][p] = sum(vals)
+                    std_items_map[code]["values"][p] = vals[0]
 
         # Balance sheet post-processing: auto-repair double-counted Total Assets if TA = Total + Current
         if std_key == "standardized_balance_sheet":

@@ -9,6 +9,9 @@ sys.path.append(str(Path(__file__).resolve().parent.parent))
 
 from app.services.xbrl_mapping import resolve_mapping, STANDARD_TEMPLATE
 
+UNMAPPED_HEADER_EN = "Other / Unmapped"
+UNMAPPED_HEADER_AR = "أخرى / غير موحدة"
+
 DATA_DIR = Path(__file__).resolve().parent.parent / "data" / "downloads"
 OUTPUT_DIR = Path(__file__).resolve().parent.parent / "output"
 
@@ -139,15 +142,25 @@ def audit_companies():
             if not std_sec:
                 continue
 
+            expected_raw_sec_key = {
+                "standardized_income_statement": "income_statement",
+                "standardized_balance_sheet": "balance_sheet",
+                "standardized_cash_flow": "cash_flow"
+            }.get(std_sec_key)
+
             periods = std_sec.get("periods", [])
             for item in std_sec.get("items", []):
+                # Skip unmapped section header and unmapped items
+                if item.get("is_unmapped") or item.get("label") in [UNMAPPED_HEADER_EN, UNMAPPED_HEADER_AR]:
+                    break
+
                 lbl = item.get("label")
                 
                 # Identify template code for this standardized item
                 code = None
                 raw_sec_key = None
                 for c, info in STANDARD_TEMPLATE.items():
-                    if info["line_en"] == lbl:
+                    if info["line_en"] == lbl and info["statement"] == expected_raw_sec_key:
                         code = c
                         raw_sec_key = info["statement"]
                         break
@@ -204,15 +217,32 @@ def audit_companies():
                             "details": f"Raw sources exist but standardized value is null. Raw: {raw_contribs}"
                         })
                     else:
-                        # Calculate expected sum (mirror parser: identical-abs synonyms count once)
+                        # Calculate expected sum (mirror parser: identical-abs synonyms count once, parent labels take precedence)
+                        _PARENT_LABELS = {
+                            'total revenue', 'revenue', 'total revenues',
+                            'total income', 'net revenue', 'net revenues',
+                            'gross premiums written',
+                            'insurance revenue',
+                            'general and administrative expenses',
+                            'general and administration expenses',
+                        }
                         signed_vals = [val * direction for _, val, direction in raw_contribs]
                         abs_set = {abs(v) for v in signed_vals}
                         if len(signed_vals) > 1 and len(abs_set) == 1:
                             expected_val = signed_vals[0]
                             is_overlap = True
+                        elif len(signed_vals) > 1:
+                            parent_vals = [(val * direction, lbl.lower().strip()) for lbl, val, direction in raw_contribs if lbl.lower().strip() in _PARENT_LABELS]
+                            if parent_vals:
+                                best = max(parent_vals, key=lambda x: abs(x[0]))
+                                expected_val = best[0]
+                                is_overlap = True
+                            else:
+                                expected_val = sum(signed_vals)
+                                is_overlap = True
                         else:
-                            expected_val = sum(signed_vals)
-                            is_overlap = len(raw_contribs) > 1
+                            expected_val = signed_vals[0] if signed_vals else 0.0
+                            is_overlap = False
 
                         # Check mismatch
                         is_mismatch = abs(std_val - expected_val) > 1e-2
