@@ -33,13 +33,18 @@ def _median(vals: List[float]) -> Optional[float]:
 _MACHINE_CACHE: Optional[Dict[str, Any]] = None
 
 
+from app.services.terminal.quant_lab_service import get_all_ratios_data
+
+
 def get_market_machine_data() -> Dict[str, Any]:
     """Calculates aggregates for Dalio Economic Machine tab dynamically from database."""
     global _MACHINE_CACHE
     if _MACHINE_CACHE is not None:
         return _MACHINE_CACHE
+
     companies = list_companies()
     all_models = {m["symbol"]: m for m in get_all_valuation_models()}
+    all_ratios = get_all_ratios_data()
 
     total_mkt_cap = 0.0
     bank_assets = 0.0
@@ -49,8 +54,8 @@ def get_market_machine_data() -> Dict[str, Any]:
     sector_data: Dict[str, Dict[str, Any]] = {}
     mkt_caps: List[tuple[str, float]] = []
 
-    pe_list = []
-    pb_list = []
+    pe_list = [r["pe"] for r in all_ratios if r.get("pe") is not None and 0 < r["pe"] < 200]
+    pb_list = [r["pb"] for r in all_ratios if r.get("pb") is not None and 0 < r["pb"] < 50]
     fcf_yield_list = []
     de_list = []
     coverage_weak_n = 0
@@ -63,13 +68,13 @@ def get_market_machine_data() -> Dict[str, Any]:
         m = all_models.get(sym, {}).get("models", {})
         graham = m.get("graham", {})
         buffett = m.get("buffett", {})
-        magic = m.get("magic_formula", {})
 
         fcf = buffett.get("free_cash_flow") or 0.0
         fcf_yield = buffett.get("fcf_yield_pct")
         de = graham.get("debt_to_equity")
 
-        mc = 1000.0
+        # Dynamic market cap from models
+        mc = 0.0
         if buffett.get("fcf_yield_pct") and fcf != 0:
             mc = abs(fcf / (buffett["fcf_yield_pct"] / 100.0))
         total_mkt_cap += mc
@@ -82,8 +87,8 @@ def get_market_machine_data() -> Dict[str, Any]:
         )
         if is_bank:
             bank_count += 1
-            bank_assets += 472.5 if mc == 1000.0 else (mc * 4.5)
-            bank_ni_ttm += fcf if fcf != 0.0 else 4316.1
+            bank_assets += (mc * 4.5) if mc > 0 else 0.0
+            bank_ni_ttm += fcf if fcf != 0.0 else 0.0
 
         if sec not in sector_data:
             sector_data[sec] = {"n": 0, "growing_count": 0, "mc": 0.0, "ni_ttm": 0.0}
@@ -132,21 +137,21 @@ def get_market_machine_data() -> Dict[str, Any]:
 
     _MACHINE_CACHE = {
         "macro": {
-            "agg_earnings_ttm_bn": round(sum(d["ni_ttm"] for d in sector_data.values()) / 1000.0, 2) or 81.6,
+            "agg_earnings_ttm_bn": round(sum(d["ni_ttm"] for d in sector_data.values()) / 1000.0, 2),
             "agg_sample_n": len(companies),
             "sector_breadth": sector_breadth,
-            "bank_assets_bn": round(bank_assets, 1) if bank_assets > 0 else 4725.0,
-            "bank_ni_ttm_bn": round(bank_ni_ttm / 1000.0, 2) if bank_ni_ttm > 0 else 43.2,
-            "banks_n": bank_count if bank_count > 0 else 10,
-            "top10_mc_share_pct": top10_pct or 85.3,
-            "total_mc_bn": round(total_mkt_cap / 1000.0, 1) or 9444.0,
-            "median_pe": 13.7,
-            "median_pb": 1.89,
-            "median_fcf_yield": round(_median(fcf_yield_list) or 3.7, 2),
-            "median_de_nonfin": round(_median(de_list) or 0.39, 2),
-            "coverage_weak_n": coverage_weak_n or 19,
-            "coverage_all_n": coverage_all_n or 89,
-            "pe_n": len(companies),
+            "bank_assets_bn": round(bank_assets, 1),
+            "bank_ni_ttm_bn": round(bank_ni_ttm / 1000.0, 2),
+            "banks_n": bank_count,
+            "top10_mc_share_pct": top10_pct,
+            "total_mc_bn": round(total_mkt_cap / 1000.0, 1),
+            "median_pe": round(_median(pe_list) or 0.0, 1),
+            "median_pb": round(_median(pb_list) or 0.0, 2),
+            "median_fcf_yield": round(_median(fcf_yield_list) or 0.0, 2),
+            "median_de_nonfin": round(_median(de_list) or 0.0, 2),
+            "coverage_weak_n": coverage_weak_n,
+            "coverage_all_n": coverage_all_n,
+            "pe_n": len(pe_list),
             "pulled_date": latest_date_str
         }
     }

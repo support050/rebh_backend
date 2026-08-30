@@ -81,16 +81,16 @@ def make_period_key(start, end, is_snapshot):
 def classify_canonical_section(code: str, title: str) -> str:
     """Classify section canonical key based on title semantics and block code."""
     tl = (title or "").lower().strip()
-    if any(k in tl for k in ["comprehensive", "الشامل"]):
-        return "other_comprehensive_income"
-    if any(k in tl for k in ["income", "profit", "loss", "operations", "الدخل", "الأرباح والخسائر", "الارباح والخسائر"]):
-        return "income_statement"
-    if any(k in tl for k in ["financial position", "balance sheet", "المركز المالي", "الميزانية"]):
-        return "balance_sheet"
     if any(k in tl for k in ["cash flow", "cash flows", "التدفقات النقدية", "التدفقات"]):
         return "cash_flow"
     if any(k in tl for k in ["changes in equity", "equity", "حقوق الملكية", "التغيرات في حقوق"]):
         return "equity_changes"
+    if any(k in tl for k in ["comprehensive", "الشامل"]):
+        return "other_comprehensive_income"
+    if any(k in tl for k in ["financial position", "balance sheet", "المركز المالي", "الميزانية"]):
+        return "balance_sheet"
+    if any(k in tl for k in ["income", "profit", "loss", "operations", "الدخل", "الأرباح والخسائر", "الارباح والخسائر"]):
+        return "income_statement"
     return CANONICAL.get(code)
 
 # ── File structure ────────────────────────────────────────────────────────
@@ -330,8 +330,18 @@ def parse_xbrl_file(filepath):
             parsed = parse_section(df, row_idx, next_row, canonical)
 
         if parsed and parsed["items"]:
-            if canonical not in sections or len(parsed["items"]) > len(sections[canonical]["items"]):
+            if canonical not in sections:
                 sections[canonical] = parsed
+            else:
+                # Merge periods and items from multiple sections belonging to the same canonical statement
+                existing = sections[canonical]
+                existing_keys = {pm["key"] for pm in existing.get("period_meta", [])}
+                for pm in parsed.get("period_meta", []):
+                    if pm.get("key") not in existing_keys:
+                        existing["period_meta"].append(pm)
+                        existing_keys.add(pm["key"])
+                existing["periods"] = [pm["key"] for pm in existing["period_meta"]]
+                existing["items"].extend(parsed["items"])
     return {"meta": meta, "sections": sections}
 
 # ── Merger ────────────────────────────────────────────────────────────────

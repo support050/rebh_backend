@@ -26,7 +26,7 @@ def get_sector_templates_master_data() -> Dict[str, Any]:
         "gen": {"symbol": "1831", "tmpl": "القالب العام", "hasSens": False},
         "ins": {"symbol": "8010", "tmpl": "قالب التأمين (IFRS 17)", "hasSens": False},
         "fin": {"symbol": "4081", "tmpl": "قالب شركات التمويل", "hasSens": False},
-        "reit": {"symbol": "4340", "tmpl": "قالب صناديق الريت", "hasSens": False}
+        "reit": {"symbol": "4300", "tmpl": "قالب التطوير العقاري والصناديق", "hasSens": False}
     }
 
     companies = {}
@@ -145,32 +145,52 @@ def get_sector_templates_master_data() -> Dict[str, Any]:
             mo = parts[1] if len(parts) > 1 else "12"
             q_map = {"03": "Q1", "06": "Q2", "09": "Q3", "12": "Q4"}
             q_name = q_map.get(mo, "FY")
-            return f"{q_name}'{yr}"
-
         periods_ar = [_format_p_ar(p) for p in selected_periods]
         periods_en = [_format_p_en(p) for p in selected_periods]
 
+        # Determine reporting unit of the filings dynamically based on the latest balance sheet period:
+        bs_items_raw = {it.label: it.values for it in (std_bs.items if std_bs else [])}
+        latest_bs_p = std_bs.periods[-1] if std_bs and std_bs.periods else None
+        raw_cap_val = float(bs_items_raw.get("Share Capital", {}).get(latest_bs_p) or 0.0)
+
+        if sym == "2222":
+            unit_divisor = 1.0  # Already in Millions SAR
+        elif raw_cap_val >= 50_000_000 and not (sym.startswith("10") or sym.startswith("11") or sym.startswith("8")):
+            unit_divisor = 1_000_000.0  # Filings in Single SAR -> convert to Millions
+        else:
+            unit_divisor = 1_000.0  # Filings in Thousands SAR -> convert to Millions
+
         def _build_stmt_rows(section, periods: list) -> list:
-            """Build normalized row dicts from a FinancialSection for the given periods."""
+            """Build normalized row dicts from a FinancialSection for the given periods scaled strictly to Millions SAR."""
             rows = []
             if not section or not section.items:
                 return rows
             for item in section.items:
                 if getattr(item, "is_unmapped", False) or not item.label:
                     continue
-                v_arr = [item.values.get(p, 0.0) or 0.0 for p in periods]
-                max_v = max([abs(x) for x in v_arr] or [1.0])
-                if max_v > 100_000_000:
-                    v_arr = [round(x / 1_000_000.0, 1) for x in v_arr]
-                elif max_v > 100_000:
-                    v_arr = [round(x / 1_000.0, 1) for x in v_arr]
                 label_lower = item.label.lower()
+                is_eps_row = "earnings per share" in label_lower or "ربحية السهم" in str(getattr(item, "label_ar", ""))
+                is_shares_row = "number of shares" in label_lower or "عدد الأسهم" in str(getattr(item, "label_ar", ""))
+                
+                v_arr = []
+                for p in periods:
+                    val = item.values.get(p)
+                    if val is None:
+                        v_arr.append(0.0)
+                    elif is_eps_row:
+                        v_arr.append(round(float(val), 2))
+                    elif is_shares_row:
+                        v_arr.append(round(float(val) / (unit_divisor * 1000.0 if unit_divisor == 1000.0 else 1_000_000.0), 1))
+                    else:
+                        v_arr.append(round(float(val) / unit_divisor, 1))
+
                 lbl_ar = getattr(item, "label_ar", None) or item.label
                 rows.append({
                     "ar": lbl_ar,
                     "en": item.label,
                     "v": v_arr,
-                    "net": "net" in label_lower or "ربح" in str(lbl_ar),
+                    "eps": is_eps_row,
+                    "net": "net profit" in label_lower or "صافي الربح" in str(lbl_ar),
                     "accel": "net" in label_lower or "profit" in label_lower or "ربح" in str(lbl_ar),
                     "t": "total" if getattr(item, "is_header", False) and any(
                         kw in label_lower for kw in ["total", "إجمالي"]

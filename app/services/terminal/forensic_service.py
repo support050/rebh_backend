@@ -82,15 +82,28 @@ def get_company_unified_page_data(symbol: str) -> Dict[str, Any]:
     bs_items = {it.label: it.values for it in (std_bs.items if std_bs else []) if not getattr(it, "is_unmapped", False)}
     cf_items = {it.label: it.values for it in (std_cf.items if std_cf else []) if not getattr(it, "is_unmapped", False)}
 
-    # Detect Company Statement Unit Multiplier dynamically across whole filings:
-    # If Total Assets / Share Capital is in thousands (> 10,000 and <= 500,000,000), statement divisor is 1,000.
-    # If in single units (> 500,000,000), statement divisor is 1,000,000.
-    ta_max = 0.0
-    for v in (bs_items.get("Total Assets") or {}).values():
-        if v and abs(v) > ta_max:
-            ta_max = abs(v)
-    
-    unit_divisor = 1_000_000.0 if ta_max > 500_000_000 else (1_000.0 if ta_max > 10_000 else 1.0)
+    # Determine reporting unit of the filings dynamically based on the latest balance sheet period:
+    # 1. Millions: Only Aramco 2222 reports in Millions SAR (Share Capital = 90,000m, Total Assets ~ 2.6m)
+    # 2. Single SAR Units: Companies where latest Share Capital >= 50,000,000 (and not Banks/Insurance) -> divisor = 1,000,000
+    # 3. Thousands: Standard Saudi XBRL format (Banks, Insurance, Traditional Corporates where SC is in '000) -> divisor = 1,000
+    latest_bs_p = std_bs.periods[-1] if std_bs and std_bs.periods else None
+    raw_cap_val = float(bs_items.get("Share Capital", {}).get(latest_bs_p) or 0.0)
+
+    if sym == "2222":
+        unit_divisor = 1.0  # Already in Millions SAR
+        sc_multiplier_to_sar = 1_000_000.0
+        # Aramco specific: 241,882 Million shares
+        num_shares_m = 241_882.0
+    elif raw_cap_val >= 50_000_000 and not (sym.startswith("10") or sym.startswith("11") or sym.startswith("8")):
+        unit_divisor = 1_000_000.0  # Filings in Single SAR -> convert to Millions
+        sc_multiplier_to_sar = 1.0
+        cap_in_sar = raw_cap_val * sc_multiplier_to_sar
+        num_shares_m = (cap_in_sar / 10.0) / 1_000_000.0 if cap_in_sar > 0 else 1.0
+    else:
+        unit_divisor = 1_000.0  # Filings in Thousands SAR -> convert to Millions
+        sc_multiplier_to_sar = 1_000.0
+        cap_in_sar = raw_cap_val * sc_multiplier_to_sar
+        num_shares_m = (cap_in_sar / 10.0) / 1_000_000.0 if cap_in_sar > 0 else 1.0
 
     def _scale_val(v):
         if v is None: return 0.0
@@ -109,6 +122,7 @@ def get_company_unified_page_data(symbol: str) -> Dict[str, Any]:
     
     # 2. Quarterly periods: Select discrete Q1, Q2, Q3 + derive Q4 = FY - 9M or from cumulative periods
     def _get_discrete_quarter_vals(vals_dict, year):
+        # Standard calendar year keys (Jan-Dec)
         q1_key = f"{year}-01_{year}-03"
         q2_disc = f"{year}-04_{year}-06"
         q3_disc = f"{year}-07_{year}-09"
@@ -116,9 +130,22 @@ def get_company_unified_page_data(symbol: str) -> Dict[str, Any]:
         m9_key = f"{year}-01_{year}-09"
         fy_key = f"{year}-01_{year}-12"
 
-        q1 = vals_dict.get(q1_key) or vals_dict.get(f"{year}-03") or 0.0
+        q1 = vals_dict.get(q1_key) or vals_dict.get(f"{year}-03")
         
-        # Q2: discrete first, else (6M - 3M)
+        # If not standard calendar, check non-calendar fiscal years (e.g., April-March fiscal year)
+        # where Q1 is (year-1)-04 to (year-1)-06, or Jan-Mar is derived Q4 of previous fiscal year
+        prev_yr = str(int(year) - 1)
+        next_yr = str(int(year) + 1)
+        if q1 is None:
+            # Check if Jan-Mar is Q4 of fiscal year ending in March (e.g. 2023-04_2024-03 - 2023-04_2023-12)
+            non_cal_fy = f"{prev_yr}-04_{year}-03"
+            non_cal_9m = f"{prev_yr}-04_{prev_yr}-12"
+            if non_cal_fy in vals_dict and non_cal_9m in vals_dict:
+                q1 = (vals_dict[non_cal_fy] or 0.0) - (vals_dict[non_cal_9m] or 0.0)
+            else:
+                q1 = 0.0
+
+        # Q2: discrete first (04-06), else (6M - 3M)
         q2 = vals_dict.get(q2_disc)
         if q2 is None or q2 == 0.0:
             m6 = vals_dict.get(m6_key, 0.0) or 0.0
@@ -127,7 +154,7 @@ def get_company_unified_page_data(symbol: str) -> Dict[str, Any]:
             else:
                 q2 = m6 or 0.0
 
-        # Q3: discrete first, else (9M - 6M)
+        # Q3: discrete first (07-09), else (9M - 6M)
         q3 = vals_dict.get(q3_disc)
         if q3 is None or q3 == 0.0:
             m9 = vals_dict.get(m9_key, 0.0) or 0.0
@@ -137,18 +164,50 @@ def get_company_unified_page_data(symbol: str) -> Dict[str, Any]:
             else:
                 q3 = m9 or 0.0
 
-        # Q4: FY - 9M
-        fy = vals_dict.get(fy_key, 0.0) or 0.0
-        m9 = vals_dict.get(m9_key, 0.0) or (q1 + (q2 or 0.0) + (q3 or 0.0))
-        q4 = fy - m9 if (fy and m9) else 0.0
+        # Q4: discrete (10-12) or derived (FY - 9M)
+        q4 = vals_dict.get(f"{year}-10_{year}-12")
+        if q4 is None or q4 == 0.0:
+            fy = vals_dict.get(fy_key, 0.0) or 0.0
+            m9 = vals_dict.get(m9_key, 0.0) or (q1 + (q2 or 0.0) + (q3 or 0.0))
+            q4 = fy - m9 if (fy and m9) else 0.0
 
         return float(q1 or 0.0), float(q2 or 0.0), float(q3 or 0.0), float(q4 or 0.0)
 
-    rev_vals = is_items.get("Revenue / Turnover") or is_items.get("Special Commission Income") or {}
-    net_vals = is_items.get("Net Profit for the Period") or is_items.get("Net Profit Attributable to Shareholders of Parent") or {}
-    op_vals = is_items.get("Operating Income (EBIT)") or is_items.get("Net Special Commission Income") or {}
-    gp_vals = is_items.get("Gross Profit") or {}
-    eps_vals = is_items.get("Basic Earnings per Share") or {}
+    # Extract raw sections for domain-specific / bank mappings
+    raw_is = sections.get("income_statement")
+    raw_is_items = {it.label: it.values for it in (raw_is.items if raw_is and hasattr(raw_is, "items") else [])}
+
+    def _get_val_dict(primary_key, fallback_labels):
+        d = is_items.get(primary_key)
+        if d and any(v is not None for v in d.values()):
+            return d
+        for fl in fallback_labels:
+            d_fb = raw_is_items.get(fl) or is_items.get(fl)
+            if d_fb and any(v is not None for v in d_fb.values()):
+                return d_fb
+        return {}
+
+    rev_vals = _get_val_dict(
+        "Revenue / Turnover",
+        ["Special Commission Income", "Special commission income/ gross financing and investment income", "Special commission income"]
+    )
+    net_vals = _get_val_dict(
+        "Net Profit for the Period",
+        ["Net Profit Attributable to Shareholders of Parent", "Profit (loss) for the period", "Profit (loss) attributable to equity holders of parent company"]
+    )
+    op_vals = _get_val_dict(
+        "Operating Income (EBIT)",
+        ["Total operating income", "Profit (loss) from operating activities", "Net Special Commission Income"]
+    )
+    gp_vals = _get_val_dict("Gross Profit", [])
+    eps_vals = _get_val_dict(
+        "Basic Earnings per Share (EPS)",
+        ["Basic Earnings per Share", "Total basic earnings (loss) per share", "Basic earnings (loss) per share from continuing operations"]
+    )
+    fin_cost_vals = _get_val_dict(
+        "Finance Costs",
+        ["Special commission expenses / return on deposits", "Special commission expenses", "Return on deposits and financial institutions"]
+    )
 
     rev_annual = _scale_series(rev_vals, annual_p)
     net_annual = _scale_series(net_vals, annual_p)
@@ -156,7 +215,7 @@ def get_company_unified_page_data(symbol: str) -> Dict[str, Any]:
     op_annual = _scale_series(op_vals, annual_p)
     cogs_annual = _scale_series(is_items.get("Cost of Sales", {}), annual_p)
     ga_annual = _scale_series(is_items.get("General and Administrative Expenses", {}), annual_p)
-    fin_cost_annual = _scale_series(is_items.get("Finance Costs", {}), annual_p)
+    fin_cost_annual = _scale_series(fin_cost_vals, annual_p)
     jv_annual = _scale_series(is_items.get("Share of Profit of Associates & Joint Ventures", {}), annual_p)
     other_income_annual = _scale_series(is_items.get("Other Operating Income / Expenses", {}), annual_p)
     pbt_annual = _scale_series(is_items.get("Profit Before Zakat and Tax", {}), annual_p)
@@ -168,7 +227,15 @@ def get_company_unified_page_data(symbol: str) -> Dict[str, Any]:
     def _build_9q_series(vals_dict):
         q1_24, q2_24, q3_24, q4_24 = _get_discrete_quarter_vals(vals_dict, "2024")
         q1_25, q2_25, q3_25, q4_25 = _get_discrete_quarter_vals(vals_dict, "2025")
+        
+        # Q1 2026: calendar or non-calendar Q4 of 2025-04_2026-03 fiscal year
         q1_26 = vals_dict.get("2026-01_2026-03", 0.0) or 0.0
+        if not q1_26:
+            non_cal_fy26 = "2025-04_2026-03"
+            non_cal_9m26 = "2025-04_2025-12"
+            if non_cal_fy26 in vals_dict and non_cal_9m26 in vals_dict:
+                q1_26 = (vals_dict[non_cal_fy26] or 0.0) - (vals_dict[non_cal_9m26] or 0.0)
+
         raw_9q = [q1_24, q2_24, q3_24, q4_24, q1_25, q2_25, q3_25, q4_25, q1_26]
         return [_scale_val(v) for v in raw_9q]
 
@@ -177,14 +244,11 @@ def get_company_unified_page_data(symbol: str) -> Dict[str, Any]:
     gp_q = _build_9q_series(gp_vals)
     op_q = _build_9q_series(op_vals)
 
-    latest_bs_p = std_bs.periods[-1] if std_bs and std_bs.periods else None
-    cap_val = float(bs_items.get("Share Capital", {}).get(latest_bs_p) or 10_800_000.0)
-    
-    # Calculate number of shares (in Millions) = Capital in SAR / Par Value (10 SAR)
-    cap_in_sar = cap_val * (1000.0 if unit_divisor == 1000.0 else 1.0)
-    num_shares_m = (cap_in_sar / 10.0) / 1_000_000.0
-
     eps_q = [round(n / (num_shares_m or 1.0), 2) for n in net_q]
+    if any(eps_annual):
+        for i in range(len(eps_annual)):
+            if eps_annual[i] == 0.0 and i < len(net_annual) and num_shares_m > 0:
+                eps_annual[i] = round(net_annual[i] / num_shares_m, 2)
 
     is_bank = sym in ("1010", "1020", "1030", "1050", "1060", "1080", "1120", "1140", "1150", "1180") or "bank" in (sector or "").lower() or "بنوك" in (sector or "")
 
@@ -199,32 +263,32 @@ def get_company_unified_page_data(symbol: str) -> Dict[str, Any]:
     ttm_other_inc = other_income_annual[-1] if other_income_annual else 0.0
     ttm_pbt = pbt_annual[-1] if pbt_annual else 0.0
     ttm_zakat = zakat_annual[-1] if zakat_annual else 0.0
-    ttm_eps = round(ttm_net / (num_shares_m or 1.0), 2)
+    ttm_eps = round(ttm_net / (num_shares_m or 1.0), 2) if num_shares_m > 0 else (eps_annual[-1] if eps_annual else 0.0)
 
     human_annual_p = [p.split("_")[0] if "_" in p else p.split("-")[0] for p in annual_p]
 
     ann_bs_periods = [p for p in (std_bs.periods if std_bs else []) if p.endswith("-12")]
     latest_annual_bs_p = ann_bs_periods[-1] if ann_bs_periods else latest_bs_p
     
-    te_annual = float(bs_items.get("Total Equity", {}).get(latest_annual_bs_p) or bs_items.get("Total Equity Attributable to Shareholders", {}).get(latest_annual_bs_p) or 1000.0)
+    te_annual = float(bs_items.get("Total Equity", {}).get(latest_annual_bs_p) or bs_items.get("Total Equity Attributable to Shareholders", {}).get(latest_annual_bs_p) or 0.0)
     te = _scale_val(te_annual)
 
-    # Pure dynamic market price from database (or fallback to 15.0 if not yet seeded)
+    # Pure dynamic market price from database
     live_px = get_latest_market_price(sym)
     px_val = live_px if live_px is not None else 20.35
 
-    # Pure dynamic Market Cap based on current database share price
+    # Pure dynamic Market Cap in Millions SAR = (Number of shares in M) * (Price in SAR)
     mc_val = round(num_shares_m * px_val, 0)
     
     roe_val = round((ttm_net / te) * 100.0, 1) if te > 0 else None
     nm_val = round((ttm_net / ttm_rev) * 100.0, 1) if ttm_rev > 0 else None
     gm_val = round((ttm_gp / ttm_rev) * 100.0, 1) if ttm_rev > 0 else None
     
-    # Pure dynamic TTM P/E = Market Cap / TTM Net Profit
+    # Pure dynamic TTM P/E = Market Cap (M) / TTM Net Profit (M)
     latest_ann_net = net_annual[-1] if net_annual else 0.0
     pe_val = round(mc_val / ttm_net, 1) if ttm_net > 0 else (round(mc_val / latest_ann_net, 1) if latest_ann_net > 0 else None)
     
-    # Pure dynamic P/B = Market Cap / Total Equity Latest Filing
+    # Pure dynamic P/B = Market Cap (M) / Total Equity Latest Filing (M)
     latest_bs_equity = _scale_val(float(bs_items.get("Total Equity", {}).get(latest_bs_p) or bs_items.get("Total Equity Attributable to Shareholders", {}).get(latest_bs_p) or te_annual))
     pb_val = round(mc_val / (latest_bs_equity or te), 2) if (latest_bs_equity or te) > 0 else None
     
