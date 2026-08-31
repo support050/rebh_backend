@@ -14,6 +14,12 @@ from app.models.price import Price
 _AUDIT_CACHE: Optional[Dict[str, Any]] = None
 
 
+def clear_forensic_cache() -> None:
+    """Clears in-memory cache for forensic audit."""
+    global _AUDIT_CACHE
+    _AUDIT_CACHE = None
+
+
 def get_latest_market_price(sym: str) -> Optional[float]:
     """Retrieves the latest available close price for any stock from SQLite database."""
     try:

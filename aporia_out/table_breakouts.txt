@@ -1,6 +1,6 @@
 ticker	name	sector	market_cap	val_avg_3mo	trailingPE	last	mtd_rtn	mo3_rtn	year_rtn	daily_trend	weekly_trend	monthly_trend	trend_rank	pfh_250	days_since_high_250	breakout	longest_consolidation_window	position	price_extreme	vol_5_day_chng	vol_20_day_chng
-2084	Miahona Co.	Utilities	131	113	135.0	11.16	-8.2%	-26.8%	-56.3%	down:78,*	down:196,*	flat	165	134.8%	522	All-Time Low	-	-	red,red	+102%	+161%
-4071	Arabian Contracting Services Co.	Media and Entertainment	86	104	129.3	63.5	-20.8%	-32.2%	-27.0%	down:84,*	down:77,*	down:188,*	246	105.8%	625	All-Time Low	-	-	red,red	-35%	+179%
-4700	Al Khabeer Diversified Income Traded Fund	Closed-End Fund	-	272	-	4.74	-1.0%	-1.7%	-17.0%	down:5,*	down:373,*	down:392,*	272	21.9%	1390	All-Time Low	-	-	-	-8%	-49%
-2210	Nama Chemicals Co.	Materials	232	273	5.6	18.74	0.0%	0.0%	-29.9%	down:142,76	down:324,76	down:584,76	256	45.7%	978	5-Year Low	-	-	-	-	-
-3008	Al Kathiri Holding Co.	Materials	253	170	-	1.15	-14.2%	-34.7%	-46.5%	down:113,*	down:451,*	down:360,*	254	92.2%	830	All-Time Low	-	-	-	+1241%	+9%
+4310	Knowledge Economic City	Real Estate Mgmt & Dev't	79	96	-	19.15	28.1%	60.9%	48.7%	up:47,*	up:16,*	down:265,110	49	0.0%	0	4-Year High	-	-	green,green	+13%	-13%
+2190	Sustained Infrastructure Holding Co.	Transportation	101	80	29.6	39.14	9.3%	12.8%	11.8%	up:7,*	up:71,*	up:100,*	1	0.0%	0	2-Year High	678	94%	-	+52%	+74%
+4338	AlAhli REIT Fund 1	REITs	177	261	50.4	7.08	8.1%	9.8%	1.7%	up:30,*	flat	down:726,119	82	0.0%	0	1-Year High	-	-	green,green	+214%	+181%
+1030	Saudi Investment Bank	Banks	33	131	8.2	14.49	4.6%	8.1%	6.5%	up:39,1	up:2,1	flat	19	0.0%	0	1-Year High	-	-	green	-41%	+26%
+2210	Nama Chemicals Co.	Materials	232	273	5.6	18.74	0.0%	0.0%	-30.5%	down:147,81	down:329,81	down:589,81	260	45.7%	983	5-Year Low	-	-	-	-	-

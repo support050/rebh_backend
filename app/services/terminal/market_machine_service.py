@@ -33,6 +33,12 @@ def _median(vals: List[float]) -> Optional[float]:
 _MACHINE_CACHE: Optional[Dict[str, Any]] = None
 
 
+def clear_market_machine_cache() -> None:
+    """Clears in-memory cache for market machine."""
+    global _MACHINE_CACHE
+    _MACHINE_CACHE = None
+
+
 from app.services.terminal.quant_lab_service import get_all_ratios_data
 
 

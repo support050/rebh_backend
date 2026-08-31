@@ -5,6 +5,7 @@ Reusable functions for caching patterns, key generation, and invalidation
 
 import json
 import logging
+import inspect
 from typing import Any, Optional, List, Callable, Dict
 from functools import wraps
 from app.core.redis import redis_cache
@@ -240,7 +241,7 @@ async def cache_read_through(
             )
             return cached_value
         
-        # 2. Cache miss - fetch from DB
+        # 2. Cache miss - fetch from DB / service
         logger.info(
             "cache_miss",
             extra={
@@ -248,7 +249,12 @@ async def cache_read_through(
                 "ttl": ttl
             }
         )
-        result = await fetch_func(*args, **kwargs)
+        if inspect.iscoroutinefunction(fetch_func):
+            result = await fetch_func(*args, **kwargs)
+        else:
+            result = fetch_func(*args, **kwargs)
+            if inspect.isawaitable(result):
+                result = await result
         
         # 3. Set in cache
         try:
@@ -283,7 +289,12 @@ async def cache_read_through(
             }
         )
         # Execute fetch_func without caching
-        return await fetch_func(*args, **kwargs)
+        if inspect.iscoroutinefunction(fetch_func):
+            return await fetch_func(*args, **kwargs)
+        res = fetch_func(*args, **kwargs)
+        if inspect.isawaitable(res):
+            return await res
+        return res
 
 
 # ============================================================================
@@ -363,9 +374,62 @@ async def invalidate_prices_history() -> None:
     await invalidate_patterns([f"{PREFIX_PRICES}:history:*"])
 
 
-async def invalidate_industry_groups_data() -> None:
-    """Invalidate all industry groups cache"""
-    await invalidate_patterns([f"{PREFIX_INDUSTRY_GROUPS}:*"])
+# ============================================================================
+# TERMINAL Cache Key Generators & Invalidation
+# ============================================================================
+
+def make_terminal_market_machine_key() -> str:
+    """Key: terminal:market_machine"""
+    return f"{PREFIX_TERMINAL}:market_machine"
+
+
+def make_terminal_quant_lab_key() -> str:
+    """Key: terminal:quant_lab"""
+    return f"{PREFIX_TERMINAL}:quant_lab"
+
+
+def make_terminal_all_ratios_key() -> str:
+    """Key: terminal:all_ratios"""
+    return f"{PREFIX_TERMINAL}:all_ratios"
+
+
+def make_terminal_audit_summary_key() -> str:
+    """Key: terminal:audit_summary"""
+    return f"{PREFIX_TERMINAL}:audit_summary"
+
+
+def make_terminal_company_fundamental_key(symbol: str) -> str:
+    """Key: terminal:company:{symbol}"""
+    sym_norm = normalize_string(symbol)
+    return f"{PREFIX_TERMINAL}:company:{sym_norm}"
+
+
+def make_terminal_sector_templates_key() -> str:
+    """Key: terminal:sector_templates"""
+    return f"{PREFIX_TERMINAL}:sector_templates"
+
+
+async def invalidate_terminal_daily_cache() -> None:
+    """Invalidate daily market-driven terminal caches (Market Machine, Quant Lab, All Ratios)"""
+    await invalidate_patterns([
+        f"{PREFIX_TERMINAL}:market_machine",
+        f"{PREFIX_TERMINAL}:quant_lab",
+        f"{PREFIX_TERMINAL}:all_ratios",
+    ])
+
+
+async def invalidate_terminal_company_cache(symbol: Optional[str] = None) -> None:
+    """Invalidate company fundamental cache for a specific symbol or all companies"""
+    if symbol:
+        sym_norm = normalize_string(symbol)
+        await invalidate_patterns([f"{PREFIX_TERMINAL}:company:{sym_norm}"])
+    else:
+        await invalidate_patterns([f"{PREFIX_TERMINAL}:company:*"])
+
+
+async def invalidate_terminal_all_cache() -> None:
+    """Invalidate all terminal caches (called when new XBRL filing is parsed/ingested)"""
+    await invalidate_patterns([f"{PREFIX_TERMINAL}:*"])
 
 
 async def invalidate_all_caches() -> None:
@@ -379,5 +443,7 @@ async def invalidate_all_caches() -> None:
         f"{PREFIX_SCREENER}:*",
         f"{PREFIX_TECHNICAL_SCREENER}:*",
         f"{PREFIX_PRICES}:*",
-        f"{PREFIX_INDUSTRY_GROUPS}:*"
+        f"{PREFIX_INDUSTRY_GROUPS}:*",
+        f"{PREFIX_TERMINAL}:*"
     ])
+

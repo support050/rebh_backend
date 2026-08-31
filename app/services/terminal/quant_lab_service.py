@@ -23,6 +23,13 @@ _QUANT_CACHE: Optional[Dict[str, Any]] = None
 _RATIOS_CACHE: Optional[List[Dict[str, Any]]] = None
 
 
+def clear_quant_lab_cache() -> None:
+    """Clears in-memory caches for quant lab and ratios."""
+    global _QUANT_CACHE, _RATIOS_CACHE
+    _QUANT_CACHE = None
+    _RATIOS_CACHE = None
+
+
 def get_quant_lab_data() -> Dict[str, Any]:
     """Calculates cross-sectional 5-factor Z-Scores for eligible companies."""
     global _QUANT_CACHE
@@ -95,11 +102,27 @@ def get_quant_lab_data() -> Dict[str, Any]:
             data["composite"] = 0.0
         results[s] = data
 
+    companies_by_sym = {c.symbol: c for c in companies}
     sorted_syms = sorted(results.keys(), key=lambda k: results[k]["composite"], reverse=True)
     ranked_factors = {}
     for idx, sym in enumerate(sorted_syms, start=1):
         item = results[sym]
+        comp_obj = companies_by_sym.get(sym)
+        c_name = getattr(comp_obj, "company_name", None) or sym
+        c_sector = getattr(comp_obj, "sector", None) or "General"
+        m = all_models.get(sym, {}).get("models", {})
+        graham = m.get("graham", {})
+        de_r = graham.get("debt_to_equity")
+        flags = []
+        if de_r is not None and de_r > 1.5:
+            flags.append("≈debt")
+        if getattr(comp_obj, "is_flagged", False):
+            flags.append("⚑")
+
         ranked_factors[sym] = {
+            "name": c_name,
+            "sector": c_sector,
+            "flags": flags,
             "value": item["factors"]["value"],
             "quality": item["factors"]["quality"],
             "cash": item["factors"]["cash"],

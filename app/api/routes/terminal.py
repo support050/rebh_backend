@@ -2,60 +2,116 @@ from fastapi import APIRouter, Depends
 from app.services import terminal_service
 from app.api.deps import get_current_user
 from app.models.user import User
+from app.core.cache_helpers import (
+    cache_read_through,
+    make_terminal_market_machine_key,
+    make_terminal_quant_lab_key,
+    make_terminal_all_ratios_key,
+    make_terminal_audit_summary_key,
+    make_terminal_company_fundamental_key,
+    make_terminal_sector_templates_key,
+)
+from app.core.cache_config import (
+    CACHE_TTL_TERMINAL_DAILY,
+    CACHE_TTL_TERMINAL_QUARTERLY,
+)
 
 router = APIRouter(prefix="/api/terminal", tags=["Terminal Aggregations"])
 
 
+# ── 1. Daily Market Caches (TTL = 24 Hours / Invalidate on Market Close) ───────
+
 @router.get("/market-machine")
 @router.get("/market-machine/")
-def get_market_machine(current_user: User = Depends(get_current_user)):
-    return terminal_service.get_market_machine_data()
+async def get_market_machine(current_user: User = Depends(get_current_user)):
+    cache_key = make_terminal_market_machine_key()
+    return await cache_read_through(
+        cache_key,
+        CACHE_TTL_TERMINAL_DAILY,
+        lambda: terminal_service.get_market_machine_data(),
+    )
 
 
 @router.get("/quant-lab")
 @router.get("/quant-lab/")
-def get_quant_lab(current_user: User = Depends(get_current_user)):
-    return terminal_service.get_quant_lab_data()
+async def get_quant_lab(current_user: User = Depends(get_current_user)):
+    cache_key = make_terminal_quant_lab_key()
+    return await cache_read_through(
+        cache_key,
+        CACHE_TTL_TERMINAL_DAILY,
+        lambda: terminal_service.get_quant_lab_data(),
+    )
 
 
 @router.get("/all-ratios")
 @router.get("/all-ratios/")
-def get_all_ratios(current_user: User = Depends(get_current_user)):
-    return terminal_service.get_all_ratios_data()
+async def get_all_ratios(current_user: User = Depends(get_current_user)):
+    cache_key = make_terminal_all_ratios_key()
+    return await cache_read_through(
+        cache_key,
+        CACHE_TTL_TERMINAL_DAILY,
+        lambda: terminal_service.get_all_ratios_data(),
+    )
 
+
+# ── 2. Long-Term Financial Statement Caches (TTL = 90 Days / Invalidate on XBRL Upload) ──
 
 @router.get("/audit-summary")
 @router.get("/audit-summary/")
-def get_audit_summary(current_user: User = Depends(get_current_user)):
-    return terminal_service.get_audit_summary_data()
+async def get_audit_summary(current_user: User = Depends(get_current_user)):
+    cache_key = make_terminal_audit_summary_key()
+    return await cache_read_through(
+        cache_key,
+        CACHE_TTL_TERMINAL_QUARTERLY,
+        lambda: terminal_service.get_audit_summary_data(),
+    )
 
 
 @router.get("/company-fundamental/{symbol}")
 @router.get("/company-fundamental/{symbol}/")
 @router.get("/company/{symbol}")
 @router.get("/company/{symbol}/")
-def get_company_fundamental(symbol: str, current_user: User = Depends(get_current_user)):
-    return terminal_service.get_company_unified_page_data(symbol)
+async def get_company_fundamental(symbol: str, current_user: User = Depends(get_current_user)):
+    cache_key = make_terminal_company_fundamental_key(symbol)
+    return await cache_read_through(
+        cache_key,
+        CACHE_TTL_TERMINAL_QUARTERLY,
+        lambda: terminal_service.get_company_unified_page_data(symbol),
+    )
 
 
 @router.get("/sector-templates")
 @router.get("/sector-templates/")
-def get_sector_templates(current_user: User = Depends(get_current_user)):
-    return terminal_service.get_sector_templates_master_data()
+async def get_sector_templates(current_user: User = Depends(get_current_user)):
+    cache_key = make_terminal_sector_templates_key()
+    return await cache_read_through(
+        cache_key,
+        CACHE_TTL_TERMINAL_QUARTERLY,
+        lambda: terminal_service.get_sector_templates_master_data(),
+    )
 
 
 @router.get("/coverage")
 @router.get("/coverage/")
-def get_coverage(current_user: User = Depends(get_current_user)):
+async def get_coverage(current_user: User = Depends(get_current_user)):
     """Official Market Coverage & Ingestion Reconciliation Contract."""
-    return terminal_service.get_audit_summary_data()
+    cache_key = make_terminal_audit_summary_key()
+    return await cache_read_through(
+        cache_key,
+        CACHE_TTL_TERMINAL_QUARTERLY,
+        lambda: terminal_service.get_audit_summary_data(),
+    )
 
 
 @router.get("/council")
 @router.get("/council/")
-def get_council_signoff(current_user: User = Depends(get_current_user)):
+async def get_council_signoff(current_user: User = Depends(get_current_user)):
     """Official Council Signoff methodologies and integrity verifications."""
-    audit = terminal_service.get_audit_summary_data()
+    audit = await cache_read_through(
+        make_terminal_audit_summary_key(),
+        CACHE_TTL_TERMINAL_QUARTERLY,
+        lambda: terminal_service.get_audit_summary_data(),
+    )
     return {
         "statement": "Statements pulled and verified against accounting identities, ratios computed — never imported, every methodology applied as published, every estimate marked, every corrupted value withheld. On the financial layer — statements, analysis, ratios — this is the standard. Signed by all.",
         "pass_count": audit.get("pass", 203),

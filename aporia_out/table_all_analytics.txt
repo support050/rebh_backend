@@ -1,274 +1,274 @@
 ticker	name	sector	market_cap	val_avg_3mo	trailingPE	last	mtd_rtn	mo3_rtn	year_rtn	daily_trend	weekly_trend	monthly_trend	trend_rank	pfh_250	days_since_high_250	breakout	longest_consolidation_window	position	price_extreme	vol_5_day_chng	vol_20_day_chng
-1010	Riyad Bank	Banks	9	12	8.1	20.49	0.7%	0.7%	1.3%	down:16,6	down:35,16	flat	146	9.1%	345	-	763	35%	-	-42%	+0%
-1020	Bank Aljazira	Banks	37	40	12.0	12.13	-0.2%	6.4%	-2.7%	up:24,11	flat	down:29,27	71	8.9%	385	-	230	55%	-	-45%	+61%
-1030	Saudi Investment Bank	Banks	33	128	8.2	14.14	2.0%	7.2%	0.0%	up:34,2	flat	flat	36	2.4%	388	-	214	88%	-	+45%	+36%
-1050	Banque Saudi Fransi	Banks	15	31	9.9	20.79	5.2%	10.2%	22.3%	up:33,1	up:136,1	flat	16	2.0%	1	-	908	78%	green	+48%	-8%
-1060	Saudi Awwal Bank	Banks	12	15	8.9	33.88	0.1%	-1.4%	5.4%	flat	down:24,22	down:234,176	179	11.8%	85	-	556	41%	-	-44%	+34%
-1080	Arab National Bank	Banks	19	39	8.2	22.19	2.3%	6.4%	-0.3%	up:19,2	flat	up:397,207	15	17.0%	207	-	188	73%	-	-27%	-14%
-1111	Saudi Tadawul Group Holding Co.	Financial Services	39	34	43.6	121.3	2.3%	-10.9%	-30.1%	down:44,5	down:177,5	down:83,5	232	75.3%	588	-	-	-	red	-20%	+90%
-1120	Al Rajhi Bank	Banks	2	1	15.0	64.8	3.6%	-3.4%	1.1%	down:71,16	flat	up:649,200	44	13.2%	200	-	224	23%	-	-5%	+32%
-1140	Bank Albilad	Banks	20	30	12.4	25.26	2.7%	4.0%	-5.5%	up:3,2	down:350,293	down:250,31	136	18.8%	615	-	-	-	-	-9%	-31%
-1150	Alinma Bank	Banks	11	5	11.7	24.86	6.4%	4.2%	16.6%	up:3,*	up:91,86	up:46,42	5	2.4%	86	-	-	-	-	+63%	+19%
-1180	The Saudi National Bank	Banks	3	3	9.4	41.66	6.3%	8.0%	15.7%	up:9,3	up:4,3	up:102,87	6	8.0%	135	-	-	-	-	-18%	-12%
-1182	Amlak International Finance Co.	Financial Services	181	186	12.6	8.87	3.5%	-8.2%	-29.3%	flat	down:176,16	down:522,16	180	56.3%	199	-	-	-	-	-32%	+52%
-1183	SHL Finance Co.	Financial Services	142	251	25.7	14.0	-2.8%	-7.4%	-36.6%	down:42,*	down:145,112	down:77,*	211	68.3%	271	-	-	-	-	+385%	-44%
-1201	Takween Advanced Industries Co.	Materials	245	211	-	4.8	-3.0%	-3.2%	-35.9%	flat	down:559,17	down:931,17	201	62.5%	1273	-	-	-	-	-34%	+170%
-1202	Middle East Paper Co.	Materials	148	91	83.6	18.49	16.4%	-0.9%	-32.1%	up:2,*	down:403,15	down:159,15	132	53.2%	601	-	-	-	-	-37%	+97%
-1210	Basic Chemical Industries Co.	Materials	207	254	24.8	25.12	11.2%	2.7%	-7.3%	up:6,3	down:186,15	down:462,15	139	15.4%	1222	-	-	-	-	-39%	+160%
-1211	Saudi Arabian Mining Co.	Materials	4	6	24.8	66.8	18.0%	9.5%	26.6%	up:4,*	flat	up:1338,137	14	19.0%	137	-	-	-	-	-48%	+38%
-1212	Astra Industrial Group	Capital Goods	46	100	14.6	137.5	13.3%	3.2%	-5.6%	up:5,3	down:73,15	flat	61	12.7%	399	-	344	41%	-	-2%	+70%
-1213	Naseej International Trading Co.	Consumer Durables & Apparel	263	75	-	24.84	14.1%	13.5%	-75.7%	flat	down:199,114	down:93,8	183	313.0%	377	-	-	-	-	+124%	-60%
-1214	Al Hassan Ghazi Ibrahim Shaker Co.	Capital Goods	180	94	11.0	12.05	-7.0%	-18.9%	-56.5%	down:80,3	down:297,3	down:114,3	236	134.8%	598	-	-	-	red,red	+124%	+327%
-1301	United Wire Factories Co.	Materials	231	232	99.6	18.34	15.1%	14.6%	-22.6%	up:11,*	down:196,113	down:316,113	131	40.9%	599	-	-	-	-	+28%	+171%
-1302	Bawan Co.	Capital Goods	127	121	16.9	34.76	1.9%	-19.6%	-40.4%	down:46,7	down:134,7	flat	152	77.2%	392	-	-	-	red	-51%	+26%
-1303	Electrical Industries Co.	Capital Goods	36	18	20.5	15.06	6.4%	-3.0%	59.4%	flat	up:315,84	up:873,84	12	27.0%	83	-	-	-	-	-45%	-26%
-1304	Al Yamamah Steel Industries Co.	Materials	136	82	14.9	37.6	7.7%	-1.4%	10.7%	down:19,15	up:144,34	up:572,34	25	14.4%	34	-	633	64%	-	-68%	-6%
-1320	Saudi Steel Pipe Co.	Materials	112	72	12.4	47.3	0.6%	-12.4%	-8.1%	down:27,3	down:1,*	flat	168	25.9%	602	-	-	-	-	-10%	-43%
-1321	East Pipes Integrated Company for Industry	Materials	67	24	10.1	187.9	2.1%	-4.1%	70.8%	down:14,13	up:168,30	up:123,30	23	20.8%	30	-	-	-	-	-24%	-17%
-1322	Almasane Alkobra Mining Co.	Materials	64	44	18.5	85.15	16.0%	14.1%	36.0%	up:7,5	flat	up:93,86	13	37.2%	134	-	-	-	-	-27%	+74%
-1323	United Carton Industries Co.	Materials	166	167	13.1	27.32	-1.2%	12.8%	-9.5%	up:19,11	flat	flat	35	15.9%	306	-	-	-	green	-42%	+120%
-1324	Saleh Abdulaziz Al Rashed and Sons Co.	Materials	194	109	-	38.66	-2.2%	-17.6%	-	down:58,5	flat	flat	95	77.7%	96	-	-	-	-	-11%	-64%
-1810	Seera Group Holding	Consumer Services	71	68	107.2	21.54	5.8%	6.5%	-16.9%	flat	down:109,104	flat	103	46.3%	209	-	117	45%	-	+98%	+136%
-1820	BAAN Holding Group Co.	Consumer Services	156	106	-	2.06	3.0%	9.6%	-10.4%	flat	flat	down:1123,104	119	12.6%	607	-	-	-	-	-17%	-38%
-1830	Leejam Sports Co.	Consumer Services	89	97	15.0	80.25	0.7%	-2.2%	-46.8%	flat	down:382,23	down:76,23	195	87.8%	600	-	-	-	-	-51%	+232%
-1831	Maharah Human Resources Co.	Commercial & Professional Svc	99	64	10.3	4.73	-10.1%	-9.9%	23.8%	down:6,2	up:142,25	up:29,25	22	16.5%	25	-	-	-	-	-49%	+48%
-1832	Sadr Logistics Co.	Commercial & Professional Svc	234	177	-	2.52	1.6%	-4.6%	-12.8%	down:31,16	down:440,112	down:420,112	263	21.0%	1164	-	173	28%	-	-61%	-16%
-1833	Al Mawarid Manpower Co.	Commercial & Professional Svc	126	79	16.8	103.3	-2.3%	11.9%	3.0%	flat	up:31,22	flat	29	7.4%	22	-	-	-	-	+29%	-38%
-1834	Saudi Manpower Solutions Co.	Commercial & Professional Svc	110	81	15.6	5.77	-7.4%	-1.0%	-3.0%	down:5,2	flat	flat	92	12.3%	11	-	-	-	-	-25%	+10%
-1835	Tamkeen Human Resource Co.	Commercial & Professional Svc	151	178	13.4	46.1	-4.4%	5.5%	-17.4%	flat	down:179,92	flat	108	34.7%	429	-	-	-	-	-53%	+11%
-2001	Methanol Chemicals Co.	Materials	219	225	-	32.1	-10.6%	-19.5%	-29.9%	down:15,3	down:14,3	down:627,114	259	54.1%	1070	-	-	-	-	+277%	0%
-2010	Saudi Basic Industries Corp.	Materials	6	9	-	49.5	-0.2%	-14.8%	-13.9%	down:56,5	down:46,5	down:910,5	262	26.9%	1107	-	-	-	red	-41%	+24%
-2020	SABIC Agri-Nutrients Co.	Materials	13	11	15.1	124.5	1.3%	-11.1%	2.4%	flat	flat	up:88,87	27	27.7%	87	-	-	-	-	-50%	+90%
-2030	Saudi Arabia Refineries Co.	Energy	197	89	-	51.2	9.7%	15.8%	-11.3%	up:3,*	down:576,53	down:532,53	133	23.0%	602	-	-	-	-	+57%	-73%
-2040	Saudi Ceramic Co.	Capital Goods	111	161	13.2	25.32	5.2%	-7.4%	-16.2%	down:58,16	down:56,16	down:367,16	228	28.4%	567	-	867	15%	-	+99%	-3%
-2050	Savola Group	Food & Beverages	57	47	8.3	26.14	0.3%	-9.6%	8.9%	down:23,19	up:46,41	flat	46	14.8%	40	-	320	57%	-	-35%	+32%
-2060	National Industrialization Co.	Materials	70	142	-	9.55	12.4%	-2.8%	-6.4%	flat	down:39,9	down:909,113	182	24.0%	216	-	-	-	-	+59%	+106%
-2070	Saudi Pharmaceutical Industries and Medical Appliances Corp.	Pharma, Biotech & Life Science	93	93	20.9	31.36	0.2%	8.3%	17.0%	up:29,11	up:88,82	down:513,342	42	5.3%	82	-	240	79%	-	-37%	-81%
-2080	Alghaz Waltsnae Company Eligibility Alqabida	Utilities	81	99	17.8	60.1	-5.9%	-22.5%	-19.1%	down:82,1	down:109,1	flat	149	57.7%	375	-	-	-	red,red	+15%	+130%
-2081	Alkhorayef Water and Power Technologies Co.	Utilities	96	108	13.4	99.9	-0.1%	-14.0%	-23.2%	down:47,7	down:179,7	down:79,7	244	54.6%	609	-	-	-	red,red	-54%	+108%
-2082	ACWA POWER Co.	Utilities	7	8	79.8	186.4	-0.6%	1.7%	-17.7%	down:3,2	down:2,1	flat	161	33.4%	466	-	-	-	-	-45%	-11%
-2083	The Power and Water Utility Company for Jubail and Yanbu	Utilities	49	67	20.4	41.24	9.7%	5.7%	1.1%	up:10,2	flat	flat	38	8.0%	777	-	-	-	-	-10%	+273%
-2084	Miahona Co.	Utilities	131	113	135.0	11.16	-8.2%	-26.8%	-56.3%	down:78,*	down:196,*	flat	165	134.8%	522	All-Time Low	-	-	red,red	+102%	+161%
-2090	National Gypsum Co.	Materials	233	234	-	13.38	-3.6%	-3.9%	-31.4%	down:27,5	down:509,112	down:672,112	231	56.2%	583	-	-	-	-	-51%	-55%
-2100	Wafrah for Industry and Development Co.	Food & Beverages	226	133	-	20.85	1.2%	3.7%	-21.3%	down:4,3	down:436,112	down:311,112	235	37.3%	597	-	23	26%	-	-28%	-71%
-2110	Saudi Cable Co.	Capital Goods	169	124	5.9	179.0	11.9%	20.1%	18.9%	up:10,5	up:152,48	flat	21	6.2%	48	-	-	-	-	-51%	-41%
-2120	Saudi Advanced Industries Co.	Financial Services	175	162	-	16.1	6.1%	-2.5%	-32.6%	flat	down:361,112	down:227,112	192	60.8%	583	-	-	-	-	+3%	-28%
-2130	Saudi Industrial Development Co.	Consumer Durables & Apparel	225	103	-	16.28	1.1%	29.0%	-23.2%	up:84,49	flat	down:739,106	70	35.4%	266	-	-	-	-	-17%	-55%
-2140	AYYAN Investment Co.	Health Care Equipment & Svc	174	207	36.8	9.08	-1.4%	-15.6%	-26.4%	down:30,1	down:331,1	down:331,1	245	51.9%	612	-	-	-	red,red	+37%	+49%
-2150	The National Company for Glass Industries	Materials	161	191	12.1	37.2	2.8%	0.0%	-9.1%	flat	down:298,112	flat	107	12.9%	396	-	180	61%	-	+175%	+43%
-2160	Saudi Arabian Amiantit Co.	Capital Goods	220	168	-	13.0	7.9%	-3.0%	-34.8%	flat	down:327,9	down:160,9	184	71.6%	449	-	-	-	-	-42%	-22%
-2170	Alujain Corp.	Materials	135	83	-	27.2	2.3%	-5.8%	-25.6%	down:6,1	down:562,114	down:451,114	260	37.9%	1076	-	46	31%	-	-6%	+22%
-2180	Filing and Packing Materials Manufacturing Co.	Materials	246	201	-	33.3	1.2%	25.4%	2.7%	up:48,11	flat	down:347,112	83	10.2%	602	-	-	-	-	-30%	+50%
-2190	Sustained Infrastructure Holding Co.	Transportation	101	84	29.6	37.4	4.5%	9.0%	9.0%	up:2,*	up:66,55	up:95,55	3	1.0%	55	-	673	82%	-	-26%	+94%
-2200	Arabian Pipes Co.	Materials	157	29	13.8	6.5	5.0%	-6.3%	11.3%	down:20,16	flat	flat	94	20.2%	50	-	-	-	-	+32%	-44%
-2210	Nama Chemicals Co.	Materials	232	273	5.6	18.74	0.0%	0.0%	-29.9%	down:142,76	down:324,76	down:584,76	256	45.7%	978	5-Year Low	-	-	-	-	-
-2220	National Metal Manufacturing and Casting Co.	Materials	239	224	-	12.12	4.3%	5.1%	-27.1%	flat	down:186,114	down:876,114	202	48.0%	1277	-	-	-	-	+23%	-40%
-2222	Saudi Arabian Oil Co.	Energy	1	2	17.2	26.4	-0.3%	-5.2%	10.5%	down:7,*	up:88,62	down:480,233	116	5.9%	62	-	50	28%	-	+8%	+5%
-2223	Saudi Aramco Base Oil Co.	Materials	26	19	23.9	137.0	8.1%	7.0%	59.9%	up:3,2	up:76,2	flat	18	0.4%	2	-	-	-	-	+16%	+36%
-2230	Saudi Chemical Co.	Health Care Equipment & Svc	62	33	20.3	7.89	-2.7%	-6.7%	11.3%	down:14,2	up:64,59	up:88,59	26	12.3%	59	-	-	-	-	-7%	+20%
-2240	Advanced Building Industries Co.	Materials	139	65	15.0	26.26	-2.4%	-22.0%	-30.3%	down:68,2	down:33,2	up:464,315	89	64.4%	315	-	-	-	red,red	-32%	+315%
-2250	Saudi Industrial Investment Group	Materials	55	114	56.9	12.29	2.8%	-13.4%	-32.2%	down:36,15	down:45,15	down:764,144	209	62.7%	247	-	-	-	-	-14%	+58%
-2270	Saudia Dairy and Foodstuff Co.	Food & Beverages	65	163	14.6	198.6	-2.3%	-11.3%	-26.6%	down:24,1	down:373,113	down:21,1	243	49.6%	606	-	-	-	-	+43%	+164%
-2280	Almarai Co.	Food & Beverages	17	32	18.9	48.24	4.0%	7.8%	3.7%	up:62,11	flat	down:263,115	86	5.7%	766	-	-	-	green	-12%	-36%
-2281	Tanmiah Food Co.	Food & Beverages	168	132	-	63.5	18.0%	3.9%	-23.3%	up:2,*	down:344,112	down:192,112	135	32.3%	603	-	-	-	-	-1%	-13%
-2282	Naqi Water Co.	Food & Beverages	163	219	-	56.25	-1.3%	7.0%	7.2%	flat	flat	down:3,2	120	12.4%	809	-	-	-	-	-39%	-28%
-2283	First Milling Co.	Food & Beverages	103	179	10.2	53.05	3.8%	1.9%	2.9%	flat	flat	flat	55	6.9%	774	-	-	-	-	-46%	+29%
-2284	Modern Mills for Food Products Co.	Food & Beverages	113	212	10.6	27.4	-6.2%	-2.1%	-12.7%	down:4,2	down:286,114	flat	164	30.4%	520	-	-	-	-	-30%	+120%
-2285	Arabian Mills for Food Products Co.	Food & Beverages	117	159	9.0	42.36	-5.8%	-4.6%	-0.1%	down:12,1	up:28,26	flat	47	16.7%	41	-	344	47%	-	-22%	+28%
-2286	Fourth Milling Co.	Food & Beverages	125	180	10.6	4.1	4.1%	0.2%	0.0%	flat	up:42,41	flat	31	5.9%	41	-	428	74%	-	+43%	+87%
-2287	Arabian Company for Agricultural and Industrial Investment	Food & Beverages	199	125	-	23.22	0.3%	-8.9%	-42.9%	down:17,5	down:62,5	flat	144	79.9%	310	-	-	-	red,red	+14%	-34%
-2288	Nofoth Food Products Co.	Food & Beverages	210	260	11.5	6.2	-0.2%	-15.0%	-	down:74,5	flat	flat	99	60.8%	146	-	-	-	-	+44%	+15%
-2290	Yanbu National Petrochemical Co.	Materials	34	42	219.3	32.48	5.8%	-4.5%	0.3%	flat	down:36,34	down:965,113	178	17.0%	78	-	-	-	-	+12%	-24%
-2300	Saudi Paper Manufacturing Co.	Materials	108	110	34.5	61.25	-11.2%	7.6%	8.2%	flat	up:22,12	up:89,12	8	12.6%	12	-	-	-	-	-58%	-4%
-2310	Sahara International Petrochemical Co.	Materials	50	58	-	13.18	3.5%	-11.0%	-30.6%	down:63,15	down:924,15	down:419,15	261	57.1%	1076	-	-	-	-	+19%	-5%
-2320	Al-Babtain Power and Telecommunication Co.	Capital Goods	98	35	6.7	59.0	11.5%	-10.7%	0.3%	down:33,15	flat	up:672,44	43	24.1%	44	-	-	-	-	-40%	+112%
-2330	Advanced Petrochemical Co.	Materials	68	76	1100.0	24.75	12.5%	-6.6%	-25.9%	flat	down:169,15	down:710,15	181	55.0%	200	-	-	-	-	-30%	-21%
-2340	ARTEX Industrial Investment Co.	Consumer Durables & Apparel	171	190	41.0	11.33	-7.9%	13.0%	-9.6%	flat	flat	down:726,112	121	24.8%	1284	-	-	-	-	-65%	-16%
-2350	Saudi Kayan Petrochemical Co.	Materials	58	43	-	5.3	6.0%	-8.8%	5.4%	flat	down:23,16	down:706,292	199	18.5%	1092	-	364	45%	-	+18%	+28%
-2360	Saudi Vitrified Clay Pipes Co.	Materials	260	206	-	17.64	3.2%	5.2%	-35.4%	up:4,3	down:565,49	down:939,49	134	61.9%	602	-	40	47%	-	-7%	-66%
-2370	Middle East Specialized Cables Co.	Capital Goods	158	92	10.8	30.46	-1.3%	-7.0%	-8.2%	flat	up:30,27	up:15,8	10	13.1%	67	-	64	24%	-	-79%	-26%
-2380	Rabigh Refining and Petrochemical Co.	Energy	23	4	-	18.0	21.0%	11.2%	139.4%	up:29,3	up:98,3	flat	19	1.1%	3	-	-	-	green,green	-31%	+36%
-2381	Arabian Drilling Co.	Energy	61	102	-	86.9	7.7%	-0.7%	15.6%	down:18,15	down:17,15	flat	173	22.0%	643	-	-	-	-	-71%	+49%
-2382	Ades Holding Co.	Energy	31	38	21.6	18.71	12.4%	-5.0%	25.0%	flat	up:141,57	flat	32	5.5%	57	-	-	-	-	-48%	+22%
-3002	Najran Cement Co.	Materials	173	221	34.2	5.53	0.9%	-5.1%	-31.9%	down:131,5	down:757,5	down:842,5	271	49.4%	1289	-	-	-	red	-25%	-7%
-3003	City Cement Co.	Materials	146	127	13.1	10.15	0.6%	-16.4%	-37.2%	down:70,3	down:295,3	down:644,3	215	61.3%	344	-	-	-	-	-47%	+12%
-3004	Northern Region Cement Co.	Materials	162	244	19.4	6.63	3.6%	-3.9%	-14.4%	flat	down:350,15	down:905,15	203	24.3%	1277	-	-	-	-	0%	+33%
-3005	Umm Al-Qura Cement Co.	Materials	195	247	12.4	12.42	-6.9%	-8.9%	-17.2%	down:10,2	down:5,2	down:315,112	214	22.2%	344	-	-	-	-	-47%	+66%
-3007	Zahrat Al Waha for Trading Co.	Materials	208	173	45.8	2.75	0.0%	10.0%	6.2%	flat	up:4,3	down:504,156	67	6.6%	18	-	-	-	-	-41%	-11%
-3008	Al Kathiri Holding Co.	Materials	253	170	-	1.15	-14.2%	-34.7%	-46.5%	down:113,*	down:451,*	down:360,*	254	92.2%	830	All-Time Low	-	-	-	+1241%	+9%
-3010	Arabian Cement Co.	Materials	122	200	11.4	21.74	-1.8%	-4.1%	0.1%	down:18,3	down:7,3	down:727,262	264	11.5%	1250	-	-	-	-	+69%	+105%
-3020	Yamama Cement Co.	Materials	85	131	9.5	23.39	3.4%	-3.8%	-30.6%	down:32,14	down:235,14	down:109,14	216	44.5%	352	-	-	-	-	-28%	+74%
-3030	Saudi Cement Co.	Materials	87	169	12.2	28.32	-0.3%	-11.0%	-27.4%	down:75,6	down:307,6	down:1145,6	212	44.8%	326	-	-	-	red,red	-48%	+44%
-3040	Qassim Cement Co.	Materials	82	158	19.7	44.9	3.9%	-0.9%	4.4%	down:13,9	flat	down:637,236	177	2.7%	1380	-	-	-	-	-49%	+37%
-3050	Southern Province Cement Co.	Materials	107	233	-	19.11	2.8%	-5.0%	-26.5%	down:92,16	down:778,16	down:944,16	273	44.2%	1395	-	-	-	-	-68%	-8%
-3060	Yanbu Cement Co.	Materials	115	138	21.0	14.88	-0.4%	-7.6%	-7.2%	down:27,5	down:35,5	down:697,112	253	15.7%	787	-	-	-	-	-47%	+4%
-3080	Eastern Province Cement Co.	Materials	124	194	10.3	24.98	-1.8%	3.1%	-6.9%	down:7,5	flat	down:567,112	176	9.9%	794	-	-	-	-	-50%	+10%
-3090	Tabuk Cement Co.	Materials	200	248	23.9	7.26	-2.0%	-7.8%	-31.5%	down:96,3	down:335,3	down:753,3	218	50.1%	381	-	-	-	red,red	-19%	-15%
-3091	Al Jouf Cement Co.	Materials	223	246	-	4.92	2.1%	1.4%	-26.2%	down:29,16	down:344,92	down:909,92	220	45.9%	389	-	-	-	-	-57%	-6%
-3092	Riyadh Cement Co.	Materials	109	196	13.0	22.74	9.0%	-1.0%	-24.0%	flat	down:235,15	flat	105	33.5%	344	-	-	-	-	-11%	+53%
-4001	Abdullah Al Othaim Markets Co.	Consumer Staples Distribution & Retail	84	146	19.8	4.95	-3.7%	-16.5%	-35.7%	down:121,5	down:561,5	down:311,5	251	59.2%	767	-	-	-	red	-42%	+35%
-4002	Mouwasat Medical Services Co.	Health Care Equipment & Svc	41	51	15.1	64.4	3.5%	-1.4%	-12.5%	flat	down:489,112	down:244,112	191	22.7%	582	-	-	-	-	+5%	+23%
-4003	United Electronics Co.	Consumer Discretionary Distribution & Retail	74	59	10.5	64.25	-2.9%	-20.1%	-26.7%	down:78,5	down:177,5	down:87,5	223	44.7%	442	-	-	-	-	-64%	+102%
-4004	Dallah Healthcare Co.	Health Care Equipment & Svc	44	80	23.0	101.2	-3.8%	-10.4%	-22.8%	down:39,2	down:170,2	flat	171	54.8%	619	-	-	-	red	-33%	+175%
-4005	National Medical Care Co.	Health Care Equipment & Svc	80	60	17.7	125.5	11.1%	27.7%	-26.7%	up:14,1	down:187,62	flat	62	45.0%	524	-	-	-	-	-3%	-27%
-4006	Saudi Marketing Co.	Consumer Staples Distribution & Retail	215	256	22.2	12.18	-2.1%	-3.9%	-23.5%	down:24,1	down:534,112	down:554,112	240	45.9%	602	-	-	-	red	-23%	-55%
-4007	Al Hammadi Holding	Health Care Equipment & Svc	90	150	18.5	25.2	-2.8%	-4.8%	-25.6%	down:21,3	down:534,112	down:174,112	247	42.1%	628	-	167	26%	-	-35%	+167%
-4008	Saudi Company for Hardware	Consumer Discretionary Distribution & Retail	190	222	18.5	21.13	-4.0%	-7.4%	-27.6%	down:76,5	down:184,5	down:1152,5	249	57.2%	648	-	-	-	red	+14%	-3%
-4009	Middle East Healthcare Co.	Health Care Equipment & Svc	105	87	16.3	32.06	7.8%	-5.7%	-44.5%	flat	down:354,113	down:115,113	196	83.1%	628	-	-	-	-	-2%	-11%
-4011	Lazurde Company for Jewelry	Consumer Durables & Apparel	211	229	-	10.68	3.4%	-5.6%	-18.6%	down:8,6	down:480,15	down:994,15	241	25.1%	602	-	-	-	-	-68%	+62%
-4012	Thob Al Aseel Co.	Consumer Durables & Apparel	144	228	13.7	3.48	-2.0%	-4.1%	-5.9%	down:8,2	down:6,2	down:332,166	252	14.7%	775	-	264	35%	-	-58%	+29%
-4013	Dr. Sulaiman Al Habib Medical Services Group	Health Care Equipment & Svc	8	26	34.0	237.8	1.2%	10.9%	-3.9%	up:14,11	down:188,38	flat	65	17.8%	618	-	-	-	-	+7%	+48%
-4014	Scientific and Medical Equipment House Co.	Health Care Equipment & Svc	186	230	28.1	27.8	1.9%	-6.6%	-25.2%	down:45,16	down:365,114	down:114,16	234	47.5%	597	-	-	-	-	+101%	+135%
-4015	Jamjoom Pharmaceuticals Factory Co.	Pharma, Biotech & Life Science	48	151	19.9	140.8	2.9%	-9.5%	-11.9%	down:29,15	down:17,15	flat	163	16.2%	478	-	-	-	-	-27%	-34%
-4016	Middle East Pharmaceutical Industries Co.	Pharma, Biotech & Life Science	128	166	19.4	61.5	6.4%	6.3%	-14.6%	flat	down:178,96	flat	111	28.1%	612	-	53	72%	-	+15%	-16%
-4017	Dr. Soliman Abdel Kader Fakeeh Hospital Co.	Health Care Equipment & Svc	56	183	31.2	35.16	0.6%	-0.3%	-10.5%	down:23,7	down:21,7	flat	157	21.2%	425	-	-	-	-	-63%	+70%
-4018	Almoosa Health Co.	Health Care Equipment & Svc	76	176	26.7	117.6	1.4%	5.8%	-30.0%	down:8,5	down:111,61	flat	142	70.1%	199	-	-	-	-	-12%	-26%
-4019	Specialized Medical Co.	Health Care Equipment & Svc	95	116	13.1	16.02	12.9%	-4.2%	-21.0%	flat	down:39,15	flat	104	32.3%	286	-	-	-	-	-81%	+97%
-4020	Saudi Real Estate Co.	Real Estate Mgmt & Dev't	66	111	9.4	16.01	0.4%	-1.2%	-9.9%	flat	flat	down:64,31	118	13.8%	388	-	-	-	-	-2%	-31%
-4021	Canadian Medical Center Co.	Health Care Equipment & Svc	238	149	66.9	5.53	3.4%	1.5%	-	flat	flat	flat	53	63.6%	165	-	-	-	-	-72%	-49%
-4030	National Shipping Company of Saudi Arabia	Energy	21	16	7.1	34.08	9.6%	1.1%	54.9%	flat	up:194,75	up:850,75	11	8.5%	75	-	-	-	-	+43%	+106%
-4031	Saudi Ground Services Co.	Transportation	78	86	13.9	26.84	-0.7%	-11.4%	-42.0%	down:42,9	down:247,9	down:19,9	230	75.8%	582	-	-	-	red	-31%	+39%
-4040	Saudi Public Transport Co.	Transportation	149	129	15.7	11.48	4.6%	3.0%	-14.8%	up:12,9	flat	down:300,113	73	25.0%	431	-	-	-	-	-75%	+171%
-4050	Saudi Automotive Services Co.	Consumer Discretionary Distribution & Retail	106	61	74.0	43.38	12.7%	-4.6%	-17.8%	down:45,9	down:166,9	flat	170	67.6%	612	-	-	-	-	-8%	+99%
-4051	Baazeem Trading Co.	Consumer Discretionary Distribution & Retail	216	210	21.2	5.52	0.0%	-1.8%	-0.2%	down:25,1	down:116,112	down:548,294	207	27.5%	204	-	-	-	-	-42%	-47%
-4061	Anaam International Holding Group	Consumer Staples Distribution & Retail	248	122	-	11.97	5.8%	18.2%	-21.5%	up:9,6	down:350,104	down:355,104	123	37.0%	466	-	-	-	-	-63%	-50%
-4070	Tihama Advertising, Public Relations and Marketing Co.	Media and Entertainment	244	165	-	20.64	20.5%	46.4%	-23.8%	up:55,*	flat	down:1022,63	72	43.1%	387	-	-	-	green	+43%	-21%
-4071	Arabian Contracting Services Co.	Media and Entertainment	86	104	129.3	63.5	-20.8%	-32.2%	-27.0%	down:84,*	down:77,*	down:188,*	246	105.8%	625	All-Time Low	-	-	red,red	-35%	+179%
-4072	MBC Group Co.	Media and Entertainment	63	172	19.1	20.39	1.6%	-16.8%	-32.0%	down:117,1	down:324,1	flat	172	85.9%	640	-	-	-	red	-38%	-52%
-4080	Sinad Holding Co.	Food & Beverages	170	249	-	7.95	-1.4%	-10.9%	-22.8%	down:30,2	down:338,104	down:337,104	226	36.4%	472	-	-	-	-	+19%	+1%
-4081	Nayifat Finance Co.	Financial Services	164	245	-	9.95	6.6%	1.8%	-20.1%	flat	down:351,17	down:183,17	186	37.3%	480	-	-	-	-	-10%	+26%
-4082	Morabaha Marina Financing Co.	Financial Services	222	257	-	8.44	14.0%	6.3%	-25.6%	up:3,*	down:241,16	flat	59	37.8%	275	-	-	-	-	-60%	-14%
-4083	United International Holding Co.	Financial Services	123	112	7.6	29.96	1.9%	-27.1%	-43.3%	down:61,7	down:178,7	flat	154	96.0%	393	-	-	-	-	-42%	-56%
-4084	Derayah Financial Co.	Financial Services	75	115	13.1	20.38	-3.0%	-10.8%	-23.7%	down:46,1	down:107,1	flat	147	55.5%	354	-	-	-	red,red	-30%	+32%
-4090	Taiba Investments Co.	Real Estate Mgmt & Dev't	52	181	24.8	18.28	2.5%	-5.5%	-5.5%	down:40,16	down:29,16	flat	151	22.5%	387	-	-	-	-	-52%	-35%
-4100	Makkah Construction and Development Co.	Real Estate Mgmt & Dev't	35	71	33.7	79.5	-3.0%	-9.0%	3.3%	down:19,2	down:14,2	flat	160	15.9%	462	-	226	20%	red	-35%	+31%
-4110	Batic Investments and Logistics Co.	Capital Goods	160	96	-	2.03	1.5%	-6.9%	-10.2%	down:32,17	down:29,17	down:133,112	225	17.2%	463	-	341	24%	-	-28%	-51%
-4130	Saudi Darb Investment Co.	Financial Services	228	62	72.0	2.18	0.9%	5.3%	-29.0%	flat	down:230,104	down:44,24	185	42.7%	464	-	-	-	-	-69%	-64%
-4140	Saudi Industrial Export Co.	Capital Goods	229	118	-	2.32	0.4%	-0.4%	10.5%	flat	up:90,13	down:703,176	68	28.4%	146	-	579	42%	-	-23%	-41%
-4141	Al-Omran Industrial Trading Co.	Capital Goods	262	239	-	19.35	-2.6%	-3.5%	-28.9%	down:26,1	down:372,1	down:516,1	268	68.0%	1273	-	-	-	-	+92%	-55%
-4142	Riyadh Cables Group Co.	Capital Goods	38	41	13.5	105.7	5.9%	-7.3%	-22.3%	down:34,15	down:110,15	flat	155	34.8%	402	-	-	-	-	-53%	+56%
-4143	Al Taiseer Group Talco Industrial Co.	Materials	150	213	15.1	35.5	8.8%	0.3%	-13.5%	up:5,1	down:295,114	flat	63	20.7%	527	-	-	-	-	-28%	+101%
-4144	Raoom Trading Co.	Capital Goods	176	135	-	72.7	-0.1%	7.4%	24.6%	flat	flat	flat	50	9.9%	17	-	-	-	-	-55%	-12%
-4145	Obeikan Glass Co.	Capital Goods	192	195	12.2	24.5	1.6%	6.7%	-19.4%	down:18,2	down:352,110	down:68,62	258	48.4%	997	-	177	37%	-	+2%	-51%
-4146	Gas Arabian Services Co.	Capital Goods	116	164	14.8	16.0	8.0%	14.9%	-	flat	flat	flat	51	11.0%	36	-	-	-	-	-46%	-40%
-4147	Consolidated Grunenfelder Saady Holding Co.	Capital Goods	205	147	13.3	6.62	5.9%	-14.7%	-	down:42,8	flat	flat	98	59.4%	136	-	-	-	-	-38%	-12%
-4148	Alwasail Industrial Co.	Capital Goods	204	157	23.5	3.28	27.1%	22.4%	-	up:9,6	flat	flat	33	11.3%	147	-	-	-	-	-60%	+101%
-4150	Arriyadh Development Co.	Real Estate Mgmt & Dev't	92	144	12.3	15.72	-2.8%	-13.5%	-51.5%	down:23,2	down:182,2	down:10,2	219	115.9%	388	-	-	-	red,red	-12%	+33%
-4160	Thimar Development Holding Co.	Consumer Staples Distribution & Retail	265	107	-	35.24	5.8%	17.6%	-14.3%	up:1,*	down:183,62	flat	66	42.0%	847	-	196	45%	-	-56%	-70%
-4161	BinDawood Holding Co.	Consumer Staples Distribution & Retail	73	202	19.3	4.7	1.5%	-3.1%	-15.3%	down:39,7	down:432,112	down:456,112	239	26.0%	601	-	-	-	-	+22%	-18%
-4162	Almunajem Foods Co.	Consumer Staples Distribution & Retail	94	123	16.6	62.7	4.5%	1.8%	6.9%	up:11,10	flat	down:159,112	77	5.3%	568	-	-	-	-	-33%	+64%
-4163	Aldawaa Medical Services Co.	Consumer Staples Distribution & Retail	97	154	14.4	38.8	-4.4%	-19.7%	-42.2%	down:79,8	down:533,8	down:104,8	248	76.6%	630	-	-	-	red	-44%	-30%
-4164	Nahdi Medical Co.	Consumer Staples Distribution & Retail	42	101	15.2	93.6	-1.5%	-3.9%	-18.0%	down:1,*	down:246,23	down:98,23	255	30.6%	978	-	-	-	-	-41%	+47%
-4165	Al Majed Oud Co.	Household & Personal Products	100	156	14.4	117.8	-1.0%	-13.6%	-3.8%	down:73,*	down:31,*	flat	141	42.7%	98	-	370	16%	-	+24%	-14%
-4170	Tourism Enterprise Co.	Consumer Services	182	139	-	14.58	-3.1%	-8.8%	-23.3%	down:20,8	down:4,3	down:192,156	210	30.3%	267	-	-	-	-	+13%	-43%
-4180	Fitaihi Holding Group	Consumer Durables & Apparel	203	188	-	2.45	3.4%	2.5%	-21.7%	down:24,15	down:296,112	down:147,112	221	36.7%	396	-	119	26%	-	-7%	+19%
-4190	Jarir Marketing Co.	Consumer Discretionary Distribution & Retail	27	23	18.5	16.73	0.7%	6.4%	31.4%	flat	up:144,26	flat	30	8.2%	26	-	-	-	-	+16%	-36%
-4191	Abdullah Saad Mohammed Abo Moati for Bookstores Co.	Consumer Discretionary Distribution & Retail	188	73	32.6	40.38	0.8%	-0.3%	1.9%	down:22,7	flat	up:381,202	45	29.8%	202	-	97	15%	-	+2%	-48%
-4192	AlSaif Stores for Development and Investment Co.	Consumer Discretionary Distribution & Retail	118	252	36.6	6.53	-0.8%	-6.0%	-6.6%	down:31,18	down:16,1	flat	166	8.6%	572	-	-	-	-	+76%	+10%
-4193	Nice One Beauty Digital Marketing Co.	Consumer Discretionary Distribution & Retail	152	117	-	11.8	6.9%	-9.6%	-50.7%	down:36,15	down:152,15	flat	148	116.1%	371	-	-	-	-	+100%	-8%
-4194	Marketing Home Group for Trading Co.	Consumer Discretionary Distribution & Retail	202	171	14.4	41.54	1.1%	2.5%	-	down:27,5	flat	flat	100	82.5%	208	-	-	-	red	-64%	-49%
-4200	Aldrees Petroleum and Transport Services Co.	Consumer Discretionary Distribution & Retail	43	27	25.1	120.0	4.4%	4.0%	-5.4%	up:7,2	down:146,23	flat	64	27.8%	612	-	575	33%	-	-33%	+37%
-4210	Saudi Research and Media Group	Media and Entertainment	83	74	-	58.65	-0.7%	-22.0%	-64.9%	down:44,5	down:350,5	down:116,5	233	227.7%	594	-	-	-	red	-45%	-36%
-4220	Emaar The Economic City	Real Estate Mgmt & Dev't	54	199	470.0	9.81	4.4%	-3.4%	-21.3%	down:43,15	down:359,114	down:974,114	227	43.6%	485	-	-	-	-	+65%	-19%
-4230	Red Sea International Co.	Real Estate Mgmt & Dev't	165	28	-	23.73	2.4%	2.1%	-44.7%	down:9,3	down:271,114	down:94,88	224	93.0%	447	-	126	50%	-	-31%	-64%
-4240	AFG International Co.	Consumer Discretionary Distribution & Retail	147	53	-	17.87	47.3%	42.7%	-21.7%	up:1,*	down:110,8	down:64,8	122	66.5%	276	-	-	-	-	+182%	+38%
-4250	Jabal Omar Development Co.	Real Estate Mgmt & Dev't	29	14	12.0	18.79	17.4%	28.9%	0.6%	up:31,*	flat	down:446,112	81	5.0%	600	-	-	-	green,green	-41%	+44%
-4260	United International Transportation Co.	Transportation	102	50	9.7	30.82	10.9%	-6.3%	-41.8%	flat	down:193,11	down:15,11	187	88.6%	498	-	-	-	-	-39%	+70%
-4261	Theeb Rent a Car Co.	Transportation	141	69	8.5	20.73	-6.4%	-17.7%	-49.4%	down:187,5	down:322,5	down:126,5	222	109.6%	440	-	-	-	red,red	+9%	+74%
-4262	Lumi Rental Co.	Transportation	140	160	8.4	27.84	-0.8%	-17.7%	-55.0%	down:70,9	down:477,9	flat	169	132.2%	602	-	-	-	red,red	-7%	+100%
-4263	SAL Saudi Logistics Services Co.	Transportation	40	36	19.7	169.1	-2.2%	2.5%	-0.7%	down:2,1	flat	flat	102	9.6%	524	-	333	52%	-	-58%	+45%
-4264	Flynas Co.	Transportation	53	48	-	49.28	0.1%	-2.8%	-38.4%	down:26,7	down:39,7	flat	143	64.6%	286	-	-	-	-	+5%	+4%
-4265	Cherry Trading Co.	Transportation	196	193	9.9	23.75	1.2%	-3.9%	-	down:67,23	flat	flat	96	29.7%	130	-	-	-	-	+56%	+1%
-4270	Saudi Printing and Packaging Co.	Commercial & Professional Svc	212	130	-	7.82	-12.1%	6.8%	-34.2%	up:17,12	down:244,112	down:861,112	140	51.9%	1284	-	-	-	-	-53%	+210%
-4280	Kingdom Holding Co.	Financial Services	18	45	22.9	14.04	15.6%	23.2%	83.0%	up:19,2	up:105,57	up:74,57	4	9.5%	57	-	-	-	-	-22%	+75%
-4290	Alkhaleej Training and Education Co.	Consumer Services	183	182	88.0	14.97	13.4%	0.5%	-33.6%	flat	down:185,15	down:47,15	193	96.3%	598	-	-	-	-	+51%	+26%
-4291	National Company for Learning and Education	Consumer Services	72	185	26.2	142.0	12.0%	22.9%	-15.6%	up:15,11	flat	flat	37	28.3%	424	-	-	-	-	-68%	+275%
-4292	Ataa Educational Co.	Consumer Services	134	197	22.0	43.58	-3.0%	-15.0%	-32.5%	down:73,23	down:187,23	down:29,23	250	59.4%	649	-	-	-	-	-49%	-7%
-4300	Dar Alarkan Real Estate Development Co.	Real Estate Mgmt & Dev't	28	77	16.7	20.51	11.5%	19.6%	3.2%	up:36,1	up:35,1	up:489,333	1	0.1%	1	-	-	-	-	+65%	-13%
-4310	Knowledge Economic City	Real Estate Mgmt & Dev't	79	105	-	18.07	20.9%	55.8%	43.1%	up:42,1	up:11,1	down:260,105	39	0.2%	1	-	-	-	green,green	-13%	-4%
-4320	Alandalus Property Co.	Real Estate Mgmt & Dev't	145	242	-	14.66	-3.2%	-1.8%	-20.3%	up:13,12	down:324,26	down:81,26	130	42.6%	598	-	-	-	-	-36%	-25%
-4321	Arabian Centres Co.	Real Estate Mgmt & Dev't	59	120	5.9	16.28	4.6%	-4.5%	-22.0%	down:28,15	down:171,15	down:189,15	208	42.5%	224	-	-	-	-	+93%	+25%
-4322	Retal Urban Development Co.	Real Estate Mgmt & Dev't	77	70	17.8	10.04	-1.2%	-17.5%	-23.6%	down:62,5	down:50,5	flat	158	50.5%	425	-	-	-	red	-24%	+505%
-4323	Sumou Real Estate Co.	Real Estate Mgmt & Dev't	153	227	8.6	25.78	1.4%	-8.6%	-33.0%	down:45,15	down:331,112	flat	167	57.1%	595	-	-	-	-	+4%	-3%
-4324	Banan Real Estate Co.	Real Estate Mgmt & Dev't	209	253	16.6	3.03	1.3%	-4.7%	-37.3%	down:80,16	down:174,16	flat	156	59.4%	422	-	-	-	-	+24%	-45%
-4325	Umm Al Qura for Development and Construction Co.	Real Estate Mgmt & Dev't	24	37	26.9	18.2	11.0%	23.3%	-20.3%	up:10,5	down:62,60	flat	60	36.5%	279	-	-	-	-	-9%	-8%
-4326	Dar Al Majed Real Estate Co.	Real Estate Mgmt & Dev't	133	119	9.6	6.51	2.8%	-13.2%	-	down:122,6	flat	flat	101	80.5%	208	-	-	-	-	+119%	+56%
-4327	Alramz Real Estate Co.	Real Estate Mgmt & Dev't	120	140	7.4	50.8	-2.8%	-6.1%	-	down:33,5	flat	flat	97	35.3%	135	-	-	-	red	-24%	+175%
-4330	Riyad REIT Fund	REITs	185	262	-	4.83	1.0%	-2.0%	-9.0%	down:31,1	down:594,1	down:717,1	257	13.5%	990	-	-	-	-	+31%	-12%
-4331	AlJazira REIT	REITs	267	259	18.3	11.14	-1.8%	2.3%	-16.8%	flat	down:570,112	down:553,112	197	23.8%	778	-	-	-	-	+15%	-81%
-4332	Jadwa REIT Al Haramain Fund	REITs	251	269	12.1	4.97	2.5%	2.7%	-5.1%	flat	down:311,102	down:1033,102	198	5.8%	785	-	-	-	-	+25%	+289%
-4333	Taleem REIT Fund	REITs	221	263	15.7	10.48	0.9%	-1.5%	8.5%	down:15,9	up:58,43	down:812,290	115	4.3%	43	-	409	72%	-	-64%	+91%
-4334	AL Maather REIT Fund	REITs	218	267	16.2	8.82	-1.2%	-1.9%	-2.1%	down:2,1	down:2,1	flat	145	5.2%	331	-	173	40%	-	+87%	+133%
-4335	Musharaka REIT Fund	REITs	254	266	-	3.44	0.6%	-13.8%	-18.7%	down:97,7	down:118,7	down:903,7	267	30.8%	1271	-	-	-	red	-73%	+77%
-4336	Mulkia Gulf Real Estate REIT	REITs	227	268	-	4.48	-2.0%	-2.0%	-4.5%	down:10,1	down:1043,113	down:929,113	269	9.4%	1276	-	-	-	-	-21%	-39%
-4337	AL AZIZIAH REIT Fund	REITs	257	271	-	4.65	-2.3%	-10.2%	9.4%	down:26,*	up:124,95	flat	49	18.9%	95	-	-	-	-	+528%	-15%
-4338	AlAhli REIT Fund 1	REITs	177	265	50.4	6.92	5.6%	7.8%	-1.0%	up:25,3	flat	down:721,114	87	1.3%	1219	-	-	-	green	-8%	+108%
-4339	Derayah REIT Fund	REITs	213	250	66.1	5.26	-0.6%	-0.8%	-4.4%	down:17,1	down:3,1	down:758,144	265	9.1%	1255	-	-	-	-	+207%	+2%
-4340	Al Rajhi REIT Fund	REITs	121	235	14.9	7.91	-2.0%	-3.8%	-3.1%	down:21,1	down:11,1	down:739,144	266	5.9%	1259	-	-	-	-	-34%	+57%
-4342	Jadwa REIT Saudi Fund	REITs	132	184	34.0	9.88	-3.0%	-11.3%	-3.0%	down:49,1	down:13,1	down:484,1	205	18.4%	115	-	-	-	red,red	-47%	+43%
-4344	SEDCO Capital REIT Fund	REITs	143	241	18.3	7.25	-5.8%	-6.6%	9.0%	down:11,1	up:61,30	down:710,174	112	12.0%	30	-	-	-	-	-10%	+44%
-4345	Alinma Retail REIT Fund	REITs	217	243	-	4.6	-2.5%	-5.1%	2.0%	down:9,1	up:61,34	down:1004,142	113	8.5%	34	-	422	41%	-	+119%	-15%
-4346	MEFIC REIT Fund	REITs	261	270	-	3.31	-0.3%	-4.1%	-11.0%	down:92,5	down:574,5	down:940,5	238	15.4%	600	-	-	-	red	-29%	+55%
-4347	Bonyan REIT Fund	REITs	138	238	15.9	9.85	-3.0%	0.8%	8.2%	down:6,5	up:103,32	up:47,32	24	3.2%	32	-	-	-	-	-80%	+44%
-4348	Alkhabeer REIT Fund	REITs	187	255	21.3	5.62	-2.1%	-1.9%	-0.5%	down:12,1	down:4,1	down:849,112	270	3.9%	1277	-	311	31%	-	-67%	-18%
-4349	Alinma Hospitality REIT Fund	REITs	184	214	16.8	7.88	-2.1%	-4.1%	-3.3%	down:26,1	down:12,1	flat	174	6.4%	654	-	-	-	red	+180%	+28%
-4350	Alistithmar AREIC Diversified REIT Fund	REITs	237	258	-	6.81	-1.7%	-3.4%	-15.5%	down:14,10	down:207,10	flat	162	23.8%	474	-	432	22%	red	-67%	-45%
-4700	Al Khabeer Diversified Income Traded Fund	Closed-End Fund	-	272	-	4.74	-1.0%	-1.7%	-17.0%	down:5,*	down:373,*	down:392,*	272	21.9%	1390	All-Time Low	-	-	-	-8%	-49%
-4702	Al Khabeer Diversified Income Traded Fund 2030	Closed-End Fund	-	261	-	7.4	-3.6%	-0.4%	-4.2%	flat	down:68,53	flat	109	8.6%	524	-	-	-	-	-50%	+39%
-4703	SEDCO Capital Multi Asset Traded Fund	Closed-End Fund	-	264	-	6.64	0.0%	4.9%	4.4%	up:1,*	down:69,62	flat	56	9.0%	145	-	467	51%	-	+179%	-40%
-5110	Saudi Energy Co.	Utilities	10	49	14.7	16.96	0.1%	1.9%	15.8%	down:4,3	up:79,43	down:656,114	114	8.3%	43	-	-	-	-	-30%	+32%
-6001	Halwani Bros. Co.	Food & Beverages	167	231	23.5	32.24	3.7%	4.3%	-29.1%	up:1,*	down:356,113	down:702,113	124	41.1%	474	-	-	-	-	-67%	-43%
-6002	Herfy Food Services Co.	Consumer Services	178	215	-	15.43	12.7%	4.0%	-33.4%	up:6,5	down:577,112	down:979,112	138	52.2%	1192	-	-	-	-	-63%	+37%
-6004	CATRION Catering Holding Co.	Commercial & Professional Svc	69	95	17.9	71.9	3.1%	-1.9%	-30.1%	flat	down:270,14	down:100,14	194	43.1%	600	-	-	-	-	-60%	+42%
-6010	National Agricultural Development Co.	Food & Beverages	88	88	12.8	14.59	3.8%	-12.5%	-31.7%	down:52,15	down:408,15	down:24,15	229	55.3%	573	-	-	-	-	-14%	-32%
-6012	Raydan Food Co.	Consumer Services	270	226	-	17.24	15.7%	27.4%	-39.6%	up:3,*	down:469,60	down:684,60	128	83.0%	569	-	-	-	-	+1650%	+214%
-6013	Development Works Food Co.	Consumer Services	258	175	-	88.35	-2.6%	2.4%	-15.8%	down:17,6	down:165,63	down:439,63	206	67.4%	202	-	122	22%	-	-44%	-68%
-6014	Alamar Foods Co.	Consumer Services	172	174	18.7	42.04	13.8%	3.0%	-18.5%	up:3,2	down:757,16	down:7,6	137	25.7%	870	-	-	-	-	-64%	+55%
-6015	Americana Restaurants International PLC - Foreign Company	Consumer Services	30	21	20.4	2.43	8.5%	25.9%	15.2%	up:59,2	up:4,2	flat	17	1.2%	1	-	-	-	green,green	-12%	+99%
-6016	Shatirah House Restaurant Co.	Consumer Services	243	209	27.6	7.25	1.0%	-9.6%	-27.3%	down:4,2	down:199,22	flat	159	45.5%	433	-	-	-	-	+9%	+17%
-6017	Jahez International Company for Information System Technology	Consumer Services	114	63	80.7	11.96	5.8%	-1.9%	-48.4%	down:27,16	down:173,92	flat	150	94.0%	378	-	-	-	-	+35%	-30%
-6018	Sport Clubs Co.	Consumer Services	191	54	18.6	8.43	22.2%	23.8%	-29.0%	up:12,*	down:22,21	flat	57	42.6%	259	-	-	-	-	-71%	+82%
-6019	Al Masar Al Shamil Education Co.	Consumer Services	119	155	15.8	25.9	16.2%	24.0%	-	up:9,5	flat	flat	34	6.1%	160	-	-	-	-	-74%	+47%
-6020	Al Gassim Investment Holding Co.	Food & Beverages	247	223	45.1	12.37	1.6%	4.1%	-22.2%	down:25,8	down:179,61	down:553,61	217	54.4%	379	-	-	-	-	-71%	-62%
-6040	Tabuk Agricultural Development Co.	Food & Beverages	242	90	-	9.24	-10.6%	49.5%	-9.8%	up:20,15	flat	down:830,64	82	13.0%	600	-	-	-	-	-57%	+268%
-6050	Saudi Fisheries Co.	Food & Beverages	241	22	-	64.0	5.6%	67.5%	-27.9%	up:5,2	flat	down:899,61	74	51.0%	473	-	-	-	-	-65%	-50%
-6060	Ash-Sharqiyah Development Co.	Food & Beverages	236	98	-	14.31	1.9%	17.4%	-13.2%	up:7,6	flat	down:824,112	88	21.2%	1365	-	-	-	-	-76%	-69%
-6070	Al-Jouf Agricultural Development Co.	Food & Beverages	155	189	25.6	39.1	-5.6%	-11.1%	-14.3%	down:31,5	down:61,5	down:175,5	204	35.4%	97	-	-	-	red	-56%	-3%
-6090	Jazan Development and Investment Co.	Food & Beverages	240	240	-	8.15	0.0%	0.7%	-23.1%	down:9,8	down:504,116	down:881,116	242	33.2%	603	-	165	39%	-	-83%	-28%
-7010	Saudi Telecom Co.	Telecommunication Services	5	7	14.4	44.14	2.3%	0.7%	2.9%	up:5,*	up:59,46	up:399,328	7	2.4%	328	-	227	74%	-	+0%	+50%
-7020	Etihad Etisalat Co.	Telecommunication Services	16	17	13.1	64.0	3.0%	-0.5%	-1.8%	flat	flat	up:1306,135	28	11.5%	135	-	219	35%	-	-45%	+28%
-7030	Mobile Telecommunication Company Saudi Arabia	Telecommunication Services	51	56	13.1	10.35	0.0%	-5.7%	-3.4%	down:65,23	down:35,23	down:475,293	213	16.7%	334	-	321	12%	-	+24%	+21%
-7040	Etihad GO Telecom Co.	Telecommunication Services	104	85	10.9	86.9	4.4%	-8.6%	-15.3%	down:1,*	down:37,15	up:790,578	91	29.6%	578	-	606	14%	-	-7%	+12%
-7200	Al Moammar Information Systems Co.	Software & Services	60	55	98.0	301.0	24.8%	63.3%	131.4%	up:88,5	up:161,5	up:170,5	2	1.7%	4	-	-	-	green,green	-68%	+99%
-7201	Arab Sea Information System Co.	Software & Services	250	203	-	3.51	7.3%	7.7%	-33.4%	flat	down:426,63	down:580,63	200	56.4%	1150	-	-	-	-	+31%	-51%
-7202	Arabian Internet and Communications Services Co.	Software & Services	22	57	17.1	204.4	-4.9%	-6.6%	-16.8%	down:3,1	down:320,112	down:114,112	237	29.6%	599	-	-	-	-	+39%	+83%
-7203	Elm Co.	Software & Services	14	13	23.5	607.5	-10.4%	-13.5%	-30.6%	down:15,5	down:261,92	flat	153	56.5%	392	-	-	-	-	-58%	+121%
-7204	Perfect Presentation for Commercial Services Co.	Software & Services	130	192	13.4	6.66	10.8%	3.1%	-37.9%	flat	down:351,15	flat	110	68.0%	610	-	-	-	-	0%	+62%
-7205	Dar Albalad for Business Solutions Co.	Software & Services	198	20	-	11.86	19.2%	-	-	-	-	-	52	17.1%	54	-	-	-	-	-5%	+15%
-7211	Saudi Azm for Communication and Information Technology Co.	Software & Services	154	217	26.8	23.46	12.2%	4.6%	-13.1%	up:1,*	down:29,28	flat	58	20.6%	272	-	-	-	-	+116%	-9%
-8010	The Company for Cooperative Insurance	Insurance	32	25	16.3	137.9	12.5%	1.4%	9.1%	flat	up:53,45	up:53,45	9	16.3%	45	-	606	44%	-	-26%	+83%
-8012	Aljazira Takaful Taawuni Co.	Insurance	189	218	25.7	11.56	-4.2%	4.7%	-7.6%	down:5,4	flat	down:506,112	175	13.2%	732	-	-	-	-	-17%	-36%
-8020	Malath Cooperative Insurance Co.	Insurance	224	205	29.1	10.25	3.5%	21.6%	-23.6%	up:47,26	flat	down:494,112	85	31.7%	757	-	-	-	-	-37%	-59%
-8030	The Mediterranean and Gulf Insurance and Reinsurance Co.	Insurance	129	66	39.3	16.95	16.7%	19.2%	1.6%	up:12,3	flat	down:168,158	69	2.8%	3	-	-	-	green	-28%	+16%
-8040	Mutakamela Insurance Co.	Insurance	193	136	-	12.68	3.0%	50.1%	-10.7%	up:39,9	flat	down:504,61	79	12.4%	569	-	-	-	-	-72%	-53%
-8050	Salama Cooperative Insurance Co.	Insurance	259	204	-	8.8	0.3%	16.2%	-27.9%	flat	down:437,92	down:397,92	189	42.2%	581	-	-	-	-	-63%	-30%
-8060	Walaa Cooperative Insurance Co.	Insurance	159	134	-	11.08	16.8%	13.5%	-9.8%	up:10,5	down:354,100	down:239,100	125	17.6%	569	-	-	-	-	-50%	+129%
-8070	Arabian Shield Cooperative Insurance Co.	Insurance	179	208	-	12.28	11.1%	4.3%	-11.2%	up:9,3	flat	down:287,92	78	15.4%	569	-	177	87%	-	-41%	+26%
-8100	Saudi Arabian Cooperative Insurance Co.	Insurance	255	198	14.0	10.65	7.0%	12.9%	-25.0%	up:10,2	down:333,99	down:306,99	126	34.3%	569	-	-	-	-	-71%	-28%
-8120	Gulf Union Alahlia Cooperative Insurance Co.	Insurance	206	220	-	14.52	6.8%	28.8%	14.4%	up:90,7	up:12,7	down:162,111	40	3.4%	7	-	-	-	-	-42%	-47%
-8150	Allied Cooperative Insurance Group	Insurance	266	137	-	8.21	29.3%	43.0%	-26.8%	up:11,5	flat	down:446,61	76	46.8%	563	-	-	-	green	-59%	+79%
-8160	Arabia Insurance Cooperative Co.	Insurance	235	237	-	8.61	6.0%	5.0%	-18.0%	flat	down:472,97	down:889,97	190	32.1%	581	-	-	-	-	-13%	-29%
-8170	Al-Etihad Cooperative Insurance Co.	Insurance	249	143	-	7.9	12.9%	36.4%	-29.5%	up:8,2	down:434,62	down:288,62	127	44.0%	569	-	-	-	-	+10%	+71%
-8180	Al Sagr Cooperative Insurance Co.	Insurance	252	187	-	11.16	8.2%	2.4%	-19.0%	up:7,2	flat	down:540,112	80	25.7%	579	-	-	-	-	-62%	-35%
-8190	United Cooperative Assurance Co.	Insurance	268	216	-	3.33	7.8%	12.1%	-38.1%	up:11,8	down:444,114	down:877,114	129	65.2%	579	-	-	-	-	-57%	+31%
-8200	Saudi Reinsurance Co.	Insurance	91	78	26.3	24.21	1.3%	-7.2%	-23.9%	down:23,14	down:152,112	up:1437,401	90	45.3%	401	-	-	-	-	-46%	+61%
-8210	Bupa Arabia for Cooperative Insurance Co.	Insurance	25	52	21.6	163.5	4.1%	-1.9%	8.1%	down:2,1	flat	flat	93	20.2%	47	-	-	-	-	-27%	-2%
-8230	Al-Rajhi Company for Cooperative Insurance	Insurance	47	46	20.3	52.15	7.5%	1.8%	-14.8%	flat	flat	flat	54	17.8%	515	-	-	-	-	+24%	+7%
-8240	CHUBB Arabia Cooperative Insurance Co.	Insurance	201	145	61.1	18.05	9.5%	-1.2%	-26.2%	flat	down:176,112	flat	106	81.9%	386	-	-	-	-	-66%	-33%
-8250	Gulf Insurance Group	Insurance	137	152	11.7	31.92	0.2%	17.3%	28.3%	up:101,18	up:49,18	flat	20	7.8%	18	-	-	-	-	-40%	-3%
-8260	Gulf General Cooperative Insurance Co.	Insurance	269	236	-	3.88	6.0%	6.0%	-22.9%	flat	down:504,92	down:950,92	188	36.3%	569	-	135	47%	-	-44%	+26%
-8280	LIVA Insurance Co.	Insurance	214	126	17.5	14.72	5.1%	42.2%	15.5%	up:59,27	up:7,3	down:439,105	41	7.6%	27	-	-	-	-	-49%	-24%
-8300	Wataniya Insurance Co.	Insurance	230	148	21.5	14.7	31.2%	21.3%	-4.6%	up:9,3	flat	down:254,15	75	11.9%	532	-	-	-	-	-76%	+85%
-8310	Amana Cooperative Insurance Co.	Insurance	256	153	-	7.38	8.8%	16.0%	-6.0%	up:9,8	flat	down:1055,105	84	11.8%	604	-	-	-	-	-80%	-32%
-8311	Saudi Enaya Cooperative Insurance Co.	Insurance	264	141	-	9.61	0.1%	-16.5%	4.5%	down:2,*	up:47,36	down:1089,156	117	26.4%	64	-	-	-	-	-64%	-19%
-8313	Rasan Information Technology Co.	Insurance	45	10	32.2	135.1	3.8%	-8.6%	40.9%	down:26,11	up:295,45	flat	48	17.0%	45	-	-	-	-	-22%	-57%
+1010	Riyad Bank	Banks	9	12	8.1	20.85	2.5%	3.5%	6.8%	flat	down:40,21	flat	119	7.2%	350	-	768	41%	-	+30%	-1%
+1020	Bank Aljazira	Banks	37	38	12.0	12.31	1.3%	8.0%	-0.4%	up:29,16	flat	down:34,32	85	7.3%	390	-	254	62%	-	+17%	+75%
+1030	Saudi Investment Bank	Banks	33	131	8.2	14.49	4.6%	8.1%	6.5%	up:39,1	up:2,1	flat	19	0.0%	0	1-Year High	-	-	green	-41%	+26%
+1050	Banque Saudi Fransi	Banks	15	32	9.9	21.81	10.4%	14.0%	34.6%	up:38,1	up:141,1	up:2,1	3	0.8%	1	-	913	91%	green,green	+2%	-1%
+1060	Saudi Awwal Bank	Banks	12	17	8.9	34.32	1.4%	0.6%	13.2%	up:4,1	down:29,27	down:239,181	139	10.4%	90	-	561	46%	-	+77%	+45%
+1080	Arab National Bank	Banks	19	39	8.2	22.4	3.2%	5.7%	-0.6%	up:24,2	flat	up:402,212	18	15.9%	212	-	193	80%	-	+163%	-12%
+1111	Saudi Tadawul Group Holding Co.	Financial Services	39	28	43.6	133.6	12.6%	-2.8%	-22.4%	flat	down:182,10	down:88,10	208	59.1%	593	-	-	-	-	+159%	+113%
+1120	Al Rajhi Bank	Banks	2	1	15.0	68.3	9.2%	2.6%	7.6%	up:1,*	flat	up:654,205	17	7.4%	205	-	229	55%	-	+141%	+43%
+1140	Bank Albilad	Banks	20	29	12.4	26.16	6.4%	7.3%	-0.2%	up:8,1	down:355,298	down:255,36	158	14.7%	620	-	-	-	-	+111%	+12%
+1150	Alinma Bank	Banks	11	5	11.7	25.84	10.6%	7.7%	21.7%	up:8,1	up:96,1	up:51,1	4	0.2%	1	-	-	-	-	+51%	+31%
+1180	The Saudi National Bank	Banks	3	3	9.4	43.4	10.7%	10.2%	23.9%	up:14,1	up:9,1	up:107,92	9	3.7%	140	-	-	-	-	+36%	-20%
+1182	Amlak International Finance Co.	Financial Services	181	191	12.6	8.94	4.3%	-8.0%	-29.6%	flat	down:181,21	down:527,21	191	55.0%	204	-	-	-	-	-8%	+23%
+1183	SHL Finance Co.	Financial Services	142	248	25.7	14.5	0.6%	-4.7%	-34.6%	down:47,5	down:150,117	down:82,5	226	62.5%	276	-	-	-	-	+29%	-44%
+1201	Takween Advanced Industries Co.	Materials	245	214	-	4.83	-2.4%	-2.4%	-37.4%	flat	down:564,22	down:936,22	218	61.5%	1278	-	-	-	-	-18%	+15%
+1202	Middle East Paper Co.	Materials	148	95	83.6	18.92	19.1%	-0.4%	-30.6%	up:7,4	down:408,20	down:164,20	154	49.7%	606	-	-	-	-	+8%	+196%
+1210	Basic Chemical Industries Co.	Materials	207	253	24.8	25.34	12.2%	3.5%	-8.7%	up:11,3	down:191,20	down:467,20	163	14.4%	1227	-	-	-	-	+16%	+187%
+1211	Saudi Arabian Mining Co.	Materials	4	6	24.8	69.7	23.1%	12.2%	32.1%	up:9,1	flat	up:1343,142	16	14.1%	142	-	-	-	-	+39%	+44%
+1212	Astra Industrial Group	Capital Goods	46	105	14.6	141.4	16.5%	7.1%	-1.5%	up:10,*	down:78,20	flat	71	9.6%	404	-	352	51%	-	+44%	+66%
+1213	Naseej International Trading Co.	Consumer Durables & Apparel	263	70	-	17.86	29.3%	26.5%	-71.9%	up:1,*	down:204,119	down:98,13	141	258.7%	382	-	-	-	-	-31%	-12%
+1214	Al Hassan Ghazi Ibrahim Shaker Co.	Capital Goods	180	79	11.0	12.15	-6.2%	-17.8%	-55.4%	down:85,8	down:302,8	down:119,8	241	132.9%	603	-	-	-	red	-38%	+414%
+1301	United Wire Factories Co.	Materials	231	228	99.6	18.92	18.8%	17.7%	-21.2%	up:16,2	down:201,118	down:321,118	152	36.6%	604	-	-	-	-	+59%	+255%
+1302	Bawan Co.	Capital Goods	127	124	16.9	35.94	5.4%	-17.0%	-41.4%	down:51,12	down:139,12	flat	172	70.6%	397	-	-	-	-	+25%	+46%
+1303	Electrical Industries Co.	Capital Goods	36	19	20.5	15.48	9.4%	-0.8%	70.7%	flat	up:320,89	up:878,89	13	23.6%	88	-	-	-	-	+25%	-28%
+1304	Al Yamamah Steel Industries Co.	Materials	136	83	14.9	37.82	8.3%	-1.2%	11.6%	down:24,20	up:149,39	up:577,39	29	13.7%	39	-	638	66%	-	+193%	-1%
+1320	Saudi Steel Pipe Co.	Materials	112	73	12.4	52.35	11.4%	-3.9%	4.8%	flat	flat	flat	65	13.8%	607	-	-	-	-	+224%	-30%
+1321	East Pipes Integrated Company for Industry	Materials	67	23	10.1	189.0	2.7%	-3.5%	76.6%	down:19,18	up:173,35	up:128,35	27	20.1%	35	-	-	-	-	+80%	-31%
+1322	Almasane Alkobra Mining Co.	Materials	64	43	18.5	88.0	19.9%	19.6%	40.7%	up:12,4	flat	up:98,91	14	32.7%	139	-	-	-	-	+2%	+21%
+1323	United Carton Industries Co.	Materials	166	168	13.1	27.6	-0.1%	13.2%	-10.2%	up:24,16	flat	flat	44	14.7%	311	-	-	-	-	+10%	-29%
+1324	Saleh Abdulaziz Al Rashed and Sons Co.	Materials	194	121	-	39.1	-1.1%	-16.3%	-	down:63,10	flat	flat	110	75.7%	101	-	-	-	-	+23%	-57%
+1810	Seera Group Holding	Consumer Services	71	61	107.2	21.68	6.5%	5.8%	-25.0%	flat	down:114,109	flat	117	45.4%	214	-	122	48%	-	-25%	+160%
+1820	BAAN Holding Group Co.	Consumer Services	156	106	-	2.08	4.0%	10.0%	-8.8%	up:5,2	flat	down:1128,109	101	11.5%	612	-	-	-	-	+202%	+47%
+1830	Leejam Sports Co.	Consumer Services	89	101	15.0	80.7	1.2%	-0.4%	-45.7%	up:4,1	down:387,28	down:81,28	153	85.9%	605	-	-	-	-	+22%	-21%
+1831	Maharah Human Resources Co.	Commercial & Professional Svc	99	62	10.3	4.65	-11.6%	-11.6%	21.1%	down:11,*	up:147,30	up:34,30	26	18.5%	30	-	-	-	-	+28%	+74%
+1832	Sadr Logistics Co.	Commercial & Professional Svc	234	181	-	2.55	2.8%	-3.0%	-14.1%	down:36,21	down:445,117	down:425,117	265	19.6%	1169	-	178	35%	-	+77%	+2%
+1833	Al Mawarid Manpower Co.	Commercial & Professional Svc	126	84	16.8	104.0	-1.6%	12.6%	6.4%	flat	up:36,27	flat	34	6.7%	27	-	-	-	-	+30%	-27%
+1834	Saudi Manpower Solutions Co.	Commercial & Professional Svc	110	93	15.6	5.97	-4.2%	0.8%	-2.1%	down:10,7	flat	flat	107	8.5%	16	-	363	50%	-	+58%	+55%
+1835	Tamkeen Human Resource Co.	Commercial & Professional Svc	151	183	13.4	48.26	0.1%	7.2%	-13.4%	flat	down:184,97	flat	126	28.7%	434	-	-	-	-	+119%	-3%
+2001	Methanol Chemicals Co.	Materials	219	218	-	31.1	-13.4%	-22.0%	-35.9%	down:20,8	down:19,8	down:632,119	262	59.0%	1075	-	-	-	-	-30%	+1142%
+2010	Saudi Basic Industries Corp.	Materials	6	8	-	50.1	1.0%	-12.4%	-18.5%	down:61,10	down:51,10	down:915,10	264	25.4%	1112	-	-	-	-	+44%	+16%
+2020	SABIC Agri-Nutrients Co.	Materials	13	14	15.1	130.5	6.2%	-5.9%	6.1%	flat	flat	up:93,92	32	21.8%	92	-	-	-	-	+35%	+48%
+2030	Saudi Arabia Refineries Co.	Energy	197	86	-	51.0	9.2%	15.2%	-12.0%	up:8,4	down:581,58	down:537,58	155	23.5%	607	-	-	-	-	-25%	-35%
+2040	Saudi Ceramic Co.	Capital Goods	111	165	13.2	25.9	7.6%	-5.3%	-12.0%	flat	down:61,21	down:372,21	205	25.5%	572	-	872	19%	-	+14%	+19%
+2050	Savola Group	Food & Beverages	57	49	8.3	26.5	1.7%	-7.7%	8.3%	down:28,24	up:51,46	flat	58	13.2%	45	-	325	62%	-	+35%	+28%
+2060	National Industrialization Co.	Materials	70	130	-	9.47	11.4%	-4.3%	-13.6%	flat	down:44,14	down:914,118	194	25.0%	221	-	-	-	-	+18%	+170%
+2070	Saudi Pharmaceutical Industries and Medical Appliances Corp.	Pharma, Biotech & Life Science	93	94	20.9	30.94	-1.2%	6.8%	15.7%	up:34,16	up:93,87	down:518,347	54	6.7%	87	-	245	74%	-	+27%	-86%
+2080	Alghaz Waltsnae Company Eligibility Alqabida	Utilities	81	78	17.8	62.3	-2.4%	-19.5%	-16.1%	down:87,3	down:114,3	flat	171	52.2%	380	-	-	-	red,red	+43%	+342%
+2081	Alkhorayef Water and Power Technologies Co.	Utilities	96	108	13.4	101.4	1.4%	-15.8%	-20.2%	down:52,12	down:184,12	down:84,12	247	52.4%	614	-	-	-	-	+104%	+66%
+2082	ACWA POWER Co.	Utilities	7	9	79.8	195.4	4.2%	5.8%	-10.1%	up:3,2	flat	flat	46	27.3%	471	-	-	-	-	+125%	+14%
+2083	The Power and Water Utility Company for Jubail and Yanbu	Utilities	49	56	20.4	43.88	16.7%	11.4%	9.7%	up:15,2	flat	flat	37	2.1%	2	-	-	-	green	-1%	+300%
+2084	Miahona Co.	Utilities	131	87	135.0	11.58	-4.7%	-22.8%	-54.9%	down:83,5	down:201,5	flat	182	121.8%	527	-	-	-	red,red	+71%	+324%
+2090	National Gypsum Co.	Materials	233	237	-	13.72	-1.2%	-1.9%	-29.9%	down:32,10	down:514,117	down:677,117	238	52.3%	588	-	-	-	-	+135%	-21%
+2100	Wafrah for Industry and Development Co.	Food & Beverages	226	139	-	21.35	3.6%	6.3%	-21.0%	down:9,8	down:441,117	down:316,117	240	34.1%	602	-	28	78%	-	+9%	-52%
+2110	Saudi Cable Co.	Capital Goods	169	141	5.9	177.0	10.6%	18.8%	17.6%	up:15,10	up:157,53	flat	24	7.3%	53	-	-	-	-	+72%	-38%
+2120	Saudi Advanced Industries Co.	Financial Services	175	154	-	16.98	11.9%	1.4%	-29.8%	up:1,*	down:366,117	down:232,117	150	52.4%	588	-	-	-	-	+67%	+76%
+2130	Saudi Industrial Development Co.	Consumer Durables & Apparel	225	115	-	16.22	0.8%	28.4%	-19.3%	flat	flat	down:744,111	134	35.9%	271	-	-	-	-	+38%	-43%
+2140	AYYAN Investment Co.	Health Care Equipment & Svc	174	189	36.8	9.68	5.1%	-11.0%	-21.2%	down:35,6	down:336,6	down:336,6	248	42.5%	617	-	-	-	red	+289%	+56%
+2150	The National Company for Glass Industries	Materials	161	158	12.1	39.14	8.1%	5.2%	-6.8%	up:5,1	down:303,117	flat	70	7.3%	401	-	-	-	-	+323%	+192%
+2160	Saudi Arabian Amiantit Co.	Capital Goods	220	163	-	13.26	10.0%	-0.8%	-33.3%	flat	down:332,14	down:165,14	200	68.2%	454	-	-	-	-	+34%	+46%
+2170	Alujain Corp.	Materials	135	88	-	27.5	3.4%	-4.8%	-25.2%	flat	down:567,119	down:456,119	216	33.8%	1081	-	51	45%	-	+2%	+25%
+2180	Filing and Packing Materials Manufacturing Co.	Materials	246	201	-	36.44	10.8%	36.8%	4.3%	up:53,*	flat	down:352,117	99	0.7%	607	-	-	-	green	+336%	+24%
+2190	Sustained Infrastructure Holding Co.	Transportation	101	80	29.6	39.14	9.3%	12.8%	11.8%	up:7,*	up:71,*	up:100,*	1	0.0%	0	2-Year High	678	94%	-	+52%	+74%
+2200	Arabian Pipes Co.	Materials	157	30	13.8	5.35	9.0%	-2.4%	16.8%	flat	up:55,54	flat	36	15.9%	55	-	-	-	-	+111%	-29%
+2210	Nama Chemicals Co.	Materials	232	273	5.6	18.74	0.0%	0.0%	-30.5%	down:147,81	down:329,81	down:589,81	260	45.7%	983	5-Year Low	-	-	-	-	-
+2220	National Metal Manufacturing and Casting Co.	Materials	239	224	-	12.62	8.6%	9.4%	-25.2%	up:3,1	down:191,119	down:881,119	164	42.2%	1282	-	-	-	-	+202%	+40%
+2222	Saudi Arabian Oil Co.	Energy	1	2	17.2	26.1	-1.4%	-6.4%	9.9%	down:12,1	up:93,67	down:485,238	132	7.1%	67	-	55	0%	-	+2%	+19%
+2223	Saudi Aramco Base Oil Co.	Materials	26	18	23.9	136.5	7.7%	7.2%	57.1%	up:8,2	up:81,2	flat	20	1.0%	2	-	-	-	-	-34%	+1%
+2230	Saudi Chemical Co.	Health Care Equipment & Svc	62	37	20.3	7.79	-4.0%	-7.8%	13.1%	down:19,*	up:69,64	up:93,64	30	13.7%	64	-	-	-	-	-12%	+17%
+2240	Advanced Building Industries Co.	Materials	139	65	15.0	28.4	5.5%	-15.9%	-21.3%	down:73,7	down:38,7	up:469,320	106	52.0%	320	-	-	-	-	-23%	+327%
+2250	Saudi Industrial Investment Group	Materials	55	113	56.9	12.62	5.6%	-11.8%	-34.6%	down:41,20	down:50,20	down:769,149	224	55.3%	252	-	-	-	-	+38%	+24%
+2270	Saudia Dairy and Foodstuff Co.	Food & Beverages	65	161	14.6	206.2	1.5%	-6.9%	-24.2%	down:29,6	down:378,118	down:26,6	246	44.1%	611	-	-	-	-	-40%	+46%
+2280	Almarai Co.	Food & Beverages	17	33	18.9	49.9	7.5%	8.2%	4.7%	up:67,*	flat	down:268,120	103	2.2%	771	-	-	-	green,green	+99%	-5%
+2281	Tanmiah Food Co.	Food & Beverages	168	129	-	63.95	18.9%	6.4%	-20.1%	up:7,3	down:349,117	down:197,117	157	31.4%	608	-	-	-	-	-30%	-2%
+2282	Naqi Water Co.	Food & Beverages	163	222	-	56.35	-1.1%	5.3%	11.4%	flat	flat	down:8,7	137	12.2%	814	-	-	-	-	-15%	-44%
+2283	First Milling Co.	Food & Beverages	103	182	10.2	53.8	5.3%	3.8%	1.8%	up:5,4	flat	flat	48	5.4%	779	-	-	-	-	+281%	+9%
+2284	Modern Mills for Food Products Co.	Food & Beverages	113	213	10.6	27.74	-5.1%	-1.3%	-12.3%	down:9,7	down:291,119	flat	181	28.8%	525	-	-	-	-	+56%	+101%
+2285	Arabian Mills for Food Products Co.	Food & Beverages	117	172	9.0	42.24	-6.0%	-6.1%	-0.0%	down:17,6	up:33,31	flat	60	17.0%	46	-	349	46%	-	+12%	-4%
+2286	Fourth Milling Co.	Food & Beverages	125	186	10.6	3.99	1.3%	-3.6%	-0.5%	down:3,1	up:47,46	flat	59	8.8%	46	-	433	62%	-	+4%	+8%
+2287	Arabian Company for Agricultural and Industrial Investment	Food & Beverages	199	123	-	23.41	1.1%	-8.4%	-42.3%	down:22,10	down:67,10	flat	169	78.5%	315	-	-	-	red	-16%	-63%
+2288	Nofoth Food Products Co.	Food & Beverages	210	260	11.5	6.24	0.5%	-15.4%	-	down:79,10	flat	flat	112	59.8%	151	-	-	-	-	-18%	+30%
+2290	Yanbu National Petrochemical Co.	Materials	34	40	219.3	34.1	11.1%	0.2%	2.4%	up:5,3	flat	down:970,118	84	11.4%	83	-	-	-	-	+37%	-22%
+2300	Saudi Paper Manufacturing Co.	Materials	108	107	34.5	65.0	-5.8%	13.5%	24.6%	up:1,*	up:27,17	up:94,17	7	6.2%	17	-	-	-	-	+97%	-28%
+2310	Sahara International Petrochemical Co.	Materials	50	60	-	13.46	5.7%	-9.0%	-33.6%	down:68,20	down:929,20	down:424,20	263	53.8%	1081	-	-	-	-	+53%	-8%
+2320	Al-Babtain Power and Telecommunication Co.	Capital Goods	98	34	6.7	62.25	17.7%	-3.9%	7.6%	flat	flat	up:677,49	31	17.6%	49	-	-	-	-	+52%	+86%
+2330	Advanced Petrochemical Co.	Materials	68	76	1100.0	24.56	11.6%	-7.3%	-30.4%	flat	down:174,20	down:715,20	192	56.2%	205	-	-	-	-	+16%	-12%
+2340	ARTEX Industrial Investment Co.	Consumer Durables & Apparel	171	197	41.0	11.6	-5.7%	14.5%	-8.0%	flat	flat	down:731,117	138	21.9%	1289	-	-	-	-	+120%	+20%
+2350	Saudi Kayan Petrochemical Co.	Materials	58	46	-	5.39	7.8%	-7.1%	1.9%	flat	down:28,21	down:711,297	217	16.5%	1097	-	369	50%	-	+21%	+47%
+2360	Saudi Vitrified Clay Pipes Co.	Materials	260	196	-	21.44	25.4%	26.9%	-24.9%	up:9,2	down:570,54	down:944,54	156	33.2%	607	-	-	-	-	+856%	+29%
+2370	Middle East Specialized Cables Co.	Capital Goods	158	89	10.8	32.08	4.0%	-0.1%	-1.0%	flat	up:35,32	up:20,13	12	7.4%	72	-	69	59%	-	+191%	-20%
+2380	Rabigh Refining and Petrochemical Co.	Energy	23	4	-	17.35	16.7%	8.6%	130.4%	up:34,8	up:103,8	flat	22	4.9%	8	-	-	-	green,green	+0%	-20%
+2381	Arabian Drilling Co.	Energy	61	97	-	93.5	15.9%	7.4%	24.6%	up:1,*	down:22,20	flat	79	13.4%	648	-	-	-	-	+154%	+40%
+2382	Ades Holding Co.	Energy	31	36	21.6	18.32	10.1%	-6.9%	22.6%	up:2,1	up:146,62	flat	25	7.8%	62	-	-	-	-	+45%	+35%
+3002	Najran Cement Co.	Materials	173	227	34.2	5.68	3.6%	-3.7%	-31.0%	flat	down:762,10	down:847,10	219	45.4%	1294	-	-	-	-	+24%	+23%
+3003	City Cement Co.	Materials	146	128	13.1	10.29	2.0%	-15.6%	-36.8%	down:75,8	down:300,8	down:649,8	229	58.1%	349	-	-	-	-	-14%	-9%
+3004	Northern Region Cement Co.	Materials	162	241	19.4	7.18	12.2%	3.5%	-8.9%	up:2,*	down:355,20	down:910,20	165	14.8%	1282	-	-	-	-	+352%	+190%
+3005	Umm Al-Qura Cement Co.	Materials	195	249	12.4	12.48	-6.4%	-9.1%	-16.5%	down:15,7	down:10,7	down:320,117	228	21.6%	349	-	-	-	-	+18%	+78%
+3007	Zahrat Al Waha for Trading Co.	Materials	208	171	45.8	2.83	2.9%	12.3%	12.3%	up:4,3	up:9,3	down:509,161	51	3.5%	23	-	-	-	-	+74%	-66%
+3008	Al Kathiri Holding Co.	Materials	253	155	-	1.22	-9.0%	-30.3%	-43.0%	down:118,4	down:456,4	down:365,4	258	81.2%	835	-	-	-	red	+66%	+190%
+3010	Arabian Cement Co.	Materials	122	202	11.4	21.82	-1.4%	-4.3%	0.5%	down:23,8	down:12,8	down:732,267	266	11.1%	1255	-	-	-	-	-52%	-6%
+3020	Yamama Cement Co.	Materials	85	135	9.5	23.63	4.4%	-3.2%	-29.5%	down:37,19	down:240,19	down:114,19	230	41.8%	357	-	-	-	-	+94%	+73%
+3030	Saudi Cement Co.	Materials	87	169	12.2	28.96	2.0%	-9.5%	-25.4%	down:80,11	down:312,11	down:1150,11	227	41.6%	331	-	-	-	-	+74%	+61%
+3040	Qassim Cement Co.	Materials	82	164	19.7	45.28	4.8%	-1.1%	4.6%	up:2,*	flat	down:642,241	105	1.8%	1385	-	-	-	-	+53%	+9%
+3050	Southern Province Cement Co.	Materials	107	239	-	19.61	5.5%	-3.1%	-24.3%	flat	down:783,21	down:949,21	220	40.5%	1400	-	-	-	-	+56%	0%
+3060	Yanbu Cement Co.	Materials	115	148	21.0	15.2	1.7%	-7.0%	-7.3%	down:32,10	down:40,10	down:702,117	257	13.2%	792	-	-	-	-	+75%	+20%
+3080	Eastern Province Cement Co.	Materials	124	200	10.3	25.34	-0.4%	3.7%	-3.0%	down:12,10	flat	down:572,117	190	8.4%	799	-	-	-	-	+151%	+15%
+3090	Tabuk Cement Co.	Materials	200	250	23.9	7.45	0.5%	-5.7%	-30.6%	down:101,8	down:340,8	down:758,8	231	46.3%	386	-	-	-	-	+65%	+7%
+3091	Al Jouf Cement Co.	Materials	223	247	-	5.0	3.7%	2.9%	-26.7%	flat	down:349,97	down:914,97	198	43.6%	394	-	-	-	-	+125%	+34%
+3092	Riyadh Cement Co.	Materials	109	208	13.0	23.31	11.7%	1.8%	-22.8%	up:1,*	down:240,20	flat	69	29.9%	349	-	-	-	-	+60%	+6%
+4001	Abdullah Al Othaim Markets Co.	Consumer Staples Distribution & Retail	84	144	19.8	4.98	-3.1%	-16.0%	-35.4%	down:126,10	down:566,10	down:316,10	254	58.2%	772	-	-	-	red	-6%	+50%
+4002	Mouwasat Medical Services Co.	Health Care Equipment & Svc	41	54	15.1	65.35	5.1%	-1.2%	-11.5%	flat	down:494,117	down:249,117	207	20.9%	587	-	-	-	-	-9%	+42%
+4003	United Electronics Co.	Consumer Discretionary Distribution & Retail	74	59	10.5	66.7	0.8%	-16.1%	-26.5%	down:83,10	down:182,10	down:92,10	234	39.4%	447	-	-	-	-	+15%	+104%
+4004	Dallah Healthcare Co.	Health Care Equipment & Svc	44	92	23.0	101.5	-3.5%	-9.3%	-23.3%	down:44,7	down:175,7	flat	186	54.4%	624	-	-	-	red	-21%	+106%
+4005	National Medical Care Co.	Health Care Equipment & Svc	80	68	17.7	125.2	10.8%	27.6%	-27.7%	up:19,4	down:192,67	flat	73	45.4%	529	-	-	-	-	+65%	-26%
+4006	Saudi Marketing Co.	Consumer Staples Distribution & Retail	215	257	22.2	12.41	-0.2%	-2.7%	-24.1%	down:29,6	down:539,117	down:559,117	243	43.2%	607	-	-	-	-	+43%	-47%
+4007	Al Hammadi Holding	Health Care Equipment & Svc	90	152	18.5	25.32	-2.4%	-4.0%	-25.5%	down:26,8	down:539,117	down:179,117	250	41.5%	633	-	172	28%	-	+96%	+123%
+4008	Saudi Company for Hardware	Consumer Discretionary Distribution & Retail	190	225	18.5	21.2	-3.6%	-7.1%	-28.1%	down:81,10	down:189,10	down:1157,10	252	56.7%	653	-	-	-	-	0%	+19%
+4009	Middle East Healthcare Co.	Health Care Equipment & Svc	105	103	16.3	32.68	9.9%	-3.8%	-44.3%	flat	down:359,118	down:120,118	214	79.6%	633	-	-	-	-	+110%	+17%
+4011	Lazurde Company for Jewelry	Consumer Durables & Apparel	211	229	-	10.68	3.4%	-4.9%	-19.7%	down:13,11	down:485,20	down:999,20	244	25.1%	607	-	-	-	-	+146%	+93%
+4012	Thob Al Aseel Co.	Consumer Durables & Apparel	144	234	13.7	3.49	-1.7%	-5.4%	-7.4%	down:13,7	down:11,7	down:337,171	255	14.3%	780	-	269	36%	-	+29%	+77%
+4013	Dr. Sulaiman Al Habib Medical Services Group	Health Care Equipment & Svc	8	26	34.0	241.0	2.6%	10.6%	-1.0%	up:19,*	down:193,43	flat	78	16.2%	623	-	-	-	-	+84%	-24%
+4014	Scientific and Medical Equipment House Co.	Health Care Equipment & Svc	186	230	28.1	28.76	5.4%	-4.3%	-23.9%	flat	down:370,119	down:119,21	209	42.6%	602	-	-	-	-	+40%	-11%
+4015	Jamjoom Pharmaceuticals Factory Co.	Pharma, Biotech & Life Science	48	149	19.9	138.9	1.5%	-9.4%	-13.5%	down:34,20	down:22,20	flat	180	17.8%	483	-	-	-	-	+79%	-17%
+4016	Middle East Pharmaceutical Industries Co.	Pharma, Biotech & Life Science	128	162	19.4	64.75	12.0%	9.8%	-12.0%	up:5,*	down:183,101	flat	77	21.7%	617	-	-	-	-	+82%	+39%
+4017	Dr. Soliman Abdel Kader Fakeeh Hospital Co.	Health Care Equipment & Svc	56	187	31.2	37.84	8.3%	5.2%	-6.5%	up:1,*	down:26,12	flat	72	12.6%	430	-	-	-	-	+137%	+68%
+4018	Almoosa Health Co.	Health Care Equipment & Svc	76	180	26.7	121.4	4.7%	2.5%	-28.9%	flat	down:116,66	flat	116	64.7%	204	-	64	79%	-	+72%	-2%
+4019	Specialized Medical Co.	Health Care Equipment & Svc	95	116	13.1	16.18	14.0%	-3.2%	-19.6%	flat	down:44,20	flat	118	31.0%	291	-	-	-	-	+85%	+23%
+4020	Saudi Real Estate Co.	Real Estate Mgmt & Dev't	66	110	9.4	15.81	-0.8%	-2.0%	-13.1%	flat	flat	down:69,36	135	15.2%	393	-	-	-	-	+22%	-20%
+4021	Canadian Medical Center Co.	Health Care Equipment & Svc	238	156	66.9	5.72	6.9%	4.8%	-	flat	flat	flat	64	58.2%	170	-	-	-	-	+185%	-11%
+4030	National Shipping Company of Saudi Arabia	Energy	21	11	7.1	35.9	15.4%	6.2%	62.4%	up:4,2	up:199,4	up:855,4	6	3.9%	4	-	-	-	-	+101%	+61%
+4031	Saudi Ground Services Co.	Transportation	78	104	13.9	27.34	1.2%	-12.7%	-40.8%	down:47,14	down:252,14	down:24,14	237	72.6%	587	-	-	-	-	+9%	+38%
+4040	Saudi Public Transport Co.	Transportation	149	126	15.7	11.64	6.0%	5.1%	-16.4%	up:17,14	flat	down:305,118	87	19.7%	436	-	-	-	-	+52%	+211%
+4050	Saudi Automotive Services Co.	Consumer Discretionary Distribution & Retail	106	72	74.0	42.34	10.0%	-7.2%	-19.4%	flat	down:171,14	flat	128	71.7%	617	-	-	-	-	-56%	+110%
+4051	Baazeem Trading Co.	Consumer Discretionary Distribution & Retail	216	212	21.2	5.57	0.9%	-3.0%	0.7%	flat	down:121,117	down:553,299	193	26.4%	209	-	-	-	-	+59%	+2%
+4061	Anaam International Holding Group	Consumer Staples Distribution & Retail	248	120	-	12.33	9.0%	21.4%	-21.4%	up:14,*	flat	down:360,109	88	33.0%	471	-	-	-	-	+185%	+3%
+4070	Tihama Advertising, Public Relations and Marketing Co.	Media and Entertainment	244	147	-	21.4	24.9%	41.9%	-20.2%	up:60,1	flat	down:1027,68	86	38.0%	392	-	-	-	green,green	+71%	+89%
+4071	Arabian Contracting Services Co.	Media and Entertainment	86	100	129.3	64.2	-19.9%	-31.4%	-28.4%	down:89,5	down:82,5	down:193,5	249	103.6%	630	-	-	-	red,red	+17%	+257%
+4072	MBC Group Co.	Media and Entertainment	63	173	19.1	20.75	3.4%	-16.0%	-31.8%	down:122,6	down:329,6	flat	187	82.6%	645	-	-	-	-	+71%	-46%
+4080	Sinad Holding Co.	Food & Beverages	170	233	-	8.6	6.7%	-4.3%	-18.8%	flat	down:343,109	down:342,109	202	26.0%	477	-	173	56%	-	+817%	+195%
+4081	Nayifat Finance Co.	Financial Services	164	235	-	10.14	8.7%	2.8%	-21.2%	up:4,3	down:356,22	down:188,22	143	34.7%	485	-	-	-	-	+657%	+252%
+4082	Morabaha Marina Financing Co.	Financial Services	222	254	-	8.99	21.5%	12.2%	-21.3%	up:8,*	down:246,21	flat	68	27.0%	280	-	-	-	-	+459%	+72%
+4083	United International Holding Co.	Financial Services	123	112	7.6	31.9	8.5%	-20.0%	-39.1%	flat	down:183,12	flat	125	84.0%	398	-	-	-	-	+57%	-49%
+4084	Derayah Financial Co.	Financial Services	75	111	13.1	22.18	5.5%	-5.1%	-22.1%	flat	down:112,6	flat	120	42.9%	359	-	-	-	-	+47%	+84%
+4090	Taiba Investments Co.	Real Estate Mgmt & Dev't	52	194	24.8	18.74	5.1%	-4.7%	-5.2%	flat	down:34,21	flat	124	19.5%	392	-	-	-	-	+10%	-32%
+4100	Makkah Construction and Development Co.	Real Estate Mgmt & Dev't	35	75	33.7	82.8	1.0%	-7.7%	8.2%	down:24,7	down:19,7	flat	178	11.3%	467	-	231	41%	-	-20%	+59%
+4110	Batic Investments and Logistics Co.	Capital Goods	160	90	-	2.03	1.5%	-6.0%	-10.6%	down:37,22	down:34,22	down:138,117	236	17.2%	468	-	346	24%	-	+245%	-15%
+4130	Saudi Darb Investment Co.	Financial Services	228	64	72.0	2.2	1.8%	6.3%	-29.3%	flat	down:235,109	down:49,29	201	41.4%	469	-	-	-	-	+63%	-54%
+4140	Saudi Industrial Export Co.	Capital Goods	229	117	-	2.3	-0.4%	-0.9%	10.0%	down:5,1	up:95,18	down:708,181	133	29.6%	151	-	584	40%	-	+62%	-17%
+4141	Al-Omran Industrial Trading Co.	Capital Goods	262	240	-	20.28	2.1%	0.3%	-26.5%	down:31,6	down:377,6	down:521,6	270	60.3%	1278	-	-	-	-	+41%	+16%
+4142	Riyadh Cables Group Co.	Capital Goods	38	41	13.5	107.0	7.2%	-5.7%	-19.7%	down:39,20	down:115,20	flat	174	33.2%	407	-	-	-	-	+44%	+31%
+4143	Al Taiseer Group Talco Industrial Co.	Materials	150	217	15.1	35.5	8.8%	-1.3%	-14.5%	up:10,3	down:300,119	flat	74	20.7%	532	-	-	-	-	+18%	+33%
+4144	Raoom Trading Co.	Capital Goods	176	140	-	74.2	1.9%	2.7%	26.4%	up:4,3	flat	flat	38	7.7%	22	-	-	-	-	+41%	-50%
+4145	Obeikan Glass Co.	Capital Goods	192	198	12.2	24.46	1.4%	6.1%	-16.9%	flat	down:357,115	down:73,67	215	48.6%	1002	-	184	36%	-	-26%	-42%
+4146	Gas Arabian Services Co.	Capital Goods	116	170	14.8	16.2	9.3%	11.0%	-	up:4,1	flat	flat	39	9.6%	41	-	-	-	-	+18%	-13%
+4147	Consolidated Grunenfelder Saady Holding Co.	Capital Goods	205	146	13.3	6.75	8.0%	-11.5%	-	flat	flat	flat	63	56.3%	141	-	-	-	-	+64%	+37%
+4148	Alwasail Industrial Co.	Capital Goods	204	151	23.5	3.22	24.8%	19.3%	-	up:14,4	flat	flat	40	13.4%	152	-	-	-	-	+22%	+121%
+4150	Arriyadh Development Co.	Real Estate Mgmt & Dev't	92	143	12.3	16.24	0.4%	-11.6%	-50.9%	down:28,7	down:187,7	down:15,7	232	109.0%	393	-	-	-	red	-29%	+25%
+4160	Thimar Development Holding Co.	Consumer Staples Distribution & Retail	265	109	-	35.24	5.8%	14.5%	-20.3%	up:6,3	down:188,67	flat	80	42.0%	852	-	201	45%	-	+11%	-63%
+4161	BinDawood Holding Co.	Consumer Staples Distribution & Retail	73	207	19.3	4.69	1.3%	-4.9%	-16.6%	flat	down:437,117	down:461,117	213	26.2%	606	-	-	-	-	-14%	+11%
+4162	Almunajem Foods Co.	Consumer Staples Distribution & Retail	94	138	16.6	61.6	2.7%	-1.5%	6.8%	flat	flat	down:164,117	136	7.1%	573	-	42	49%	-	+51%	+92%
+4163	Aldawaa Medical Services Co.	Consumer Staples Distribution & Retail	97	157	14.4	39.0	-3.9%	-19.8%	-41.1%	down:84,13	down:538,13	down:109,13	251	73.3%	635	-	-	-	red	+13%	-29%
+4164	Nahdi Medical Co.	Consumer Staples Distribution & Retail	42	99	15.2	93.9	-1.2%	-4.6%	-20.8%	down:6,4	down:251,28	down:103,28	259	30.1%	983	-	-	-	-	+56%	+8%
+4165	Al Majed Oud Co.	Household & Personal Products	100	167	14.4	121.2	1.8%	-10.5%	1.2%	down:78,5	down:36,5	flat	167	38.7%	103	-	375	21%	-	+41%	+14%
+4170	Tourism Enterprise Co.	Consumer Services	182	159	-	14.59	-3.1%	-8.0%	-20.7%	down:25,13	down:9,8	down:197,161	225	30.2%	272	-	-	-	-	+5%	+4%
+4180	Fitaihi Holding Group	Consumer Durables & Apparel	203	188	-	2.46	3.8%	2.1%	-22.2%	flat	down:301,117	down:152,117	199	36.2%	401	-	124	28%	-	+53%	+31%
+4190	Jarir Marketing Co.	Consumer Discretionary Distribution & Retail	27	22	18.5	17.1	2.9%	8.4%	33.1%	up:4,3	up:149,31	flat	23	5.9%	31	-	-	-	-	-19%	-34%
+4191	Abdullah Saad Mohammed Abo Moati for Bookstores Co.	Consumer Discretionary Distribution & Retail	188	74	32.6	42.1	5.1%	4.8%	8.0%	down:27,12	flat	up:386,207	55	24.5%	207	-	102	38%	-	+105%	-20%
+4192	AlSaif Stores for Development and Investment Co.	Consumer Discretionary Distribution & Retail	118	256	36.6	6.55	-0.5%	-6.8%	-7.1%	down:36,23	down:21,6	flat	183	7.6%	577	-	-	-	-	+21%	+18%
+4193	Nice One Beauty Digital Marketing Co.	Consumer Discretionary Distribution & Retail	152	125	-	12.69	15.0%	-2.9%	-48.1%	flat	down:157,20	flat	121	101.0%	376	-	-	-	-	+144%	+28%
+4194	Marketing Home Group for Trading Co.	Consumer Discretionary Distribution & Retail	202	178	14.4	41.42	0.8%	1.0%	-	down:32,10	flat	flat	113	83.0%	213	-	-	-	-	+141%	-10%
+4200	Aldrees Petroleum and Transport Services Co.	Consumer Discretionary Distribution & Retail	43	27	25.1	118.7	3.3%	3.3%	-3.3%	up:12,4	down:151,28	flat	76	29.2%	617	-	580	31%	-	-14%	+15%
+4210	Saudi Research and Media Group	Media and Entertainment	83	69	-	62.3	5.5%	-20.3%	-64.9%	down:49,10	down:355,10	down:121,10	239	208.5%	599	-	-	-	-	+394%	-9%
+4220	Emaar The Economic City	Real Estate Mgmt & Dev't	54	192	470.0	10.17	8.2%	-6.5%	-22.6%	flat	down:364,119	down:979,119	203	38.5%	490	-	-	-	-	+142%	+51%
+4230	Red Sea International Co.	Real Estate Mgmt & Dev't	165	25	-	24.04	3.8%	2.3%	-46.6%	down:14,8	down:276,119	down:99,93	235	87.5%	452	-	134	54%	-	+6%	-53%
+4240	AFG International Co.	Consumer Discretionary Distribution & Retail	147	44	-	17.24	42.1%	29.0%	-29.7%	up:6,4	down:115,13	down:69,13	140	72.6%	281	-	-	-	-	+9%	+258%
+4250	Jabal Omar Development Co.	Real Estate Mgmt & Dev't	29	15	12.0	18.88	18.0%	24.2%	-0.6%	up:36,2	flat	down:451,117	97	4.4%	605	-	-	-	green,green	+1%	+35%
+4260	United International Transportation Co.	Transportation	102	48	9.7	32.2	15.8%	-2.2%	-38.4%	flat	down:198,16	down:20,16	204	80.6%	503	-	-	-	-	+12%	+121%
+4261	Theeb Rent a Car Co.	Transportation	141	63	8.5	21.67	-2.1%	-13.9%	-47.7%	down:192,10	down:327,10	down:131,10	233	100.6%	445	-	-	-	red	+116%	+197%
+4262	Lumi Rental Co.	Transportation	140	160	8.4	28.76	2.4%	-15.7%	-53.2%	down:75,14	down:482,14	flat	185	124.8%	607	-	-	-	-	-3%	+54%
+4263	SAL Saudi Logistics Services Co.	Transportation	40	35	19.7	168.4	-2.7%	-1.4%	-2.1%	down:7,1	flat	flat	115	10.1%	529	-	338	50%	-	+167%	+19%
+4264	Flynas Co.	Transportation	53	51	-	49.8	1.1%	-3.5%	-37.4%	down:31,12	down:44,12	flat	168	62.8%	291	-	-	-	-	+31%	+12%
+4265	Cherry Trading Co.	Transportation	196	195	9.9	24.43	4.0%	-1.2%	-	flat	flat	flat	62	26.1%	135	-	-	-	-	+173%	+56%
+4270	Saudi Printing and Packaging Co.	Commercial & Professional Svc	212	118	-	8.1	-9.0%	11.0%	-29.8%	up:22,17	down:249,117	down:866,117	166	42.5%	1289	-	-	-	-	+249%	+85%
+4280	Kingdom Holding Co.	Financial Services	18	57	22.9	14.32	17.9%	16.0%	83.8%	up:24,*	up:110,62	up:79,62	8	7.4%	62	-	-	-	-	-23%	+27%
+4290	Alkhaleej Training and Education Co.	Consumer Services	183	185	88.0	14.75	11.7%	-3.2%	-35.3%	flat	down:190,20	down:52,20	210	99.2%	603	-	-	-	-	-41%	+11%
+4291	National Company for Learning and Education	Consumer Services	72	184	26.2	145.1	14.4%	25.1%	-16.8%	up:20,16	flat	flat	45	25.6%	429	-	-	-	-	+270%	+215%
+4292	Ataa Educational Co.	Consumer Services	134	176	22.0	44.14	-1.7%	-14.4%	-30.6%	down:78,28	down:192,28	down:34,28	253	57.3%	654	-	-	-	-	+183%	+67%
+4300	Dar Alarkan Real Estate Development Co.	Real Estate Mgmt & Dev't	28	81	16.7	21.14	15.0%	26.0%	10.7%	up:41,1	up:40,1	up:494,338	2	0.0%	1	-	-	-	green	+13%	+23%
+4310	Knowledge Economic City	Real Estate Mgmt & Dev't	79	96	-	19.15	28.1%	60.9%	48.7%	up:47,*	up:16,*	down:265,110	49	0.0%	0	4-Year High	-	-	green,green	+13%	-13%
+4320	Alandalus Property Co.	Real Estate Mgmt & Dev't	145	245	-	15.06	-0.6%	0.3%	-24.8%	up:18,17	down:329,31	down:86,31	151	38.8%	603	-	-	-	-	+48%	-49%
+4321	Arabian Centres Co.	Real Estate Mgmt & Dev't	59	122	5.9	16.31	4.8%	-2.9%	-21.3%	flat	down:176,20	down:194,20	195	42.2%	229	-	-	-	-	-27%	+32%
+4322	Retal Urban Development Co.	Real Estate Mgmt & Dev't	77	77	17.8	10.05	-1.1%	-17.4%	-19.6%	down:67,10	down:55,10	flat	176	50.3%	430	-	-	-	-	-62%	+404%
+4323	Sumou Real Estate Co.	Real Estate Mgmt & Dev't	153	232	8.6	26.56	4.5%	-8.6%	-32.2%	down:50,20	down:336,117	flat	184	52.5%	600	-	-	-	-	+113%	-4%
+4324	Banan Real Estate Co.	Real Estate Mgmt & Dev't	209	255	16.6	2.98	-0.3%	-7.2%	-36.7%	down:85,21	down:179,21	flat	175	58.0%	427	-	-	-	-	+121%	-32%
+4325	Umm Al Qura for Development and Construction Co.	Real Estate Mgmt & Dev't	24	42	26.9	18.28	11.5%	25.0%	-20.4%	up:15,1	flat	flat	43	35.9%	284	-	-	-	-	+43%	+9%
+4326	Dar Al Majed Real Estate Co.	Real Estate Mgmt & Dev't	133	114	9.6	6.7	5.9%	-10.5%	-	down:127,11	flat	flat	114	75.4%	213	-	-	-	-	+46%	+136%
+4327	Alramz Real Estate Co.	Real Estate Mgmt & Dev't	120	137	7.4	51.5	-1.4%	-6.4%	-	down:38,10	flat	flat	111	33.5%	140	-	-	-	-	+24%	+336%
+4330	Riyad REIT Fund	REITs	185	264	-	4.85	1.5%	-3.0%	-11.0%	down:36,6	down:599,6	down:722,6	261	13.0%	995	-	-	-	-	+27%	-20%
+4331	AlJazira REIT	REITs	267	258	18.3	11.26	-0.8%	2.5%	-16.2%	up:1,*	down:575,117	down:558,117	159	22.5%	783	-	-	-	-	+224%	-56%
+4332	Jadwa REIT Al Haramain Fund	REITs	251	268	12.1	4.79	-1.2%	-1.4%	-8.1%	down:4,*	down:316,107	down:1038,107	256	9.8%	790	-	131	4%	-	+18%	+398%
+4333	Taleem REIT Fund	REITs	221	262	15.7	10.62	2.2%	0.8%	7.0%	flat	up:63,48	down:817,295	81	2.9%	48	-	414	81%	-	+105%	+88%
+4334	AL Maather REIT Fund	REITs	218	267	16.2	8.82	-1.2%	-1.7%	-3.2%	down:7,6	down:7,6	flat	170	5.2%	336	-	200	40%	-	-39%	+162%
+4335	Musharaka REIT Fund	REITs	254	266	-	3.45	0.9%	-13.8%	-19.6%	down:102,12	down:123,12	down:908,12	269	30.4%	1276	-	-	-	-	+32%	+18%
+4336	Mulkia Gulf Real Estate REIT	REITs	227	270	-	4.49	-1.8%	-2.8%	-4.9%	down:15,2	down:1048,118	down:934,118	271	9.1%	1281	-	-	-	-	+40%	-38%
+4337	AL AZIZIAH REIT Fund	REITs	257	269	-	4.78	0.4%	-8.8%	14.9%	down:31,4	flat	flat	109	15.7%	100	-	-	-	-	+69%	-7%
+4338	AlAhli REIT Fund 1	REITs	177	261	50.4	7.08	8.1%	9.8%	1.7%	up:30,*	flat	down:726,119	82	0.0%	0	1-Year High	-	-	green,green	+214%	+181%
+4339	Derayah REIT Fund	REITs	213	251	66.1	5.26	-0.6%	-1.3%	-4.7%	down:22,6	down:8,6	down:763,149	267	9.1%	1260	-	-	-	-	-81%	-3%
+4340	Al Rajhi REIT Fund	REITs	121	236	14.9	7.99	-1.0%	-4.2%	-3.7%	down:26,6	down:16,6	down:744,149	268	4.9%	1264	-	-	-	-	+55%	+69%
+4342	Jadwa REIT Saudi Fund	REITs	132	177	34.0	9.78	-4.0%	-13.1%	-5.4%	down:54,2	down:18,2	down:489,2	222	19.6%	120	-	-	-	red,red	+57%	+60%
+4344	SEDCO Capital REIT Fund	REITs	143	243	18.3	7.38	-4.2%	-5.3%	7.0%	down:16,6	up:66,35	down:715,179	129	10.0%	35	-	-	-	-	+84%	+63%
+4345	Alinma Retail REIT Fund	REITs	217	246	-	4.67	-1.1%	-4.5%	2.6%	down:14,6	up:66,39	down:1009,147	130	6.8%	39	-	430	52%	-	-25%	+1%
+4346	MEFIC REIT Fund	REITs	261	271	-	3.36	1.2%	-2.3%	-8.9%	down:97,10	down:579,10	down:945,10	242	13.7%	605	-	-	-	-	+106%	+76%
+4347	Bonyan REIT Fund	REITs	138	244	15.9	9.83	-3.2%	0.1%	5.9%	down:11,10	up:108,37	up:52,37	28	3.5%	37	-	-	-	-	+50%	+6%
+4348	Alkhabeer REIT Fund	REITs	187	252	21.3	5.61	-2.3%	-2.8%	-2.1%	down:17,*	down:9,*	down:854,117	272	4.1%	1282	-	316	28%	-	+69%	-11%
+4349	Alinma Hospitality REIT Fund	REITs	184	211	16.8	7.87	-2.2%	-4.5%	-3.8%	down:31,3	down:17,3	flat	188	6.5%	659	-	-	-	red,red	+42%	+144%
+4350	Alistithmar AREIC Diversified REIT Fund	REITs	237	259	-	6.85	-1.2%	-3.0%	-17.0%	down:19,15	down:212,15	flat	179	23.1%	479	-	437	23%	red	+49%	-73%
+4700	Al Khabeer Diversified Income Traded Fund	Closed-End Fund	-	272	-	4.74	-1.0%	-1.9%	-17.6%	down:10,3	down:378,3	down:397,3	273	21.9%	1395	-	-	-	-	+17%	-36%
+4702	Al Khabeer Diversified Income Traded Fund 2030	Closed-End Fund	-	263	-	7.42	-3.4%	1.6%	-5.8%	flat	down:73,58	flat	127	8.4%	529	-	-	-	-	+22%	+33%
+4703	SEDCO Capital Multi Asset Traded Fund	Closed-End Fund	-	265	-	6.72	1.2%	5.2%	2.6%	up:6,*	down:74,67	flat	66	7.7%	150	-	472	57%	-	-53%	-43%
+5110	Saudi Energy Co.	Utilities	10	55	14.7	17.37	2.5%	3.1%	19.0%	down:9,2	up:84,48	down:661,119	131	5.8%	48	-	-	-	-	+17%	-1%
+6001	Halwani Bros. Co.	Food & Beverages	167	238	23.5	32.22	3.7%	4.1%	-23.5%	up:6,4	down:361,118	down:707,118	142	30.7%	479	-	-	-	-	+22%	-38%
+6002	Herfy Food Services Co.	Consumer Services	178	219	-	16.0	16.9%	6.7%	-31.3%	up:11,*	down:582,117	down:984,117	162	45.5%	1197	-	-	-	-	+109%	+125%
+6004	CATRION Catering Holding Co.	Commercial & Professional Svc	69	102	17.9	72.3	3.7%	-1.8%	-29.0%	flat	down:275,19	down:105,19	212	40.9%	605	-	-	-	-	+49%	+60%
+6010	National Agricultural Development Co.	Food & Beverages	88	91	12.8	15.3	8.9%	-8.9%	-27.8%	flat	down:413,20	down:29,20	206	48.1%	578	-	-	-	-	+104%	-17%
+6012	Raydan Food Co.	Consumer Services	270	216	-	17.2	15.4%	31.9%	-39.9%	up:8,4	down:474,65	down:689,65	145	83.4%	574	-	-	-	-	+3%	+540%
+6013	Development Works Food Co.	Consumer Services	258	179	-	91.95	1.3%	7.5%	-21.3%	down:22,11	down:170,68	down:444,68	223	60.8%	207	-	127	42%	-	+207%	-42%
+6014	Alamar Foods Co.	Consumer Services	172	174	18.7	42.54	15.2%	4.1%	-18.7%	up:8,*	down:762,21	down:12,11	160	24.0%	875	-	192	50%	-	+7%	+88%
+6015	Americana Restaurants International PLC - Foreign Company	Consumer Services	30	21	20.4	2.36	5.4%	22.9%	14.0%	up:64,7	up:9,7	flat	21	4.2%	6	-	-	-	green	-25%	+37%
+6016	Shatirah House Restaurant Co.	Consumer Services	243	215	27.6	7.36	2.5%	-7.9%	-26.2%	down:9,7	down:204,27	flat	177	43.3%	438	-	-	-	-	+74%	+62%
+6017	Jahez International Company for Information System Technology	Consumer Services	114	67	80.7	12.61	11.6%	2.5%	-43.5%	flat	down:178,97	flat	122	78.6%	383	-	-	-	-	+55%	+26%
+6018	Sport Clubs Co.	Consumer Services	191	53	18.6	8.33	20.7%	22.9%	-25.4%	up:17,3	flat	flat	42	41.2%	264	-	-	-	-	-2%	+95%
+6019	Al Masar Al Shamil Education Co.	Consumer Services	119	166	15.8	25.76	15.6%	24.9%	-	up:14,10	flat	flat	41	6.7%	165	-	-	-	-	-25%	+104%
+6020	Al Gassim Investment Holding Co.	Food & Beverages	247	221	45.1	12.46	2.4%	4.6%	-21.7%	flat	down:184,66	down:558,66	197	53.3%	384	-	-	-	-	+120%	-37%
+6040	Tabuk Agricultural Development Co.	Food & Beverages	242	85	-	9.07	-12.3%	47.0%	-11.5%	up:25,20	flat	down:835,69	98	15.1%	605	-	-	-	-	-32%	+106%
+6050	Saudi Fisheries Co.	Food & Beverages	241	20	-	66.2	9.2%	71.8%	-25.1%	up:10,*	flat	down:904,66	89	46.0%	478	-	-	-	-	+100%	-32%
+6060	Ash-Sharqiyah Development Co.	Food & Beverages	236	98	-	14.55	3.6%	19.6%	-10.5%	up:1,*	flat	down:829,117	104	19.2%	1370	-	-	-	-	+83%	-52%
+6070	Al-Jouf Agricultural Development Co.	Food & Beverages	155	175	25.6	40.24	-2.8%	-7.7%	-9.9%	down:36,10	down:66,10	down:180,10	221	31.6%	102	-	-	-	red	+275%	+39%
+6090	Jazan Development and Investment Co.	Food & Beverages	240	242	-	8.19	0.5%	0.9%	-22.4%	down:14,13	down:509,121	down:886,121	245	32.6%	608	-	170	42%	-	+109%	-11%
+7010	Saudi Telecom Co.	Telecommunication Services	5	7	14.4	44.66	3.5%	1.4%	6.1%	up:10,*	up:64,51	up:404,333	10	1.2%	333	-	232	87%	-	+30%	+24%
+7020	Etihad Etisalat Co.	Telecommunication Services	16	16	13.1	67.55	8.7%	6.2%	5.5%	up:5,*	flat	up:1311,140	15	5.6%	140	-	224	67%	-	+55%	+68%
+7030	Mobile Telecommunication Company Saudi Arabia	Telecommunication Services	51	58	13.1	10.57	2.1%	-2.7%	-1.6%	flat	down:40,28	down:480,298	196	14.3%	339	-	326	23%	-	+5%	-7%
+7040	Etihad GO Telecom Co.	Telecommunication Services	104	82	10.9	90.05	8.2%	-4.0%	-15.4%	flat	down:42,20	up:795,583	57	25.0%	583	-	611	21%	-	+338%	+47%
+7200	Al Moammar Information Systems Co.	Software & Services	60	45	98.0	304.0	26.0%	61.3%	127.2%	up:93,2	up:166,2	up:175,2	5	5.7%	2	-	-	-	green,green	+301%	+154%
+7201	Arab Sea Information System Co.	Software & Services	250	203	-	3.72	13.8%	14.5%	-31.1%	up:4,*	down:431,68	down:585,68	161	47.6%	1155	-	-	-	-	+111%	+90%
+7202	Arabian Internet and Communications Services Co.	Software & Services	22	50	17.1	216.9	0.9%	1.5%	-11.6%	flat	down:325,117	down:119,117	211	22.2%	604	-	-	-	-	+107%	+69%
+7203	Elm Co.	Software & Services	14	13	23.5	648.0	-4.4%	-5.5%	-25.0%	down:20,10	down:266,97	flat	173	46.7%	397	-	-	-	-	+85%	+113%
+7204	Perfect Presentation for Commercial Services Co.	Software & Services	130	190	13.4	6.81	13.3%	6.6%	-34.8%	up:1,*	down:356,20	flat	75	64.3%	615	-	-	-	-	+22%	+106%
+7205	Dar Albalad for Business Solutions Co.	Software & Services	198	31	-	12.1	21.6%	-6.0%	-	-	-	-	61	14.8%	59	-	-	-	-	-36%	+16%
+7211	Saudi Azm for Communication and Information Technology Co.	Software & Services	154	209	26.8	26.02	24.4%	16.2%	-0.9%	up:6,*	down:34,33	flat	67	8.8%	277	-	-	-	-	+183%	+28%
+8010	The Company for Cooperative Insurance	Insurance	32	24	16.3	139.0	13.4%	0.7%	14.9%	flat	up:58,50	up:58,50	11	15.4%	50	-	611	46%	-	+15%	+31%
+8012	Aljazira Takaful Taawuni Co.	Insurance	189	220	25.7	11.84	-1.8%	6.2%	-5.1%	down:10,9	flat	down:511,117	189	10.6%	737	-	252	47%	-	+137%	-2%
+8020	Malath Cooperative Insurance Co.	Insurance	224	206	29.1	10.44	5.4%	22.1%	-22.2%	up:52,31	flat	down:499,117	102	29.3%	762	-	-	-	-	+116%	-7%
+8030	The Mediterranean and Gulf Insurance and Reinsurance Co.	Insurance	129	66	39.3	17.3	19.1%	21.1%	4.0%	up:17,1	flat	down:173,163	83	1.2%	1	-	-	-	green	+78%	+37%
+8040	Mutakamela Insurance Co.	Insurance	193	134	-	14.0	13.7%	63.6%	-0.8%	up:44,14	flat	down:509,66	95	1.8%	574	-	-	-	-	+170%	-26%
+8050	Salama Cooperative Insurance Co.	Insurance	259	204	-	9.2	4.9%	21.2%	-24.4%	up:3,1	down:442,97	down:402,97	148	36.0%	586	-	-	-	-	+90%	+89%
+8060	Walaa Cooperative Insurance Co.	Insurance	159	133	-	11.34	19.5%	14.8%	-8.8%	up:15,10	flat	down:244,105	92	14.9%	574	-	-	-	-	+38%	+74%
+8070	Arabian Shield Cooperative Insurance Co.	Insurance	179	210	-	12.63	14.3%	8.0%	-6.9%	up:14,*	flat	down:292,97	93	12.2%	574	-	-	-	green	+196%	+188%
+8100	Saudi Arabian Cooperative Insurance Co.	Insurance	255	199	14.0	10.93	9.8%	16.4%	-20.8%	up:15,1	flat	down:311,104	94	30.8%	574	-	-	-	-	+23%	+19%
+8120	Gulf Union Alahlia Cooperative Insurance Co.	Insurance	206	226	-	14.58	7.3%	23.8%	13.2%	up:95,12	up:17,12	down:167,116	50	2.9%	12	-	-	-	-	+97%	-30%
+8150	Allied Cooperative Insurance Group	Insurance	266	127	-	8.43	32.8%	45.6%	-22.2%	up:16,1	flat	down:451,66	91	42.9%	568	-	-	-	green,green	+48%	+197%
+8160	Arabia Insurance Cooperative Co.	Insurance	235	223	-	8.92	9.8%	7.9%	-16.6%	up:4,1	down:477,102	down:894,102	149	27.5%	586	-	-	-	-	+131%	+148%
+8170	Al-Etihad Cooperative Insurance Co.	Insurance	249	136	-	7.98	14.0%	36.9%	-28.5%	up:13,7	down:439,67	down:293,67	144	42.6%	574	-	-	-	-	-23%	+91%
+8180	Al Sagr Cooperative Insurance Co.	Insurance	252	193	-	11.62	12.7%	5.9%	-15.5%	up:12,1	flat	down:545,117	96	18.3%	584	-	-	-	-	+622%	+135%
+8190	United Cooperative Assurance Co.	Insurance	268	205	-	3.55	14.9%	17.5%	-32.9%	up:16,1	down:449,119	down:882,119	147	54.9%	584	-	-	-	-	+527%	+289%
+8200	Saudi Reinsurance Co.	Insurance	91	71	26.3	26.76	12.0%	3.6%	-15.0%	flat	down:157,117	up:1442,406	56	31.4%	406	-	-	-	-	+375%	+206%
+8210	Bupa Arabia for Cooperative Insurance Co.	Insurance	25	52	21.6	160.0	1.9%	-6.8%	6.8%	down:7,*	flat	flat	108	22.9%	52	-	-	-	-	+125%	+15%
+8230	Al-Rajhi Company for Cooperative Insurance	Insurance	47	47	20.3	57.2	17.9%	8.0%	-4.6%	up:1,*	flat	flat	47	7.4%	520	-	-	-	-	+67%	+15%
+8240	CHUBB Arabia Cooperative Insurance Co.	Insurance	201	142	61.1	18.9	14.6%	4.0%	-22.7%	flat	down:181,117	flat	123	73.8%	391	-	-	-	-	+215%	+19%
+8250	Gulf Insurance Group	Insurance	137	153	11.7	32.14	0.9%	17.3%	29.9%	flat	up:54,23	flat	33	7.0%	23	-	-	-	-	-13%	-25%
+8260	Gulf General Cooperative Insurance Co.	Insurance	269	231	-	4.31	17.8%	17.8%	-13.6%	up:4,1	down:509,97	down:955,97	146	22.7%	574	-	-	-	-	+411%	+177%
+8280	LIVA Insurance Co.	Insurance	214	119	17.5	15.31	9.4%	46.7%	23.9%	up:64,32	up:12,*	down:444,110	52	3.5%	32	-	-	-	-	+61%	-18%
+8300	Wataniya Insurance Co.	Insurance	230	145	21.5	15.04	34.3%	24.2%	-3.0%	up:14,8	flat	down:259,20	90	9.4%	537	-	-	-	green	+89%	+119%
+8310	Amana Cooperative Insurance Co.	Insurance	256	150	-	8.11	19.6%	26.7%	5.6%	up:14,*	flat	down:1060,110	100	1.7%	609	-	-	-	-	+583%	+68%
+8311	Saudi Enaya Cooperative Insurance Co.	Insurance	264	132	-	11.79	22.8%	5.6%	29.3%	up:1,*	up:52,*	down:1094,161	53	3.0%	69	-	-	-	-	+450%	+32%
+8313	Rasan Information Technology Co.	Insurance	45	10	32.2	139.7	7.3%	-7.5%	42.8%	flat	up:300,50	flat	35	13.2%	50	-	-	-	-	+40%	-38%

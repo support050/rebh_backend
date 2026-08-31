@@ -532,19 +532,52 @@ def update_daily(target_date_str=None):
         # 10. Invalidate Caches so new data shows up immediately
         # -------------------------------------------------------------------
         try:
-            import asyncio
-            from app.core.redis import redis_cache
-            asyncio.run(redis_cache.flush_all())
-            logger.info("🧹 Application caches cleared successfully. New data is now live.")
-            
-            # # --- Re-build NAAIM page metadata ---
-            # try:
-            #     logger.info("🔄 Re-caching NAAIM metadata after cache wipe...")
-            #     from app.scrapers.naaim_scraper import scrape_naaim
-            #     scrape_naaim(mode="incremental")
-            # except Exception as naaim_err:
-            #     logger.error(f"⚠️ Failed to restore NAAIM metadata: {naaim_err}")
+            logger.info("🧹 Invalidating application caches...")
+            cache_cleared = False
+
+            # Primary Method: Direct Sync Redis Connection (Fast & bulletproof in background jobs/scripts)
+            try:
+                import redis as sync_redis
+                r = sync_redis.from_url(str(settings.REDIS_URL), decode_responses=True, socket_timeout=10)
                 
+                # Auth keys prefixes to protect
+                auth_prefixes = (
+                    "token_blacklist:",
+                    "refresh_token:",
+                    "refresh_jti:",
+                    "session_index:",
+                    "oauth_state:",
+                    "oauth_link:",
+                    "verify_token:",
+                    "reset_token:",
+                )
+                
+                deleted_count = 0
+                cursor = 0
+                while True:
+                    cursor, keys = r.scan(cursor=cursor, match="*", count=500)
+                    keys_to_del = [k for k in keys if not any(k.startswith(p) for p in auth_prefixes)]
+                    if keys_to_del:
+                        r.delete(*keys_to_del)
+                        deleted_count += len(keys_to_del)
+                    if cursor == 0:
+                        break
+                r.close()
+                cache_cleared = True
+                logger.info(f"✅ Sync Redis cache flushed successfully ({deleted_count} keys removed). New data is now live!")
+            except Exception as sync_err:
+                logger.warning(f"⚠️ Sync Redis flush encountered an issue: {sync_err}. Falling back to async flush...")
+
+            # Fallback Method: Async RedisCache
+            if not cache_cleared:
+                try:
+                    import asyncio
+                    from app.core.redis import redis_cache
+                    asyncio.run(redis_cache.flush_all())
+                    logger.info("✅ Async Redis cache flushed successfully.")
+                except Exception as async_err:
+                    logger.error(f"⚠️ Async Redis flush also failed: {async_err}")
+
         except Exception as cache_err:
             logger.error(f"⚠️ Failed to invalidate caches: {cache_err}")
 
