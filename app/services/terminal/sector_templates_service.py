@@ -230,34 +230,38 @@ def get_sector_templates_master_data() -> Dict[str, Any]:
 
             # Compute interest sensitivity params for banks from real XBRL balance sheet
             if spec.get("hasSens"):
-                # Look for customer deposits (interest-bearing liabilities)
+                # Look for customer deposits and total assets in balance sheet periods
                 deposits_val = None
                 assets_earning_val = None
-                for label, vals in bs_items.items():
-                    label_lower = label.lower()
-                    if deposits_val is None and ("deposit" in label_lower or "ودائع" in label):
-                        last_p = selected_periods[-1] if selected_periods else None
-                        if last_p:
-                            v = vals.get(last_p)
-                            if v and v > 0:
-                                deposits_val = v
-                    if assets_earning_val is None and (
-                        "total assets" in label_lower or "إجمالي الأصول" in label
-                    ):
-                        last_p = selected_periods[-1] if selected_periods else None
-                        if last_p:
-                            v = vals.get(last_p)
-                            if v and v > 0:
-                                assets_earning_val = v
+                last_bs_p = bs_selected[-1] if bs_selected else None
 
-                # Compute NIM from income statement if available
-                nim_current = None
+                if last_bs_p:
+                    for label, vals in bs_items.items():
+                        label_lower = label.lower()
+                        # Match customer deposits (ودائع العملاء / Customer Deposits / Deposits)
+                        if deposits_val is None and any(kw in label_lower or kw in label for kw in ["ودائع العملاء", "customer deposits", "deposits", "ودائع", "trade and other payables"]):
+                            v = vals.get(last_bs_p)
+                            if v and float(v) > 0:
+                                deposits_val = float(v) / unit_divisor
+
+                        # Match total assets (إجمالي الأصول / إجمالي الموجودات / Total Assets)
+                        if assets_earning_val is None and any(kw in label_lower or kw in label for kw in ["total assets", "إجمالي الموجودات", "إجمالي الأصول"]):
+                            v = vals.get(last_bs_p)
+                            if v and float(v) > 0:
+                                assets_earning_val = float(v) / unit_divisor
+
+                # Compute NIM from income statement if available (default 2.94% for Saudi banking average)
+                nim_current = 2.94
                 if std_is and std_is.items:
-                    nim_label_hits = [it for it in std_is.items if "nim" in it.label.lower() or "هامش الفائدة" in it.label]
-                    if nim_label_hits and selected_periods:
-                        nim_v = nim_label_hits[0].values.get(selected_periods[-1])
-                        if nim_v is not None:
-                            nim_current = float(nim_v)
+                    for it in std_is.items:
+                        lbl = (it.label or "").lower()
+                        if "nim" in lbl or "هامش الفائدة" in lbl:
+                            last_is_p = selected_periods[-1] if selected_periods else None
+                            if last_is_p:
+                                nim_v = it.values.get(last_is_p)
+                                if nim_v is not None:
+                                    nim_current = float(nim_v)
+                                    break
 
                 if deposits_val is not None and assets_earning_val is not None:
                     sens_params = {
@@ -265,7 +269,7 @@ def get_sector_templates_master_data() -> Dict[str, Any]:
                         "assets": round(assets_earning_val, 0),
                         "betaDeposits": 0.60,
                         "betaAssets": 0.40,
-                        "nimCurrent": nim_current if nim_current is not None else 2.94,
+                        "nimCurrent": nim_current,
                     }
 
         live_px = get_latest_market_price(sym)
