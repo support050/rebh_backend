@@ -1,4 +1,5 @@
 import sys
+import os
 import gc
 from pathlib import Path
 import csv
@@ -121,6 +122,22 @@ def update_aporia_analytics():
         logger.error(traceback.format_exc())
         return False
 
+def update_tadawul_market_reports():
+    """
+    تشغيل سكريبت تقارير تداول الرسمية (كبار الملاك، البيع على المكشوف، تملك الأجانب، شراء الأسهم، إقراض الأوراق المالية SBL)
+    """
+    try:
+        logger.info("📑 Starting Tadawul Market Reports Update (Shareholders, Net Short, Headroom, Buybacks, SBL)...")
+        from scripts.update_market_reports import main as run_market_reports
+        run_market_reports()
+        logger.info("✅ Tadawul Market Reports completed successfully!")
+        return True
+    except Exception as e:
+        logger.error(f"⚠️ Tadawul Market Reports encountered an error: {e}")
+        logger.error(traceback.format_exc())
+        return False
+
+
 
 def _rollback_session(db):
     try:
@@ -173,19 +190,24 @@ def update_daily(target_date_str=None):
         """), {"now": dt_module.datetime.utcnow()})
         db.commit()
         
+        logger.info("=" * 80)
         # 0.1 Run Historical Reports Scraper
         run_historical_reports_scraper()
         
+        logger.info("=" * 80)
         # 0.2 Run Market Pulse Update
         update_market_pulse()
         
+        logger.info("=" * 80)
         # 0.3 Run Daily Financial Indicators
         update_financial_indicators()
 
-        # 0.4 Run Aporia Saudi Analytics Scraper
-        update_aporia_analytics()
-        
-        # 0.5 Load Mappings
+        logger.info("=" * 80)
+        # 0.4 Run Tadawul Market Reports (Shareholders, Net Short, Headroom, Buybacks, SBL)
+        update_tadawul_market_reports()
+
+        logger.info("=" * 80)
+        # 0.6 Load Mappings
         hierarchy_map = load_full_hierarchy_mapping()
         
         # 1. Determine Date
@@ -193,9 +215,24 @@ def update_daily(target_date_str=None):
             market_date = datetime.datetime.strptime(target_date_str, "%Y-%m-%d").date()
             logger.info(f"📅 User provided custom date: {market_date}")
         else:
-            market_date = date.today()
-            logger.info(f"📅 Using today's date: {market_date}")
+            # Auto-detect: use the latest date from historical_reports (آخر يوم تداول فعلي)
+            # هذا أدق من date.today() لأن السكريبت قد يشتغل في الفجر ويوم التداول لم يبدأ بعد
+            try:
+                from app.models import HistoricalReport
+                latest_hist = db.query(HistoricalReport.report_date)\
+                    .order_by(HistoricalReport.report_date.desc())\
+                    .first()
+                if latest_hist:
+                    market_date = latest_hist[0]
+                    logger.info(f"📅 Auto-detected latest trading day from DB: {market_date}")
+                else:
+                    market_date = date.today()
+                    logger.info(f"📅 No historical data found, using today: {market_date}")
+            except Exception as e:
+                market_date = date.today()
+                logger.warning(f"⚠️ Could not detect market date from DB ({e}), falling back to today: {market_date}")
 
+        logger.info("=" * 80)
         # 2. Scraping
         logger.info("📡 Scraping daily detailed report...")
         scraped_data = scrape_daily_details(headless=True)
@@ -281,6 +318,7 @@ def update_daily(target_date_str=None):
         del scraped_data, hierarchy_map
         gc.collect()
         
+        logger.info("=" * 80)
         # 4. RS Calculation (Optimized Final) — CALCULATE ONLY, DO NOT SAVE YET
         # -------------------------------------------------------------------
         logger.info(f"🧮 Starting RS Calculation for {market_date} (Daily Single-Day Mode)...")
@@ -305,6 +343,7 @@ def update_daily(target_date_str=None):
 
         gc.collect()
             
+        logger.info("=" * 80)
         # 5. Calculate Technical Indicators — ATOMIC: only save prices.change, keep tech data in memory
         # -------------------------------------------------------------------
         logger.info("🧮 Calculating Technical Indicators (SMAs, 52W High/Low)...")
@@ -466,6 +505,41 @@ def update_daily(target_date_str=None):
 
         # 8.7 Export RS Hub cached JSON data
         # -------------------------------------------------------------------
+        # 6. Historical Reports (Reports.py)
+        logger.info("\n--- [6/7] Updating Historical Reports ---")
+        try:
+            from scrapers.Reports import run_historical_reports_sync
+            run_historical_reports_sync()
+            logger.info("✅ Historical Reports updated successfully.")
+        except Exception as e:
+            logger.error(f"❌ Failed to update Historical Reports: {e}")
+
+        # 7. Sukuk & Bonds Market Data
+        logger.info("\n--- [7/8] Updating Sukuk & Bonds Market Data ---")
+        try:
+            import importlib.util
+            sukuk_path = os.path.join(os.path.dirname(__file__), "Sukuk&Bonds.py")
+            spec = importlib.util.spec_from_file_location("sukuk_module", sukuk_path)
+            sukuk_module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(sukuk_module)
+            sukuk_module.run_sukuk_sync()
+            logger.info("✅ Sukuk & Bonds Market Data updated successfully.")
+        except Exception as e:
+            logger.error(f"❌ Failed to update Sukuk & Bonds Data: {e}")
+
+        # 8. SAMA & GaStat Macroeconomic Indicators & Buffett Index
+        logger.info("\n--- [8/8] Updating SAMA & GaStat Macroeconomic Data ---")
+        try:
+            import importlib.util
+            sama_path = os.path.join(os.path.dirname(__file__), "SAMA&GaStat.py")
+            spec = importlib.util.spec_from_file_location("sama_module", sama_path)
+            sama_module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(sama_module)
+            sama_module.run_economic_sync()
+            logger.info("✅ SAMA & GaStat Macro Indicators updated successfully.")
+        except Exception as e:
+            logger.error(f"❌ Failed to update SAMA & GaStat Data: {e}")
+
         try:
             logger.info("📦 Exporting unified RS Hub data to JSON...")
             from scripts.export_rs_hub_data import export_rs_hub_data

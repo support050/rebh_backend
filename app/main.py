@@ -150,6 +150,10 @@ app.include_router(tasi_settings_router.router, prefix="/api/tasi-settings", tag
 from app.api.routes import aporia as aporia_router
 app.include_router(aporia_router.router, prefix="/api/aporia", tags=["Aporia Analytics"], dependencies=protected_dependencies)
 
+from app.api.routes import rebh_engine as rebh_engine_router
+app.include_router(rebh_engine_router.router)
+
+
 # ── Wallet / Finance System ──
 from app.api.routes.wallet import calculator as wallet_calculator
 from app.api.routes.wallet import rbaf as wallet_rbaf

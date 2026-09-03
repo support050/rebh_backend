@@ -147,7 +147,11 @@ def main():
 
         db.commit()
         print(f"\n🎉 Done! Inserted: {inserted}, Skipped: {skipped}")
-        print(f"📈 Total market_pulse rows: {db.query(MarketPulse.id).count()}")
+        try:
+            total_count = db.query(func.count(MarketPulse.id)).scalar()
+            print(f"📈 Total market_pulse rows: {total_count}")
+        except Exception:
+            pass
 
     except Exception as e:
         db.rollback()

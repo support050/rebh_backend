@@ -48,19 +48,21 @@ def build_driver(headless=True):
     options.add_argument("--no-default-browser-check")
     options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
     
-    # Memory optimization flags (critical for Render 512MB instances)
-    options.add_argument("--disable-background-networking")
-    options.add_argument("--disable-default-apps")
-    options.add_argument("--disable-sync")
-    options.add_argument("--disable-translate")
-    options.add_argument("--disable-background-timer-throttling")
-    options.add_argument("--disable-backgrounding-occluded-windows")
-    options.add_argument("--disable-renderer-backgrounding")
-    options.add_argument("--disable-features=TranslateUI")
-    options.add_argument("--disable-ipc-flooding-protection")
-    options.add_argument("--js-flags=--max-old-space-size=128")
-    # Note: --single-process removed - causes Chrome crashes on Windows
-    options.add_argument("--memory-pressure-off")
+    # Windows compatibility: avoid aggressive flags that break Chrome renderer communication
+    if os.name != 'nt':
+        options.add_argument("--disable-background-networking")
+        options.add_argument("--disable-default-apps")
+        options.add_argument("--disable-sync")
+        options.add_argument("--disable-translate")
+        options.add_argument("--disable-background-timer-throttling")
+        options.add_argument("--disable-backgrounding-occluded-windows")
+        options.add_argument("--disable-renderer-backgrounding")
+        options.add_argument("--disable-ipc-flooding-protection")
+        options.add_argument("--js-flags=--max-old-space-size=128")
+        options.add_argument("--memory-pressure-off")
+    else:
+        options.add_argument("--remote-allow-origins=*")
+        options.add_argument("--disable-features=OptimizationGuideModelDownloading,OptimizationHintsFetching,OptimizationTargetPrediction,OptimizationHints")
     
     if headless:
         options.add_argument("--headless=new")
@@ -146,13 +148,16 @@ def build_driver(headless=True):
         except Exception as e:
             logger.warning(f"⚠️ Explicit ChromeDriver failed, falling back to manager: {e}")
 
-    # Fallback: webdriver-manager
+    # Fallback: webdriver-manager (with in-memory path caching to prevent repeated network calls)
+    global _CACHED_CHROMEDRIVER_PATH
     try:
-        logger.info("🔄 Attempting to use webdriver-manager...")
-        from webdriver_manager.chrome import ChromeDriverManager
-        service = Service(ChromeDriverManager().install())
+        if '_CACHED_CHROMEDRIVER_PATH' not in globals() or not _CACHED_CHROMEDRIVER_PATH or not os.path.exists(_CACHED_CHROMEDRIVER_PATH):
+            logger.info("🔄 Attempting to use webdriver-manager...")
+            from webdriver_manager.chrome import ChromeDriverManager
+            _CACHED_CHROMEDRIVER_PATH = ChromeDriverManager().install()
+        service = Service(_CACHED_CHROMEDRIVER_PATH)
         driver = webdriver.Chrome(service=service, options=options)
-        logger.info("✅ Chrome WebDriver initialized successfully (via webdriver-manager)")
+        logger.info("✅ Chrome WebDriver initialized successfully (via cached driver path)")
         return driver
     except Exception as e:
         logger.error(f"❌ All methods failed to initialize Chrome: {e}")
@@ -185,7 +190,23 @@ def scrape_daily_details(headless=True):
         logger.info(f"🌍 Navigating to {url}")
         driver.get(url)
         
-        # استخراج كل الجداول
+        # استنى لحد ما الجدول يظهر في الصفحة (الصفحة بتحمل بـ JavaScript)
+        wait = WebDriverWait(driver, 45)
+        for attempt in range(3):
+            try:
+                wait.until(EC.presence_of_element_located((By.TAG_NAME, "table")))
+                time.sleep(3)  # هامش أمان لتحميل الصفوف بالكامل
+                tables = driver.find_elements(By.TAG_NAME, "table")
+                if tables and len(tables) > 0:
+                    break
+            except Exception:
+                if attempt < 2:
+                    logger.warning(f"⚠️ Attempt {attempt+1}/3: Table not loaded yet. Refreshing after 5s...")
+                    time.sleep(5)
+                    driver.refresh()
+                else:
+                    logger.error("❌ All attempts timed out waiting for table to appear.")
+
         tables = driver.find_elements(By.TAG_NAME, "table")
         logger.info(f"🔍 Found {len(tables)} tables on the page.")
         

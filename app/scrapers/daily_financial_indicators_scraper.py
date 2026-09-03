@@ -180,10 +180,24 @@ def scrape_daily_financial_indicators(headless=True):
         logger.info(f"🌍 Navigating to {url}")
         driver.get(url)
 
-        # استنى لحد ما الجدول يظهر
-        wait = WebDriverWait(driver, 30)
-        wait.until(EC.presence_of_element_located((By.TAG_NAME, "table")))
-        time.sleep(1)  # هامش أمان لتحميل الصفوف بالكامل
+        # استنى لحد ما الجدول يظهر — 3 محاولات مع تأخير متزايد
+        wait = WebDriverWait(driver, 45)
+        table_found = False
+        for attempt in range(3):
+            try:
+                wait.until(EC.presence_of_element_located((By.TAG_NAME, "table")))
+                table_found = True
+                break
+            except Exception:
+                if attempt < 2:
+                    logger.warning(f"⚠️ Attempt {attempt+1}/3 timed out waiting for table. Refreshing after {10*(attempt+1)}s sleep...")
+                    time.sleep(10 * (attempt + 1))
+                    driver.refresh()
+                else:
+                    logger.error("❌ All 3 attempts to find table failed. Aborting scrape.")
+                    raise
+        time.sleep(2)  # هامش أمان لتحميل الصفوف بالكامل
+
 
         # محاولة استخراج تاريخ التقرير (مثال: "Main Market 2026/07/01")
         try:
@@ -341,15 +355,20 @@ def save_to_db(companies):
     try:
         updated = 0
         added = 0
+        
+        # 1. Fetch all existing components in one single roundtrip query
+        existing_components = {c.symbol: c for c in db.query(TasiComponent).all()}
+        
         for comp in companies:
             symbol = comp.get("Symbol")
             if not symbol:
                 continue
 
-            db_comp = db.query(TasiComponent).filter(TasiComponent.symbol == symbol).first()
+            db_comp = existing_components.get(symbol)
             if not db_comp:
                 db_comp = TasiComponent(symbol=symbol)
                 db.add(db_comp)
+                existing_components[symbol] = db_comp
                 added += 1
             else:
                 updated += 1
@@ -357,7 +376,6 @@ def save_to_db(companies):
             db_comp.company_name = comp.get("Company", db_comp.company_name)
             
             # Map scraped keys to DB columns
-            # "Close Price", "Market Cap", "Market Cap %", "EPS", "P/E Ratio"
             cp = comp.get("Close Price")
             if cp is not None:
                 db_comp.current_price = cp
