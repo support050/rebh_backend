@@ -34,6 +34,25 @@ from app.models.eps_estimates import EpsEstimate  # noqa: E402,F401
 from app.models.system_config import SystemConfig  # noqa: E402,F401
 from app.models.valuation_zones import ValuationZone  # noqa: E402,F401
 from app.models.tasi_components import TasiComponent  # noqa: E402,F401
+from app.models.user import User  # noqa: E402,F401
+from app.models.contact import ContactMessage  # noqa: E402,F401
+from app.models.aporia import AporiaAnalytics  # noqa: E402,F401
+from app.models.Corporate_actions import CorporateAction  # noqa: E402,F401
+from app.models.stock_indicators import StockIndicator  # noqa: E402,F401
+from app.models.scraped_reports import Company, FinancialReport  # noqa: E402,F401
+from app.models.financials import IncomeStatement, BalanceSheet, CashFlow  # noqa: E402,F401
+from app.models.market_reports import (  # noqa: E402,F401
+    SubstantialShareholder,
+    NetShortPosition,
+    ForeignHeadroom,
+    ShareBuyback,
+    SBLPosition,
+    HistoricalReport,
+    QFIOwnershipFlow,
+)
+from app.models.sukuk_bonds import SukukMarketData  # noqa: E402,F401
+from app.models.saudi_macro import SaudiEconomicIndicator  # noqa: E402,F401
+from app.models.update_status import UpdateStatus  # noqa: E402,F401
 
 
 def create_tables():
@@ -42,9 +61,9 @@ def create_tables():
     """
     try:
         Base.metadata.create_all(bind=engine)
-        print("✅ تم إنشاء الجداول في PostgreSQL بنجاح")
+        print("[DB] Tables verified/created successfully in PostgreSQL.")
     except Exception as e:
-        print(f"❌ خطأ في إنشاء الجداول: {e}")
+        print(f"[DB ERROR] Error creating tables: {e}")
 
 
 def get_db():

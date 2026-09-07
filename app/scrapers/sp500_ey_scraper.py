@@ -74,7 +74,7 @@ def _fetch_from_gurufocus() -> Optional[float]:
                 val = float(clean)
                 if 0.5 < val < 15:
                     logger.info(f"GuruFocus SP500_EY: {val}%")
-                    return val / 100.0   # store as decimal fraction
+                    return val   # Standardized: store as percentage e.g. 4.107% matching DB history
             except ValueError:
                 pass
 
@@ -103,7 +103,7 @@ def _fetch_from_yahoo() -> Optional[float]:
     }
 
     try:
-        resp = requests.get(url, params=params, headers=headers, timeout=20)
+        resp = requests.get(url, params=params, headers=headers, timeout=15)
         resp.raise_for_status()
         data = resp.json()
 
@@ -115,9 +115,9 @@ def _fetch_from_yahoo() -> Optional[float]:
         )
 
         if trailing_pe and trailing_pe > 0:
-            ey = 1.0 / trailing_pe
-            logger.info(f"Yahoo Finance PE={trailing_pe:.2f} → EY={ey:.4f}")
-            return ey
+            ey_pct = (1.0 / trailing_pe) * 100.0
+            logger.info(f"Yahoo Finance PE={trailing_pe:.2f} → EY={ey_pct:.2f}%")
+            return ey_pct
 
     except Exception as e:
         logger.warning(f"Yahoo Finance EY fallback failed: {e}")

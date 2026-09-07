@@ -3,6 +3,8 @@ import logging
 import time
 from datetime import datetime
 from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException, WebDriverException
 from app.services.daily_detailed_scraper import build_driver
 
@@ -33,12 +35,18 @@ def extract_table_rows(driver, url, wait_time=5):
     except WebDriverException as e:
         logger.error(f"WebDriver error loading {url}: {e}")
         return datetime.now().date(), [], []
-    time.sleep(wait_time) # Wait for JS to render
+    # Wait for tables to render dynamically via JavaScript
+    try:
+        WebDriverWait(driver, max(wait_time, 15)).until(
+            EC.presence_of_element_located((By.TAG_NAME, "table"))
+        )
+    except Exception:
+        pass
+    time.sleep(2)
     
     # Try finding the Last Update Date
     report_date = datetime.now().date()
     try:
-        # Usually it's in a span or div
         date_elements = driver.find_elements(By.XPATH, "//*[contains(text(), 'Last Update Date')]")
         for el in date_elements:
             if "Last Update Date" in el.text:
@@ -55,14 +63,15 @@ def extract_table_rows(driver, url, wait_time=5):
     
     for tbl in tables:
         try:
-            rows = tbl.find_element(By.TAG_NAME, "tbody").find_elements(By.TAG_NAME, "tr")
+            tbody_elems = tbl.find_elements(By.TAG_NAME, "tbody")
+            rows = tbody_elems[0].find_elements(By.TAG_NAME, "tr") if tbody_elems else tbl.find_elements(By.TAG_NAME, "tr")
             if len(rows) > max_rows:
                 max_rows = len(rows)
                 target_table = tbl
         except:
             continue
             
-    if not target_table:
+    if not target_table or max_rows == 0:
         return report_date, [], []
         
     # Get table headers if needed (for Buyback dynamic columns)
@@ -106,7 +115,14 @@ def scrape_substantial_shareholders(driver):
         except WebDriverException as e:
             logger.error(f"WebDriver error loading Substantial Shareholders: {e}")
             return data
-        time.sleep(8) # Wait a bit longer to ensure it loads
+        # Wait for table to render dynamically
+        try:
+            WebDriverWait(driver, 20).until(
+                EC.presence_of_element_located((By.TAG_NAME, "table"))
+            )
+        except Exception:
+            pass
+        time.sleep(3)
         
         # Get report date
         report_date = datetime.now().date()
@@ -127,14 +143,15 @@ def scrape_substantial_shareholders(driver):
         max_rows = 0
         for tbl in tables:
             try:
-                rows = tbl.find_element(By.TAG_NAME, "tbody").find_elements(By.TAG_NAME, "tr")
+                tbody_elems = tbl.find_elements(By.TAG_NAME, "tbody")
+                rows = tbody_elems[0].find_elements(By.TAG_NAME, "tr") if tbody_elems else tbl.find_elements(By.TAG_NAME, "tr")
                 if len(rows) > max_rows:
                     max_rows = len(rows)
                     target_table = tbl
             except:
                 continue
         
-        if not target_table:
+        if not target_table or max_rows == 0:
             logger.error("No table found for Substantial Shareholders")
             return data
         

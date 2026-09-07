@@ -198,7 +198,7 @@ def trigger_scrape_cmefedwatch(_: bool = Depends(verify_internal_key)):
     
     def scrape_with_error_handling():
         try:
-            scrape_cme_fedwatch(save_db=True, force=True)
+            scrape_cme_fedwatch(force=True)
             logger.info("CME FedWatch scraping completed successfully")
         except Exception as e:
             logger.error(f"CME FedWatch scraping failed: {e}")

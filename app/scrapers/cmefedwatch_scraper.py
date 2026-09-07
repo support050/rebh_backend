@@ -95,7 +95,7 @@ def _save_records(records: list[dict], today: date) -> bool:
 
 
 # ─── الدالة الرئيسية ──────────────────────────────────────────────────────────
-def scrape_cme_fedwatch(force: bool = False) -> bool:
+def scrape_cme_fedwatch(force: bool = False, **kwargs) -> bool:
     logger.info("🚀 CME FedWatch scraper بيبدأ...")
     today = date.today()
 

@@ -21,6 +21,7 @@ from app.models.market_reports import (
     ShareBuyback,
     SBLPosition,
     HistoricalReport,
+    QFIOwnershipFlow,
 )
 from app.schemas.market_reports import (
     SubstantialShareholderResponse,
@@ -29,6 +30,7 @@ from app.schemas.market_reports import (
     ShareBuybackResponse,
     SBLPositionResponse,
     HistoricalReportResponse,
+    QFIOwnershipFlowResponse,
 )
 
 router = APIRouter()
@@ -107,6 +109,25 @@ def get_sbl_positions(
             query = query.filter(SBLPosition.report_date == latest[0])
             
     return query.order_by(SBLPosition.symbol).all()
+
+@router.get("/qfi-flows", response_model=List[QFIOwnershipFlowResponse])
+def get_qfi_flows(
+    report_date: Optional[date] = None,
+    symbol: Optional[str] = None,
+    db: Session = Depends(get_db)
+):
+    query = db.query(QFIOwnershipFlow)
+    if report_date:
+        query = query.filter(QFIOwnershipFlow.report_date == report_date)
+    else:
+        latest = db.query(QFIOwnershipFlow.report_date).order_by(desc(QFIOwnershipFlow.report_date)).first()
+        if latest:
+            query = query.filter(QFIOwnershipFlow.report_date == latest[0])
+            
+    if symbol:
+        query = query.filter((QFIOwnershipFlow.symbol == symbol) | (QFIOwnershipFlow.normalized_symbol == symbol))
+        
+    return query.order_by(desc(QFIOwnershipFlow.qfi_holding_percent)).all()
 
 @router.get("/historical-reports", response_model=List[HistoricalReportResponse])
 def get_historical_reports(

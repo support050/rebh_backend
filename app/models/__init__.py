@@ -14,6 +14,7 @@ from app.models.market_reports import (
     ForeignHeadroom,
     ShareBuyback,
     SBLPosition,
+    HistoricalReport,
 )
 from app.models.naaim_exposure import NaaimExposure
 from app.models.market_pulse import MarketPulse
@@ -24,5 +25,6 @@ from app.models.eps_estimates import EpsEstimate
 from app.models.system_config import SystemConfig
 from app.models.valuation_zones import ValuationZone
 from app.models.tasi_components import TasiComponent
-from app.models.aporia import AporiaAnalytics
 from app.models.Corporate_actions import CorporateAction
+from app.models.rebh_user_data import AnalystNote, TradeJournal, UserWatchlist
+from app.models.rebh_engine_vintage import RebhEngineVintage

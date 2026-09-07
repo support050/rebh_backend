@@ -152,6 +152,7 @@ app.include_router(aporia_router.router, prefix="/api/aporia", tags=["Aporia Ana
 
 from app.api.routes import rebh_engine as rebh_engine_router
 app.include_router(rebh_engine_router.router)
+app.include_router(rebh_engine_router.engine_router)
 
 
 # ── Wallet / Finance System ──
@@ -211,13 +212,18 @@ async def root():
 
 @app.get("/health")
 async def health_check():
-    """فحص صحة التطبيق"""
+    """فحص صحة التطبيق وحالة المستوردين وتكامل البيانات"""
     import datetime
+    from app.services.rebh_importers_service import get_importers_health_status
     
     redis_status = "connected" if redis_cache.redis_client else "disconnected"
+    importers_status = get_importers_health_status()
+    
     return {
-        "status": "healthy",
+        "status": "healthy" if importers_status.get("overall_status") in ("healthy", "ok") else "degraded",
         "redis": redis_status,
+        "importers": importers_status.get("importers"),
+        "totals": importers_status.get("database_totals"),
         "timestamp": datetime.datetime.utcnow().isoformat() + "Z",
         "message": "API is running" + (" with cache" if redis_cache.redis_client else " without cache")
     }

@@ -75,3 +75,35 @@ def get_current_admin(current_user: User = Depends(get_current_user)) -> User:
             detail="The user doesn't have enough privileges",
         )
     return current_user
+
+
+def get_current_user_optional(
+    request: Request,
+    db: Session = Depends(get_db)
+) -> Optional[User]:
+    """
+    Returns the authenticated User if valid token present, otherwise None.
+    Does not raise 401, permitting guest mode with fallback.
+    """
+    auth_header = request.headers.get("Authorization")
+    cookie_token = request.cookies.get("access_token")
+    raw_token = None
+    if auth_header and auth_header.startswith("Bearer "):
+        raw_token = auth_header.split(" ", 1)[1].strip()
+    elif cookie_token:
+        raw_token = cookie_token.strip()
+
+    if not raw_token:
+        return None
+
+    try:
+        from app.core.auth import decode_token
+        payload = decode_token(raw_token)
+        user_id = parse_user_id(payload)
+        if user_id:
+            user = db.query(User).filter(User.id == user_id).first()
+            if user and not getattr(user, "is_locked", False):
+                return user
+    except Exception:
+        pass
+    return None

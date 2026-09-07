@@ -148,37 +148,49 @@ def discover_ajax_url(driver):
     """
     Capture the DataTable's AJAX data source URL from the browser's network log or page source.
     """
-    logs = driver.get_log('performance')
+    import urllib.parse
     ajax_url = None
     
     # 1. Search Network Logs
-    for entry in logs:
-        try:
-            log = json.loads(entry['message'])['message']
-            if log['method'] == 'Network.requestWillBeSent':
-                req_url = log['params']['request']['url']
-                if 'populateCompanyDetails' in req_url or ('historical-reports/!ut/p/' in req_url and 'http' in req_url):
-                    ajax_url = req_url
-                    logger.info(f"Found AJAX URL in Network Logs!")
-                    break
-        except Exception:
-            continue
+    try:
+        logs = driver.get_log('performance')
+        for entry in logs:
+            try:
+                log = json.loads(entry['message'])['message']
+                if log['method'] == 'Network.requestWillBeSent':
+                    req_url = log['params']['request']['url']
+                    if 'populateCompanyDetails' in req_url or ('historical-reports/!ut/p/' in req_url and 'http' in req_url):
+                        ajax_url = req_url
+                        logger.info("Found AJAX URL in Network Logs!")
+                        break
+            except Exception:
+                continue
+    except Exception:
+        pass
             
     # 2. Search Page Source Action URLs
     if not ajax_url:
         page_source = driver.page_source
-        match = re.search(r'[\'"]([^\'"]+populateCompanyDetails[^\'"]*)[\'"]', page_source)
-        if match:
-            ajax_url = match.group(1)
-            # Ensure it is an absolute URL
-            if ajax_url.startswith('/'):
-                ajax_url = "https://www.saudiexchange.sa" + ajax_url
-            logger.info("Found AJAX URL in Page Source!")
+        base_m = re.search(r'<base\s+href=[\'"]([^\'"]+)[\'"]', page_source)
+        base_url = base_m.group(1) if base_m else URL
+
+        patterns = [
+            r'url\s*:\s*[\'"]([^\'"\s\(\)\{\}\;]*populateCompanyDetails[^\'"\s\(\)\{\}\;]*)[\'"]',
+            r'[\'"](p0/[^\'"\s\(\)\{\}\;]*populateCompanyDetails[^\'"\s\(\)\{\}\;]*)[\'"]',
+            r'[\'"](/wps/portal/[^\'"\s\(\)\{\}\;]*populateCompanyDetails[^\'"\s\(\)\{\}\;]*)[\'"]',
+            r'[\'"](https?://[^\'"\s\(\)\{\}\;]*populateCompanyDetails[^\'"\s\(\)\{\}\;]*)[\'"]',
+        ]
+        for pat in patterns:
+            match = re.search(pat, page_source)
+            if match:
+                matched_path = match.group(1)
+                ajax_url = urllib.parse.urljoin(base_url, matched_path)
+                logger.info("Found AJAX URL in Page Source via pattern!")
+                break
 
     # 3. Form action fallback
     if not ajax_url:
         try:
-            # Often WebSphere puts the resource URL in a form or hidden input
             forms = driver.find_elements(By.TAG_NAME, "form")
             for f in forms:
                 action = f.get_attribute("action")
@@ -188,6 +200,12 @@ def discover_ajax_url(driver):
                     break
         except Exception:
             pass
+
+    # 4. Strict sanity check to avoid invalid URLs
+    if ajax_url:
+        if not (ajax_url.startswith("http://") or ajax_url.startswith("https://")) or any(c in ajax_url for c in ["\n", "\r", " ", "{", "}", "(", ")", ";"]):
+            logger.warning(f"Invalid candidate AJAX URL discarded: {ajax_url[:80]}")
+            ajax_url = None
 
     return ajax_url
 
@@ -360,6 +378,9 @@ def main():
     finally:
         db.close()
         driver.quit()
+
+
+run_historical_reports_sync = main
 
 
 if __name__ == "__main__":
