@@ -86,6 +86,39 @@ SECTOR_DEFAULTS = {
 }
 
 
+_CLASSIFICATION_OVERRIDES_CACHE: Dict[str, Any] = {"timestamp": 0.0, "data": {}}
+
+def _get_all_classification_overrides():
+    import time
+    now = time.time()
+    if _CLASSIFICATION_OVERRIDES_CACHE["data"] and (now - _CLASSIFICATION_OVERRIDES_CACHE["timestamp"] < 300):
+        return _CLASSIFICATION_OVERRIDES_CACHE["data"]
+    db = SessionLocal()
+    m = {}
+    try:
+        rows = db.query(CompanyClassificationOverride).all()
+        for r in rows:
+            m[str(r.symbol)] = {
+                "symbol": r.symbol,
+                "is_override": True,
+                "industry_class": r.industry_class,
+                "market_form": r.market_form,
+                "price_elasticity": r.price_elasticity,
+                "bcg_position": r.bcg_position,
+                "dominance": r.dominance,
+                "retail_path": r.retail_path,
+                "notes": r.notes,
+                "source": "Owner-Edited Custom Override"
+            }
+        _CLASSIFICATION_OVERRIDES_CACHE["timestamp"] = now
+        _CLASSIFICATION_OVERRIDES_CACHE["data"] = m
+    except Exception:
+        pass
+    finally:
+        db.close()
+    return _CLASSIFICATION_OVERRIDES_CACHE["data"]
+
+
 def get_company_classification(symbol: str, sector: Optional[str] = None) -> Dict[str, Any]:
     """
     Returns the 7-pillar classification for a company, factoring in:
@@ -93,24 +126,10 @@ def get_company_classification(symbol: str, sector: Optional[str] = None) -> Dic
     2. Sector-specific rule heuristic.
     3. General corporate default.
     """
-    db = SessionLocal()
-    try:
-        override = db.query(CompanyClassificationOverride).filter(CompanyClassificationOverride.symbol == str(symbol)).first()
-        if override:
-            return {
-                "symbol": symbol,
-                "is_override": True,
-                "industry_class": override.industry_class,
-                "market_form": override.market_form,
-                "price_elasticity": override.price_elasticity,
-                "bcg_position": override.bcg_position,
-                "dominance": override.dominance,
-                "retail_path": override.retail_path,
-                "notes": override.notes,
-                "source": "Owner-Edited Custom Override"
-            }
-    finally:
-        db.close()
+    overrides_map = _get_all_classification_overrides()
+    sym_str = str(symbol)
+    if sym_str in overrides_map:
+        return overrides_map[sym_str]
 
     # Fallback to sector heuristic
     matched_sec = "Other"
@@ -138,8 +157,15 @@ def get_company_classification(symbol: str, sector: Optional[str] = None) -> Dic
         "bcg_position": defaults["bcg_position"],
         "dominance": defaults["dominance"],
         "retail_path": defaults["retail_path"],
-        "notes": f"Derived from {matched_sec} benchmark archetype",
-        "source": "≈ Sector Benchmark Archetype"
+        "notes": (
+            f"Derived from {matched_sec} benchmark archetype. "
+            "dominance and retail_path are sector-level heuristics — "
+            "NOT calculated from company market-share data, store count, or revenue-per-sqm. "
+            "Use owner override to reflect actual company-specific intelligence."
+        ),
+        "source": "≈ Sector Benchmark Archetype (Heuristic)",
+        # Explicitly flag which pillars are heuristic so the UI can display a disclosure note
+        "heuristic_pillars": ["dominance", "retail_path"],
     }
 
 

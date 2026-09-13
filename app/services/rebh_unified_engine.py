@@ -45,22 +45,27 @@ from app.schemas.rebh_contract import (
 )
 
 
+_SUKUK_MODULE = None
+
 def _get_buildup_sukuk_yield_safe(symbol: str) -> Dict[str, Any]:
     """
     Thin wrapper that imports get_buildup_sukuk_yield from the Sukuk&Bonds script.
     Falls back to SAMA repo rate (5.5%) with is_fallback=True if import fails.
+    Module is cached in memory to avoid repetitive disk imports during batch runs.
     """
+    global _SUKUK_MODULE
     try:
-        # Import at call-time to avoid circular imports (scripts/ are not a package)
-        import importlib.util, os
-        script_path = os.path.join(
-            os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
-            "scripts", "Sukuk&Bonds.py"
-        )
-        spec = importlib.util.spec_from_file_location("sukuk_bonds_script", script_path)
-        mod  = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(mod)
-        return mod.get_buildup_sukuk_yield(symbol)
+        if _SUKUK_MODULE is None:
+            import importlib.util, os
+            script_path = os.path.join(
+                os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
+                "scripts", "Sukuk&Bonds.py"
+            )
+            spec = importlib.util.spec_from_file_location("sukuk_bonds_script", script_path)
+            mod  = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(mod)
+            _SUKUK_MODULE = mod
+        return _SUKUK_MODULE.get_buildup_sukuk_yield(symbol)
     except Exception:
         return {
             "yield_pct":   5.50,
@@ -308,8 +313,15 @@ def calculate_full_company_payload(
     fcf = (cfo - abs(capex)) if (cfo is not None) else None
 
     # Shares
-    shares_raw = bs_items.get("Issued Capital", {}).get(latest_bs_p)
+    shares_raw = (
+        bs_items.get("Share Capital", {}).get(latest_bs_p)
+        or bs_items.get("Issued Capital", {}).get(latest_bs_p)
+        or bs_items.get("Paid-up Capital", {}).get(latest_bs_p)
+        or bs_items.get("Capital", {}).get(latest_bs_p)
+    )
     shares = (shares_raw / 10.0) if (shares_raw and shares_raw > 0) else None
+    if not shares and mc and px and px > 0:
+        shares = (mc * 1_000_000) / px
 
     # 3. Guards Verification
     bs_identity = verify_balance_sheet_identity(ta, tl, te)
@@ -347,7 +359,16 @@ def calculate_full_company_payload(
     sector_porter = get_sector_porter_forces(sec)
     porter_forces = sector_porter["forces"]
     porter_res = calculate_porter_compensation(porter_forces)
+    de_ratio = round(tot_debt / te, 2) if (tot_debt is not None and te and te > 0) else 0.0
     safety_res = compute_safety_cluster(roe, roa, cur_r, de_assets, int_cov)
+    safety_res.update({
+        "roe": roe,
+        "roa": roa,
+        "current_ratio": cur_r,
+        "debt_to_assets": de_assets,
+        "de": de_ratio,
+        "interest_coverage": int_cov,
+    })
     build_up_res = calculate_build_up_r(
         bond_yield=bond_yield,
         porter_comp=porter_res["compensation_pct"],

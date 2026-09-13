@@ -19,8 +19,10 @@ from app.core.database import get_db
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from app.models.rebh_user_data import AnalystNote, TradeJournal, UserWatchlist, CouncilCompanyChecklist
+from app.models.Corporate_actions import CorporateAction
 from app.models.user import User
 from app.services import rebh_classification_service
+from app.services import rebh_sector_stats_service
 import json
 
 from app.services.rebh_unified_engine import calculate_full_company_payload
@@ -1546,4 +1548,63 @@ def save_classification_override_route(
     )
 
 
+@router.get("/sector-stats")
+def get_sector_stats_route(
+    sector: str = Query(..., description="Sector name (e.g. Materials, Banks)"),
+    metric: str = Query("nm", description="Metric code: nm, gm, opm, roe, de, current, cfo_ni, revenue")
+) -> Dict[str, Any]:
+    """
+    Computes sector-level median, percentiles, and distribution for a specific metric.
+    """
+    return rebh_sector_stats_service.compute_sector_stats(sector=sector, metric=metric)
+
+
+@router.get("/sector-stats-full")
+def get_sector_stats_full_route(
+    sector: str = Query(..., description="Sector name (e.g. Materials, Banks)")
+) -> Dict[str, Any]:
+    """
+    Returns full sector profile across all supported metrics.
+    """
+    return rebh_sector_stats_service.compute_sector_full_profile(sector=sector)
+
+
+# =====================================================================
+# CORPORATE ACTIONS & DIVIDENDS CALENDAR ENDPOINTS
+# =====================================================================
+
+@router.get("/corporate-actions")
+def get_corporate_actions_feed(
+    symbol: Optional[str] = Query(None, description="Optional symbol filter"),
+    limit: int = Query(50, description="Max records to return"),
+    db: Session = Depends(get_db)
+) -> Dict[str, Any]:
+    """
+    Fetches real Tadawul corporate actions, dividends, and capital changes
+    from the corporate_actions table.
+    """
+    q = db.query(CorporateAction)
+    if symbol:
+        q = q.filter(CorporateAction.symbol == symbol.strip().upper())
+    
+    records = q.order_by(CorporateAction.eligibility_date.desc()).limit(limit).all()
+
+    return {
+        "count": len(records),
+        "actions": [
+            {
+                "id": r.id,
+                "symbol": r.symbol,
+                "company_name": r.company_name or r.symbol,
+                "issue_type": r.issue_type,
+                "eligibility_date": str(r.eligibility_date) if r.eligibility_date else None,
+                "announcement_date": str(r.recommendation_announcement_date) if r.recommendation_announcement_date else None,
+                "classification": r.classification,
+                "previous_capital": r.previous_capital,
+                "new_capital": r.new_capital,
+                "processed": r.processed
+            }
+            for r in records
+        ]
+    }
 

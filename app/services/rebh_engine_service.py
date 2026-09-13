@@ -7,6 +7,7 @@ REBH Engine Service Integration
 """
 from typing import Dict, List, Optional, Any
 from app.services.xbrl_data_service import get_company
+from app.services.rebh_data_guard_service import verify_balance_sheet_identity
 
 
 # --- 1. DERIVATIONS ---
@@ -58,13 +59,12 @@ def yoy_series(quarters: List[Optional[float]]) -> List[Optional[float]]:
 
 # --- 2. CHECKS & TRUST BADGE ---
 
-def check_balance_sheet(assets: Optional[float], liabilities: Optional[float], equity: Optional[float], tol: float = 0.5) -> bool:
-    """Verify Assets == Liabilities + Equity within tolerance."""
-    if assets is None or liabilities is None or equity is None:
-        return False
-    diff = abs(assets - (liabilities + equity))
-    max_allowed = max(tol, abs(assets) * 0.01) if abs(assets) > 1000 else tol
-    return diff <= max_allowed
+def check_balance_sheet(assets: Optional[float], liabilities: Optional[float], equity: Optional[float], tol: float = 1.0) -> bool:
+    """Verify Assets == Liabilities + Equity with strict 1 SAR tolerance (production contract standard)."""
+    result = verify_balance_sheet_identity(
+        assets, liabilities, equity, abs_tol=max(tol, 1.0), exact_to_the_riyal=True
+    )
+    return result["is_valid"]
 
 
 def check_components_sum(components: List[float], total: float, tol: float = 50.0) -> bool:
@@ -108,17 +108,17 @@ def get_trust_badge_status(symbol: str) -> Dict[str, Any]:
         tl = bs_items.get("Total Liabilities", {}).get(p)
         te = bs_items.get("Total Equity", {}).get(p)
         if ta is not None and tl is not None and te is not None:
-            ok = check_balance_sheet(ta, tl, te)
-            bs_checks.append(ok)
+            identity = verify_balance_sheet_identity(ta, tl, te, exact_to_the_riyal=True)
+            bs_checks.append(identity["is_valid"])
     
     all_passed = len(bs_checks) > 0 and all(bs_checks)
     pass_rate = (sum(bs_checks) / len(bs_checks) * 100) if bs_checks else 0.0
     
     return {
         "symbol": symbol,
-        "verified": all_passed or pass_rate >= 90.0,
-        "badge_label": "قوائم مدققة آلياً ✓" if (all_passed or pass_rate >= 90.0) else "قيد المراجعة ⚠",
-        "badge_status": "pass" if (all_passed or pass_rate >= 90.0) else "warning",
+        "verified": all_passed,
+        "badge_label": "قوائم مدققة آلياً ✓" if all_passed else "قيد المراجعة ⚠",
+        "badge_status": "pass" if all_passed else "warning",
         "pass_rate_pct": round(pass_rate, 1),
         "total_periods_checked": len(bs_checks),
         "latest_period": periods[-1] if periods else None

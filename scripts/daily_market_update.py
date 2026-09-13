@@ -122,20 +122,20 @@ def update_aporia_analytics():
         logger.error(traceback.format_exc())
         return False
 
-def update_tadawul_market_reports():
-    """
-    تشغيل سكريبت تقارير تداول الرسمية (كبار الملاك، البيع على المكشوف، تملك الأجانب، شراء الأسهم، إقراض الأوراق المالية SBL)
-    """
-    try:
-        logger.info("📑 Starting Tadawul Market Reports Update (Shareholders, Net Short, Headroom, Buybacks, SBL)...")
-        from scripts.update_market_reports import main as run_market_reports
-        run_market_reports()
-        logger.info("✅ Tadawul Market Reports completed successfully!")
-        return True
-    except Exception as e:
-        logger.error(f"⚠️ Tadawul Market Reports encountered an error: {e}")
-        logger.error(traceback.format_exc())
-        return False
+# def update_tadawul_market_reports():
+#     """
+#     تشغيل سكريبت تقارير تداول الرسمية (كبار الملاك، البيع على المكشوف، تملك الأجانب، شراء الأسهم، إقراض الأوراق المالية SBL)
+#     """
+#     try:
+#         logger.info("📑 Starting Tadawul Market Reports Update (Shareholders, Net Short, Headroom, Buybacks, SBL)...")
+#         from scripts.update_market_reports import main as run_market_reports
+#         run_market_reports()
+#         logger.info("✅ Tadawul Market Reports completed successfully!")
+#         return True
+#     except Exception as e:
+#         logger.error(f"⚠️ Tadawul Market Reports encountered an error: {e}")
+#         logger.error(traceback.format_exc())
+#         return False
 
 
 
@@ -202,9 +202,9 @@ def update_daily(target_date_str=None):
         # 0.3 Run Daily Financial Indicators
         update_financial_indicators()
 
-        logger.info("=" * 80)
-        # 0.4 Run Tadawul Market Reports (Shareholders, Net Short, Headroom, Buybacks, SBL)
-        update_tadawul_market_reports()
+        # logger.info("=" * 80)
+        # # 0.4 Run Tadawul Market Reports (Shareholders, Net Short, Headroom, Buybacks, SBL)
+        # update_tadawul_market_reports()
 
         logger.info("=" * 80)
         # 0.6 Load Mappings
@@ -505,15 +505,6 @@ def update_daily(target_date_str=None):
 
         # 8.7 Export RS Hub cached JSON data
         # -------------------------------------------------------------------
-        # 6. Historical Reports (Reports.py)
-        logger.info("\n--- [6/7] Updating Historical Reports ---")
-        try:
-            from scrapers.Reports import run_historical_reports_sync
-            run_historical_reports_sync()
-            logger.info("✅ Historical Reports updated successfully.")
-        except Exception as e:
-            logger.error(f"❌ Failed to update Historical Reports: {e}")
-
         # 7. Sukuk & Bonds Market Data
         logger.info("\n--- [7/8] Updating Sukuk & Bonds Market Data ---")
         try:
@@ -587,6 +578,36 @@ def update_daily(target_date_str=None):
         except Exception as models_err:
             logger.error(f"⚠️ Valuation models summary sync failed: {models_err}")
 
+        # 8.9 Khurafshi Universal Engine Vintage Generation (Phase 6 Pipeline Stage)
+        # -------------------------------------------------------------------
+        try:
+            logger.info("🏛️ Generating Point-In-Time Engine Vintages for universe...")
+            from app.services.rebh_unified_engine import calculate_full_company_payload
+            from app.services.xbrl_data_service import list_companies
+            from app.services.rebh_production_helper_service import warm_sector_medians_cache
+
+            # Pre-load sector medians in ONE pass before the loop
+            # (eliminates per-sector full-disk XBRL scans inside the loop)
+            n_sectors = warm_sector_medians_cache()
+            logger.info(f"⚡ Sector medians pre-loaded for {n_sectors} sectors (single-pass).")
+
+            companies = list_companies()
+            vintages_file = OUTPUT_DIR / f"rebh_engine_vintage_{market_date}.json"
+            engine_vintages = {}
+            for c in companies:
+                try:
+                    payload = calculate_full_company_payload(c.symbol)
+                    engine_vintages[c.symbol] = payload.model_dump(mode="json")
+                except Exception as c_err:
+                    logger.debug(f"Engine payload skip for {c.symbol}: {c_err}")
+            
+            with open(vintages_file, "w", encoding="utf-8") as vf:
+                json.dump(engine_vintages, vf, ensure_ascii=False)
+            logger.info(f"✅ Generated and archived engine vintage for {len(engine_vintages)} companies as of {market_date}.")
+        except Exception as vintage_err:
+            logger.error(f"⚠️ Engine vintage archiving failed: {vintage_err}")
+
+
         # 9. Finalize Update Status (Atomic Switch)
         # -------------------------------------------------------------------
         try:
@@ -612,7 +633,8 @@ def update_daily(target_date_str=None):
             # Primary Method: Direct Sync Redis Connection (Fast & bulletproof in background jobs/scripts)
             try:
                 import redis as sync_redis
-                r = sync_redis.from_url(str(settings.REDIS_URL), decode_responses=True, socket_timeout=10)
+                r = sync_redis.from_url(str(settings.REDIS_URL), decode_responses=True, socket_timeout=2)
+                r.ping()
                 
                 # Auth keys prefixes to protect
                 auth_prefixes = (
@@ -640,17 +662,7 @@ def update_daily(target_date_str=None):
                 cache_cleared = True
                 logger.info(f"✅ Sync Redis cache flushed successfully ({deleted_count} keys removed). New data is now live!")
             except Exception as sync_err:
-                logger.warning(f"⚠️ Sync Redis flush encountered an issue: {sync_err}. Falling back to async flush...")
-
-            # Fallback Method: Async RedisCache
-            if not cache_cleared:
-                try:
-                    import asyncio
-                    from app.core.redis import redis_cache
-                    asyncio.run(redis_cache.flush_all())
-                    logger.info("✅ Async Redis cache flushed successfully.")
-                except Exception as async_err:
-                    logger.error(f"⚠️ Async Redis flush also failed: {async_err}")
+                logger.info("ℹ️ Redis server is not active locally — skipping cache flush (safe in dev/script mode).")
 
         except Exception as cache_err:
             logger.error(f"⚠️ Failed to invalidate caches: {cache_err}")

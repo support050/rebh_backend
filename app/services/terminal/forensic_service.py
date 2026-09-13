@@ -365,7 +365,7 @@ def get_company_unified_page_data(symbol: str) -> Dict[str, Any]:
             return 50
         vals_sorted = sorted(vals)
         rank = sum(1 for x in vals_sorted if (x <= val if higher_is_better else x >= val))
-        return int(round((rank / len(vals_sorted)) * 100))
+        return min(100, max(0, int(round((rank / len(vals_sorted)) * 100))))
     
     cur_dict = {
         "roe": roe_val,
@@ -411,6 +411,8 @@ def get_company_unified_page_data(symbol: str) -> Dict[str, Any]:
         "periods": selected_bs_periods,
         "cash": _scale_series(bs_items.get("Cash and Cash Equivalents", {}), selected_bs_periods),
         "receivables": _scale_series(bs_items.get("Trade and Other Receivables", {}), selected_bs_periods),
+        "inventory": _scale_series(bs_items.get("Inventories", {}) or bs_items.get("Inventory", {}), selected_bs_periods),
+        "payables": _scale_series(bs_items.get("Trade and Other Payables", {}), selected_bs_periods),
         "current_assets": _scale_series(bs_items.get("Total Current Assets", {}), selected_bs_periods),
         "ppe": _scale_series(bs_items.get("Property, Plant and Equipment (PPE)", {}), selected_bs_periods),
         "total_assets": _scale_series(bs_items.get("Total Assets", {}), selected_bs_periods),

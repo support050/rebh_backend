@@ -30,6 +30,10 @@ def test_balance_sheet_identity_strict():
     assert res_fail["is_valid"] is False
     assert res_fail["discrepancy"] == 50.0
 
+    # Legacy 1% tolerance would pass; strict 1 SAR must fail
+    from app.services.rebh_engine_service import check_balance_sheet
+    assert not check_balance_sheet(assets=100_000.0, liabilities=60_000.0, equity=39_500.0)
+
 
 def test_net_income_plausibility_rule():
     # Plausible: NI is 20% of Revenue

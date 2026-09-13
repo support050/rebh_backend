@@ -9,8 +9,58 @@ Specialized mathematical engine implementing Mishal Al-Kharfashi methodology ver
 - Asset Play / Graham Net-Net / EPV Scenarios
 """
 from typing import Dict, List, Optional, Any
+from datetime import date
+import calendar
+import re
 from app.core.database import SessionLocal
 from app.models.sukuk_bonds import SukukMarketData
+
+
+def _parse_period_end_date(period_label: Optional[str]) -> Optional[str]:
+    """
+    Derives the actual calendar period end date (YYYY-MM-DD) from XBRL period strings.
+    Handles YYYY-MM-DD, range YYYY-MM_YYYY-MM, YYYY-MM, and quarter designations.
+    """
+    if not period_label:
+        return None
+    s = str(period_label).strip()
+    # 1. Full date YYYY-MM-DD
+    m = re.search(r"(\d{4})[-/](\d{1,2})[-/](\d{1,2})", s)
+    if m:
+        try:
+            return date(int(m.group(1)), int(m.group(2)), int(m.group(3))).isoformat()
+        except Exception:
+            pass
+    # 2. Range YYYY-MM_YYYY-MM (e.g. 2026-01_2026-03)
+    rm = re.search(r"(\d{4})[-/](\d{1,2})_(\d{4})[-/](\d{1,2})", s)
+    if rm:
+        try:
+            y = int(rm.group(3))
+            mon = int(rm.group(4))
+            last_day = calendar.monthrange(y, mon)[1]
+            return date(y, mon, last_day).isoformat()
+        except Exception:
+            pass
+    # 3. Year-Month YYYY-MM (e.g. 2026-03)
+    ym = re.match(r"^(\d{4})[-/](\d{1,2})$", s)
+    if ym:
+        try:
+            y = int(ym.group(1))
+            mon = int(ym.group(2))
+            last_day = calendar.monthrange(y, mon)[1]
+            return date(y, mon, last_day).isoformat()
+        except Exception:
+            pass
+    # 4. Quarter designations (e.g. 2024-Q3, Q3 2024, FY2024)
+    y_m = re.search(r"(20\d{2})", s)
+    if y_m:
+        y = int(y_m.group(1))
+        up = s.upper()
+        if "Q1" in up: return date(y, 3, 31).isoformat()
+        elif "Q2" in up: return date(y, 6, 30).isoformat()
+        elif "Q3" in up: return date(y, 9, 30).isoformat()
+        elif "Q4" in up or "FY" in up: return date(y, 12, 31).isoformat()
+    return None
 
 
 def get_company_sukuk_yield(symbol: str) -> Optional[Dict[str, Any]]:
@@ -198,11 +248,19 @@ def calculate_loss_ps_ladder(sales_per_share: float, expected_npm_pct: float, ex
     }
 
 
-def _get_latest_prices_map() -> Dict[str, Dict[str, Any]]:
+_PRICES_MAP_CACHE: Dict[str, Any] = {"timestamp": 0.0, "data": {}}
+
+def _get_latest_prices_map(force_refresh: bool = False) -> Dict[str, Dict[str, Any]]:
     """
     Internal helper: returns {symbol: {close, market_cap}} from the latest
-    available trading day in the prices table. Used by universe and stats.
+    available trading day in the prices table. Cached for 60 seconds to support fast batch operations.
     """
+    import time
+    global _PRICES_MAP_CACHE
+    now = time.time()
+    if not force_refresh and _PRICES_MAP_CACHE["data"] and (now - _PRICES_MAP_CACHE["timestamp"] < 60):
+        return _PRICES_MAP_CACHE["data"]
+
     from app.core.database import SessionLocal
     from app.models.price import Price
     from sqlalchemy import desc
@@ -236,6 +294,7 @@ def _get_latest_prices_map() -> Dict[str, Dict[str, Any]]:
                     "close": float(row.close) if row.close is not None else None,
                     "market_cap": float(row.market_cap) if row.market_cap is not None else None,
                 }
+            _PRICES_MAP_CACHE = {"timestamp": now, "data": price_map}
     except Exception:
         pass
     finally:
@@ -630,6 +689,10 @@ def get_khurafshi_universe_data() -> List[Dict[str, Any]]:
         if f_score is not None and f_score <= 2:
             flags.append("⚑low-f-score")
 
+        # Period tracking for Calendar & contract auditing
+        actual_period = latest_i or latest_b
+        actual_period_end = _parse_period_end_date(actual_period)
+
         results.append({
             "sym": sym,
             "n": name,
@@ -651,6 +714,9 @@ def get_khurafshi_universe_data() -> List[Dict[str, Any]]:
             "fresh": has_bs and has_is,
             "flags": flags,
             "bs_ok": has_bs,
+            "period": actual_period,
+            "end": actual_period_end,
+            "period_end": actual_period_end,
             "grades": {
                 "Valuation": val_grade,
                 "Profitability": prof_grade,

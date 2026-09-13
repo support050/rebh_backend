@@ -267,30 +267,46 @@ def calculate_and_store_indicators(db: Session, target_date: date = None, target
             error_details.append(f"{symbol}: {str(e)}")
 
     print("-" * 60)
-    print(f"💾 Saving {len(all_indicators_data)} stock indicators atomically to database...")
+    print(f"💾 Saving {len(all_indicators_data)} stock indicators to database...")
     
     if all_indicators_data:
+        # استخدام SessionLocal منفصلة وطازجة لعملية الحفظ لتجنب أي Session متعطلة أو منتهية أثناء الحساب
+        from app.core.database import SessionLocal
+        save_db = SessionLocal()
         try:
             for i, indicator_data in enumerate(all_indicators_data):
-                stmt = insert(StockIndicator).values(indicator_data)
-                stmt = stmt.on_conflict_do_update(
-                    index_elements=['symbol', 'date'],
-                    set_={k: v for k, v in indicator_data.items() if k not in ['symbol', 'date', 'created_at']}
-                )
-                db.execute(stmt)
-                
-                # Commit every 50 records to prevent SSL timeout/connection drops on large batches
-                if (i + 1) % 50 == 0:
-                    db.commit()
+                for attempt in range(2):
+                    try:
+                        stmt = insert(StockIndicator).values(indicator_data)
+                        stmt = stmt.on_conflict_do_update(
+                            index_elements=['symbol', 'date'],
+                            set_={k: v for k, v in indicator_data.items() if k not in ['symbol', 'date', 'created_at']}
+                        )
+                        save_db.execute(stmt)
+                        
+                        # Commit every 25 records to keep transactions short
+                        if (i + 1) % 25 == 0:
+                            save_db.commit()
+                        break
+                    except Exception as save_item_err:
+                        save_db.rollback()
+                        if attempt == 0:
+                            # Re-establish connection and retry once
+                            save_db.close()
+                            save_db = SessionLocal()
+                        else:
+                            raise save_item_err
             
-            db.commit()
+            save_db.commit()
             successful = len(all_indicators_data)
-            print("✅ All stock indicators saved atomically successfully.")
+            print("✅ All stock indicators saved successfully.")
         except Exception as e:
             print(f"❌ Error during bulk save: {e}")
-            db.rollback()
+            save_db.rollback()
             errors += len(all_indicators_data)
             error_details.append(f"Bulk Save Error: {str(e)}")
+        finally:
+            save_db.close()
 
     print("-" * 60)
     print("📊 Calculation Summary:")

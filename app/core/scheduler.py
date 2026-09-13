@@ -131,6 +131,61 @@ def job_market_reports_scrapers():
     logger.info("📊 [Scheduler] MARKET REPORTS scrapers finished.")
 
 
+# ─── Job: Daily Market Update (Prices & Indicators) ────────────
+def job_daily_market_update():
+    logger.info("=" * 50)
+    logger.info("📈 [Scheduler] DAILY MARKET UPDATE starting…")
+    _safe("Daily Market Update", lambda: __import__(
+        "scripts.daily_market_update", fromlist=["main"]
+    ).main())
+    logger.info("📈 [Scheduler] DAILY MARKET UPDATE finished.")
+
+
+# ─── Job: Sukuk Importer (Phase 4 / Phase 12) ──────────────────
+def job_sukuk_importer():
+    logger.info("📜 [Scheduler] SUKUK & BONDS importer starting…")
+    _safe("Sukuk Importer", lambda: __import__(
+        "app.services.rebh_importers_service", fromlist=["run_sukuk_importer"]
+    ).run_sukuk_importer())
+    logger.info("📜 [Scheduler] SUKUK & BONDS importer finished.")
+
+
+# ─── Job: SAMA & GaStat Macro Importer (Phase 5 / Phase 12) ────
+def job_macro_importer():
+    logger.info("🏛️ [Scheduler] SAMA & GASTAT Macro importer starting…")
+    _safe("Macro Importer", lambda: __import__(
+        "app.services.rebh_importers_service", fromlist=["run_macro_importer"]
+    ).run_macro_importer())
+    logger.info("🏛️ [Scheduler] SAMA & GASTAT Macro importer finished.")
+
+
+# ─── Job: Bank Financial Lines Importer (Phase 3 / Phase 12) ───
+def job_bank_lines_importer():
+    logger.info("🏦 [Scheduler] Bank Lines Verification starting…")
+    _safe("Bank Lines Importer", lambda: __import__(
+        "app.services.rebh_importers_service", fromlist=["run_bank_lines_importer"]
+    ).run_bank_lines_importer())
+    logger.info("🏦 [Scheduler] Bank Lines Verification finished.")
+
+
+# ─── Job: Filings Importer (Phase 12) ──────────────────────────
+def job_filings_importer():
+    logger.info("📑 [Scheduler] Official Filings check starting…")
+    _safe("Filings Importer", lambda: __import__(
+        "app.services.rebh_importers_service", fromlist=["run_filings_importer"]
+    ).run_filings_importer())
+    logger.info("📑 [Scheduler] Official Filings check finished.")
+
+
+# ─── Job: REBH Engine Vintage Snapshot (Phase 12) ─────────────
+def job_engine_vintages():
+    logger.info("⚙️ [Scheduler] REBH Engine Vintage Snapshot job starting…")
+    _safe("Engine Vintage Snapshot", lambda: __import__(
+        "app.services.rebh_importers_service", fromlist=["run_engine_vintages_job"]
+    ).run_engine_vintages_job())
+    logger.info("⚙️ [Scheduler] REBH Engine Vintage Snapshot job finished.")
+
+
 # ─── Helpers ───────────────────────────────────────────────────
 def _safe(name: str, fn):
     """Run a scraper function with error handling."""
@@ -199,6 +254,36 @@ def start_scheduler():
         job_market_reports_scrapers,
         CronTrigger(day_of_week="sun,mon,tue,wed,thu", hour=18, minute=0, timezone=EGYPT_TZ),
         id="market_reports", name="Saudi Market Reports Scrapers", replace_existing=True,
+    )
+    _scheduler.add_job(
+        job_daily_market_update,
+        CronTrigger(day_of_week="sun,mon,tue,wed,thu", hour=18, minute=30, timezone=EGYPT_TZ),
+        id="daily_market_update", name="Daily Market Update Pipeline", replace_existing=True,
+    )
+    _scheduler.add_job(
+        job_sukuk_importer,
+        CronTrigger(day_of_week="sun", hour=19, minute=0, timezone=EGYPT_TZ),
+        id="sukuk_importer", name="Sukuk & Debt Instruments Importer", replace_existing=True,
+    )
+    _scheduler.add_job(
+        job_macro_importer,
+        CronTrigger(day=1, hour=3, minute=0, timezone=EGYPT_TZ),
+        id="macro_importer", name="SAMA & GaStat Macro Importer", replace_existing=True,
+    )
+    _scheduler.add_job(
+        job_bank_lines_importer,
+        CronTrigger(day_of_week="sun", hour=19, minute=30, timezone=EGYPT_TZ),
+        id="bank_lines_importer", name="Bank Financial Lines Importer", replace_existing=True,
+    )
+    _scheduler.add_job(
+        job_filings_importer,
+        CronTrigger(day_of_week="sun,mon,tue,wed,thu", hour=19, minute=45, timezone=EGYPT_TZ),
+        id="filings_importer", name="Official Filings Ingestion Check", replace_existing=True,
+    )
+    _scheduler.add_job(
+        job_engine_vintages,
+        CronTrigger(day_of_week="sun,mon,tue,wed,thu", hour=20, minute=0, timezone=EGYPT_TZ),
+        id="engine_vintages", name="REBH Unified Engine Vintage Snapshot", replace_existing=True,
     )
 
     _scheduler.start()

@@ -166,11 +166,30 @@ def evaluate_statement_freshness(
     is_financial_sector: bool = False
 ) -> Dict[str, Any]:
     """
-    Evaluates statement freshness based on official regulatory disclosure deadlines:
-    - Quarterly statements: 45 calendar days after period end.
-    - Annual (FY) statements: 90 calendar days after period end.
-    - Extended tolerance: 120 days for quarterly, 180 days for annual.
-    Returns fresh=False if statements exceed regulatory timeliness.
+    PRICING FRESHNESS GATE — NOT a filing deadline checker.
+
+    Determines whether a company's statements are recent enough to support
+    a reliable valuation model (i.e., whether the engine may price the stock).
+
+    Regulatory FILING deadlines (Tadawul/CMA):
+      - Quarterly: 45 calendar days after period end
+      - Annual:    90 calendar days after period end
+      - Banks/Insurance (SAMA): shorter cycle, approximately 45d quarterly / 60d annual
+
+    Pricing-gate buffer (deliberately wider than filing deadlines):
+      - Standard companies:  180d quarterly / 270d annual
+        Rationale: Allows for late filers, restatements, and periods where
+        data has not yet been imported. The engine withholds output if exceeded.
+      - Financial sector:    120d quarterly / 240d annual
+        Rationale: SAMA-regulated entities have faster-moving balance sheets;
+        staleness is more consequential for bank valuations.
+
+    AUDIT NOTE (2026-09-09):
+      The 180/270d limits are INTENTIONAL PRODUCT DECISIONS for the pricing gate.
+      They are NOT filing deadlines and are NOT a mismatch with the 45/90d package
+      reference. The package describes filing deadlines; this function implements
+      the pricing gate. Both are correct in their respective contexts.
+      Do NOT change these limits without explicit product-owner sign-off.
     """
     if not latest_period_label:
         return {
@@ -542,105 +561,185 @@ def get_sector_porter_forces(sector: str) -> Dict[str, Any]:
     }
 
 
+# ──────────────────────────────────────────────────────────────────────────────
+# Sector Medians Cache — reads ALL XBRL files once, derives medians for all
+# sectors in a single pass.  Per-sector lookup is then O(1).
+# ──────────────────────────────────────────────────────────────────────────────
 _SECTOR_MEDIANS_CACHE: Dict[str, Dict[str, Any]] = {}
+_SECTOR_MEDIANS_WARMED: bool = False  # True after full-universe pre-load
 
-def get_sector_margin_and_growth(sector: str) -> Dict[str, Any]:
-    """
-    Returns data-derived Sector Median Net Profit Margin (NPM) and Sales Growth
-    calculated from the active universe in XBRL financials, with calibrated fallback.
-    """
-    global _SECTOR_MEDIANS_CACHE
-    if sector in _SECTOR_MEDIANS_CACHE:
-        return _SECTOR_MEDIANS_CACHE[sector]
 
-    # Attempt dynamic derivation from local XBRL files for peer companies in this sector
+def _sector_baseline(sector: str) -> Dict[str, Any]:
+    """Hardcoded calibrated fallback when XBRL sample is insufficient."""
+    s = (sector or "").lower()
+    if any(k in s for k in ["materials", "chemical", "petrochem", "مواد"]):
+        npm, growth = 12.0, 6.0
+    elif any(k in s for k in ["retail", "consumer", "تجارة"]):
+        npm, growth = 4.5, 8.0
+    elif any(k in s for k in ["telecom", "it", "تقنية", "technology"]):
+        npm, growth = 11.0, 12.0
+    elif any(k in s for k in ["health", "pharma", "رعاية"]):
+        npm, growth = 14.0, 10.0
+    elif any(k in s for k in ["energy", "oil", "طاقة"]):
+        npm, growth = 15.0, 5.0
+    elif any(k in s for k in ["real estate", "reit", "عقارات"]):
+        npm, growth = 25.0, 7.0
+    else:
+        npm, growth = 8.0, 7.5
+    return {
+        "sector": sector,
+        "median_npm_pct": npm,
+        "expected_growth_pct": growth,
+        "sample_size": 1,
+        "source": "≈ declared sector baseline",
+    }
+
+
+def warm_sector_medians_cache() -> int:
+    """
+    Pre-loads sector medians for every sector in the XBRL universe in ONE pass.
+    Reads each JSON file exactly once, groups metrics by sector, then stores
+    the medians. Returns number of sectors warmed.
+
+    Call this ONCE before the universe loop in daily_market_update.py:
+        from app.services.rebh_production_helper_service import warm_sector_medians_cache
+        warm_sector_medians_cache()
+    """
+    global _SECTOR_MEDIANS_CACHE, _SECTOR_MEDIANS_WARMED
+    if _SECTOR_MEDIANS_WARMED:
+        return len(_SECTOR_MEDIANS_CACHE)
+
     try:
         import json, statistics
         from app.services.xbrl_data_service import _all_json_files
-        
-        sector_npms = []
-        sector_growths = []
+
+        # sector_key → {"npms": [...], "growths": [...]}
+        buckets: Dict[str, Dict[str, list]] = {}
+
+        for fp in _all_json_files():
+            try:
+                with open(fp, encoding="utf-8") as f:
+                    cdata = json.load(f)
+                c_sec = (cdata.get("meta", {}).get("sector") or "").strip()
+                if not c_sec:
+                    continue
+                is_sec = cdata.get("sections", {}).get("income_statement", {})
+                items = is_sec.get("items", {})
+                periods = is_sec.get("periods", [])
+                if not periods:
+                    continue
+                p_last = periods[-1]
+                rev_curr = rev_prev = ni = None
+                for k, v in items.items():
+                    if re.search(r"Revenue|Turnover", k, re.IGNORECASE):
+                        rev_curr = v.get(p_last)
+                        if len(periods) >= 5:
+                            rev_prev = v.get(periods[-5])
+                    elif re.search(r"Net Profit|Net Income", k, re.IGNORECASE):
+                        ni = v.get(p_last)
+
+                bucket = buckets.setdefault(c_sec, {"npms": [], "growths": []})
+                if rev_curr and ni and rev_curr > 0 and ni > 0:
+                    npm = (ni / rev_curr) * 100.0
+                    if 0.0 < npm < 80.0:
+                        bucket["npms"].append(npm)
+                if rev_curr and rev_prev and rev_curr > 0 and rev_prev > 0:
+                    g = ((rev_curr / rev_prev) - 1.0) * 100.0
+                    if -40.0 < g < 60.0:
+                        bucket["growths"].append(g)
+            except Exception:
+                continue
+
+        for sec_name, data in buckets.items():
+            npms = data["npms"]
+            growths = data["growths"]
+            if len(npms) >= 3:
+                _SECTOR_MEDIANS_CACHE[sec_name] = {
+                    "sector": sec_name,
+                    "median_npm_pct": round(statistics.median(npms), 1),
+                    "expected_growth_pct": round(statistics.median(growths), 1) if len(growths) >= 3 else 7.0,
+                    "sample_size": len(npms),
+                    "growth_sample_size": len(growths),
+                    "source": "Data-Derived Sector Medians (Full XBRL Universe — pre-loaded)",
+                }
+        _SECTOR_MEDIANS_WARMED = True
+    except Exception:
+        pass
+
+    return len(_SECTOR_MEDIANS_CACHE)
+
+
+def get_sector_margin_and_growth(sector: str) -> Dict[str, Any]:
+    """
+    Returns data-derived Sector Median Net Profit Margin (NPM) and Sales Growth.
+
+    - If warm_sector_medians_cache() was called beforehand (universe loop),
+      this is an O(1) dict lookup — zero disk I/O.
+    - If not pre-warmed, falls back to single-sector on-demand derivation
+      (legacy behaviour) then stores the result in the cache.
+    """
+    global _SECTOR_MEDIANS_CACHE
+
+    # Fast path: already in cache (pre-warmed or previously computed)
+    if sector in _SECTOR_MEDIANS_CACHE:
+        return _SECTOR_MEDIANS_CACHE[sector]
+
+    # Slow path: on-demand derivation for this one sector (not pre-warmed)
+    try:
+        import json, statistics
+        from app.services.xbrl_data_service import _all_json_files
+
+        sector_npms: list = []
+        sector_growths: list = []
         target_s = (sector or "").lower()
-        all_files = _all_json_files()
-        
-        for fp in all_files:
+
+        for fp in _all_json_files():
             try:
                 with open(fp, encoding="utf-8") as f:
                     cdata = json.load(f)
                 c_sec = (cdata.get("meta", {}).get("sector") or "").lower()
-                if c_sec and (c_sec == target_s or any(w in c_sec for w in target_s.split() if len(w) > 3)):
-                    is_sec = cdata.get("sections", {}).get("income_statement", {})
-                    items = is_sec.get("items", {})
-                    periods = is_sec.get("periods", [])
-                    if periods:
-                        p_last = periods[-1]
-                        rev_curr = None
-                        rev_prev = None
-                        ni = None
-                        for k, v in items.items():
-                            if re.search(r"Revenue|Turnover", k, re.IGNORECASE):
-                                rev_curr = v.get(p_last)
-                                if len(periods) >= 5:
-                                    rev_prev = v.get(periods[-5]) # YoY comparable quarter
-                            elif re.search(r"Net Profit|Net Income", k, re.IGNORECASE):
-                                ni = v.get(p_last)
-                        if rev_curr and ni and rev_curr > 0 and ni > 0:
-                            npm = (ni / rev_curr) * 100.0
-                            if 0.0 < npm < 80.0:
-                                sector_npms.append(npm)
-                        if rev_curr and rev_prev and rev_curr > 0 and rev_prev > 0:
-                            g_yoy = ((rev_curr / rev_prev) - 1.0) * 100.0
-                            if -40.0 < g_yoy < 60.0:
-                                sector_growths.append(g_yoy)
+                if not (c_sec and (c_sec == target_s or any(w in c_sec for w in target_s.split() if len(w) > 3))):
+                    continue
+                is_sec = cdata.get("sections", {}).get("income_statement", {})
+                items = is_sec.get("items", {})
+                periods = is_sec.get("periods", [])
+                if not periods:
+                    continue
+                p_last = periods[-1]
+                rev_curr = rev_prev = ni = None
+                for k, v in items.items():
+                    if re.search(r"Revenue|Turnover", k, re.IGNORECASE):
+                        rev_curr = v.get(p_last)
+                        if len(periods) >= 5:
+                            rev_prev = v.get(periods[-5])
+                    elif re.search(r"Net Profit|Net Income", k, re.IGNORECASE):
+                        ni = v.get(p_last)
+                if rev_curr and ni and rev_curr > 0 and ni > 0:
+                    npm = (ni / rev_curr) * 100.0
+                    if 0.0 < npm < 80.0:
+                        sector_npms.append(npm)
+                if rev_curr and rev_prev and rev_curr > 0 and rev_prev > 0:
+                    g = ((rev_curr / rev_prev) - 1.0) * 100.0
+                    if -40.0 < g < 60.0:
+                        sector_growths.append(g)
             except Exception:
                 continue
 
         if len(sector_npms) >= 3:
-            calc_npm = round(statistics.median(sector_npms), 1)
-            calc_growth = round(statistics.median(sector_growths), 1) if len(sector_growths) >= 3 else 7.0
             res = {
                 "sector": sector,
-                "median_npm_pct": calc_npm,
-                "expected_growth_pct": calc_growth,
+                "median_npm_pct": round(statistics.median(sector_npms), 1),
+                "expected_growth_pct": round(statistics.median(sector_growths), 1) if len(sector_growths) >= 3 else 7.0,
                 "sample_size": len(sector_npms),
                 "growth_sample_size": len(sector_growths),
-                "source": "Data-Derived Sector Medians (Full XBRL Universe)"
+                "source": "Data-Derived Sector Medians (Full XBRL Universe)",
             }
             _SECTOR_MEDIANS_CACHE[sector] = res
             return res
     except Exception:
         pass
 
-    # Baseline calibrated defaults if dynamic sample is insufficient
-    s = (sector or "").lower()
-    if any(k in s for k in ["materials", "chemical", "petrochem", "مواد"]):
-        npm = 12.0
-        growth = 6.0
-    elif any(k in s for k in ["retail", "consumer", "تجارة"]):
-        npm = 4.5
-        growth = 8.0
-    elif any(k in s for k in ["telecom", "it", "تقنية", "technology"]):
-        npm = 11.0
-        growth = 12.0
-    elif any(k in s for k in ["health", "pharma", "رعاية"]):
-        npm = 14.0
-        growth = 10.0
-    elif any(k in s for k in ["energy", "oil", "طاقة"]):
-        npm = 15.0
-        growth = 5.0
-    elif any(k in s for k in ["real estate", "reit", "عقارات"]):
-        npm = 25.0
-        growth = 7.0
-    else:
-        npm = 8.0
-        growth = 7.5
-
-    res = {
-        "sector": sector,
-        "median_npm_pct": npm,
-        "expected_growth_pct": growth,
-        "sample_size": 1,
-        "source": "≈ declared sector baseline"
-    }
+    # Baseline calibrated defaults
+    res = _sector_baseline(sector)
     _SECTOR_MEDIANS_CACHE[sector] = res
     return res

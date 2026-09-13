@@ -66,12 +66,18 @@ SAMA_BASE     = "https://www.sama.gov.sa"
 SAMA_PAGE_URL = f"{SAMA_BASE}/en-US/Statistics/pages/monthlystatistics.aspx"
 KAPSARC_GDP_API = (
     "https://datasource.kapsarc.org/api/explore/v2.1/catalog/datasets/"
-    "gross-domestic-product-by-type-of-economic-activity-at-current-prices/"
-    "records?limit=10&order_by=date%20desc"
+    "gross-domestic-product-by-kind-of-economic-activity-at-current-prices-2023-100/"
+    "records?where=economic_activity%3D%22Gross%20Domestic%20Product%22%20and%20unit%3D%22Million%20of%20Saudi%20Riyals%22"
+    "&order_by=date%20desc&limit=4"
 )
 GASTAT_UNEMPLOYMENT_API = (
     "https://open.data.gov.sa/api/explore/v2.1/catalog/datasets/"
     "employment-unemployment-indicators/records?limit=5&order_by=date%20desc"
+)
+KAPSARC_UNEMPLOYMENT_API = (
+    "https://datasource.kapsarc.org/api/explore/v2.1/catalog/datasets/labor-force-survey-data/records?"
+    "where=search(indicator,%20%27Unemployement%27)%20and%20age_group%3D%22Total%22%20and%20gender%3D%22Total%22%20and%20nationality%3D%22Saudi%22"
+    "&order_by=time_period%20desc&limit=1"
 )
 
 HEADERS = {
@@ -83,13 +89,14 @@ HEADERS = {
 }
 
 # Fallback constants — MUST have is_fallback=True when used
-_FALLBACK_REPO_RATE         = 5.50   # SAMA Repo Rate as of last known bulletin
-_FALLBACK_REVERSE_REPO      = 5.00
-_FALLBACK_SAIBOR_3M         = 5.65
-_FALLBACK_SAIBOR_12M        = 5.40
-_FALLBACK_GDP_M_SAR         = 4010000.0  # GaStat 2024 benchmark
-_FALLBACK_GDP_PERIOD        = "2024-GaStat"
-_FALLBACK_UNEMPLOYMENT_PCT  = 7.7    # GaStat Q4-2024
+_FALLBACK_REPO_RATE         = 4.25   # SAMA Repo Rate as of current bulletin
+_FALLBACK_REVERSE_REPO      = 3.75
+_FALLBACK_SAIBOR_3M         = 3.897
+_FALLBACK_SAIBOR_12M        = 4.062
+_FALLBACK_GDP_M_SAR         = 4788536.0  # GaStat/KAPSARC 2025 trailing annual GDP (M SAR)
+_FALLBACK_GDP_PERIOD        = "2025-GaStat"
+_FALLBACK_UNEMPLOYMENT_PCT  = 7.1    # GaStat 2024/2025 total unemployment estimate
+
 
 _CURRENT_PERIOD = datetime.utcnow().strftime("%Y-%m")  # e.g. "2026-09"
 
@@ -158,10 +165,14 @@ def fetch_saibor_from_sama_bulletin() -> dict:
         opts.add_argument("--no-sandbox")
         opts.add_argument("--disable-dev-shm-usage")
         opts.add_argument("--disable-gpu")
+        opts.add_argument("--disable-extensions")
+        opts.add_argument("--blink-settings=imagesEnabled=false")  # no images — faster load
+        opts.add_argument("--disable-background-networking")
+        opts.page_load_strategy = "eager"  # don't wait for full load, just DOM
 
         driver = webdriver.Chrome(options=opts)
-        driver.set_page_load_timeout(30)
-        driver.set_script_timeout(15)
+        driver.set_page_load_timeout(15)
+        driver.set_script_timeout(10)
         xlsx_link = None
         cookies   = []
         ua        = HEADERS["User-Agent"]
@@ -171,7 +182,7 @@ def fetch_saibor_from_sama_bulletin() -> dict:
                 driver.get(SAMA_PAGE_URL)
             except Exception as nav_e:
                 logger.warning(f"[SAMA] Page load timed out or had error ({nav_e}), attempting parse...")
-            _time.sleep(3)
+            _time.sleep(1)  # 1s is enough after eager DOM load
             soup  = BeautifulSoup(driver.page_source, "html.parser")
             links = [a["href"] for a in soup.find_all("a", href=True) if a["href"].lower().endswith(".xlsx")]
             if links:
@@ -259,19 +270,29 @@ def fetch_saibor_from_sama_bulletin() -> dict:
 
 def fetch_saudi_gdp() -> dict:
     """
-    Fetches Saudi GDP at current prices from GaStat/KAPSARC.
+    Fetches Saudi GDP at current prices from KAPSARC.
+    Sums the latest 4 quarters to represent trailing 12-month annual GDP.
     Returns dict: { gdp_m_sar, period, is_fallback, source_status, reason? }
     """
     logger.info("[GDP] Fetching Saudi GDP at Current Prices from KAPSARC...")
     try:
         res = requests.get(KAPSARC_GDP_API, headers=HEADERS, timeout=15)
         if res.status_code == 200:
-            for r in res.json().get("results", []):
-                val = r.get("gdp_at_current_prices") or r.get("value") or r.get("total_gdp")
-                if val and float(val) > 500000:
-                    period = str(r.get("date") or "2024")
-                    logger.info(f"[GDP] Live GDP: {float(val):,.0f} M SAR — period: {period}")
-                    return {"gdp_m_sar": float(val), "period": period, "is_fallback": False, "source_status": "live"}
+            results = res.json().get("results", [])
+            valid_quarters = [float(r["gdp"]) for r in results if r.get("gdp") is not None]
+            if len(valid_quarters) == 4:
+                annual_gdp = sum(valid_quarters)
+                latest_r = results[0]
+                period = f"{latest_r.get('year', '')}-{latest_r.get('quarter', '')}-TTM"
+                logger.info(f"[GDP] Live Trailing Annual GDP (4Q): {annual_gdp:,.0f} M SAR — period: {period}")
+                return {"gdp_m_sar": annual_gdp, "period": period, "is_fallback": False, "source_status": "live"}
+            elif len(valid_quarters) > 0:
+                # Fallback to single latest quarter annualized if fewer than 4 quarters returned
+                annual_gdp = valid_quarters[0] * 4
+                latest_r = results[0]
+                period = f"{latest_r.get('year', '')}-{latest_r.get('quarter', '')}-Annualized"
+                logger.info(f"[GDP] Live Annualized GDP (1Q*4): {annual_gdp:,.0f} M SAR — period: {period}")
+                return {"gdp_m_sar": annual_gdp, "period": period, "is_fallback": False, "source_status": "live"}
     except Exception as e:
         logger.warning(f"[GDP] KAPSARC API query failed: {e}")
 
@@ -291,15 +312,16 @@ def fetch_saudi_gdp() -> dict:
 
 def fetch_unemployment() -> dict:
     """
-    Fetches Saudi unemployment rate from GaStat Open Data portal.
+    Fetches Saudi unemployment rate.
+    Tries GaStat Open Data first, then KAPSARC Labor Force Survey (live GaStat mirror).
     Returns dict: { unemployment_pct, period, is_fallback, source_status, reason? }
     """
+    # 1. Try GaStat portal
     logger.info("[UNEMP] Fetching Saudi unemployment from GaStat Open Data...")
     try:
-        res = requests.get(GASTAT_UNEMPLOYMENT_API, headers=HEADERS, timeout=15)
+        res = requests.get(GASTAT_UNEMPLOYMENT_API, headers=HEADERS, timeout=2)
         if res.status_code == 200:
             for r in res.json().get("results", []):
-                # Try various common field names
                 val = (
                     r.get("saudi_unemployment_rate") or
                     r.get("unemployment_rate") or
@@ -308,9 +330,9 @@ def fetch_unemployment() -> dict:
                 )
                 if val is not None:
                     pct = float(val)
-                    if 0 < pct < 50:   # sanity check: unemployment rate must be 0-50%
+                    if 0 < pct < 50:
                         period = str(r.get("date") or r.get("period") or _CURRENT_PERIOD)
-                        logger.info(f"[UNEMP] Live unemployment: {pct}% — period: {period}")
+                        logger.info(f"[UNEMP] Live GaStat unemployment: {pct}% — period: {period}")
                         return {
                             "unemployment_pct": pct,
                             "period":           period,
@@ -318,7 +340,29 @@ def fetch_unemployment() -> dict:
                             "source_status":    "live",
                         }
     except Exception as e:
-        logger.warning(f"[UNEMP] GaStat API query failed: {e}")
+        logger.debug(f"[UNEMP] GaStat Open Data unavailable ({e}), trying KAPSARC Labor Force Survey...")
+
+    # 2. Try KAPSARC Labor Force Survey (GaStat mirror)
+    try:
+        logger.info("[UNEMP] Fetching Saudi unemployment from KAPSARC Labor Force Survey...")
+        res = requests.get(KAPSARC_UNEMPLOYMENT_API, headers=HEADERS, timeout=10)
+        if res.status_code == 200:
+            results = res.json().get("results", [])
+            if results:
+                r = results[0]
+                val = r.get("value")
+                if val is not None:
+                    pct = float(val)
+                    period = str(r.get("time_period") or r.get("year") or _CURRENT_PERIOD)
+                    logger.info(f"[UNEMP] Live KAPSARC/GaStat unemployment: {pct}% — period: {period}")
+                    return {
+                        "unemployment_pct": pct,
+                        "period":           period,
+                        "is_fallback":      False,
+                        "source_status":    "live",
+                    }
+    except Exception as e:
+        logger.warning(f"[UNEMP] KAPSARC unemployment API query failed: {e}")
 
     logger.warning(f"[UNEMP] Using fallback unemployment: {_FALLBACK_UNEMPLOYMENT_PCT}%")
     return {
@@ -326,7 +370,7 @@ def fetch_unemployment() -> dict:
         "period":           "2024-Q4-GaStat",
         "is_fallback":      True,
         "source_status":    "fallback",
-        "reason":           "GaStat API returned no valid unemployment value",
+        "reason":           "All unemployment APIs returned no valid data",
     }
 
 
@@ -342,12 +386,24 @@ def calculate_buffett_indicator(gdp_m_sar: float) -> dict:
     The indicator is a methodological reference only — not a trading signal.
     """
     try:
-        companies  = list_companies()
-        total_mc   = sum(getattr(c, "market_cap", 0.0) or 0.0 for c in companies)
-        mc_source  = "xbrl_data_service"
+        from app.core.database import SessionLocal
+        from app.models.price import Price
+        from sqlalchemy import func
+        db = SessionLocal()
+        try:
+            latest_dt = db.query(func.max(Price.date)).scalar()
+            total_raw = db.query(func.sum(Price.market_cap)).filter(Price.date == latest_dt).scalar()
+            if total_raw and float(total_raw) > 0:
+                total_mc = round(float(total_raw) / 1_000_000.0, 1)  # Convert SAR to M SAR
+                mc_source = f"prices_table_live_{latest_dt}"
+            else:
+                total_mc = 9500000.0
+                mc_source = "fallback_constant"
+        finally:
+            db.close()
     except Exception as e:
         logger.warning(f"[BUFFETT] Could not fetch live market cap: {e}")
-        total_mc  = 9850000.0  # ~9.85T SAR TASI market cap fallback
+        total_mc  = 9500000.0  # ~9.5T SAR TASI market cap fallback
         mc_source = "fallback_constant"
 
     ratio = (total_mc / gdp_m_sar) * 100.0 if gdp_m_sar > 0 else 0.0

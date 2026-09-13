@@ -410,66 +410,84 @@ def save_sukuk_to_db(items: list, source_url: str = STATIC_AJAX_URL) -> int:
 # Build-Up R Integration: get best yield for a company
 # ──────────────────────────────────────────────────────────────────────────────
 
+_SUKUK_CACHE = {"timestamp": 0.0, "company_map": {}, "govt": None}
+
+def _get_sukuk_memory_cache():
+    import time
+    now = time.time()
+    if _SUKUK_CACHE["company_map"] and (now - _SUKUK_CACHE["timestamp"] < 300):
+        return _SUKUK_CACHE["company_map"], _SUKUK_CACHE["govt"]
+
+    db = SessionLocal()
+    company_map = {}
+    govt = None
+    try:
+        all_active = db.query(SukukMarketData).filter(SukukMarketData.is_active == True).order_by(SukukMarketData.maturity_date.desc()).all()
+        for item in all_active:
+            if item.bond_type == "G" and govt is None:
+                govt = {
+                    "yield_pct": float(item.yield_to_maturity or item.coupon_rate) if (item.yield_to_maturity or item.coupon_rate) is not None else 5.5,
+                    "symbol": item.symbol,
+                    "issuer": item.issuer_name,
+                    "as_of": item.as_of,
+                    "is_ytm": item.yield_to_maturity is not None
+                }
+            
+            p_sym = str(item.parent_company_symbol) if item.parent_company_symbol else None
+            sym = str(item.symbol) if item.symbol else None
+            y_val = item.yield_to_maturity or item.coupon_rate
+            
+            if y_val is not None:
+                entry = {
+                    "yield_pct": float(y_val),
+                    "source": "company_sukuk_db",
+                    "symbol": item.symbol,
+                    "issuer": item.issuer_name,
+                    "bond_type": item.bond_type,
+                    "is_ytm": item.yield_to_maturity is not None,
+                    "is_fallback": False,
+                    "as_of": item.as_of,
+                }
+                if p_sym and p_sym not in company_map:
+                    company_map[p_sym] = entry
+                if sym and sym not in company_map:
+                    company_map[sym] = entry
+                    
+        _SUKUK_CACHE["timestamp"] = now
+        _SUKUK_CACHE["company_map"] = company_map
+        _SUKUK_CACHE["govt"] = govt
+    except Exception as e:
+        logger.warning(f"[BUILD-UP] Failed to pre-load sukuk memory cache: {e}")
+    finally:
+        db.close()
+    return _SUKUK_CACHE["company_map"], _SUKUK_CACHE["govt"]
+
+
 def get_buildup_sukuk_yield(equity_symbol: str) -> dict:
     """
     Returns the best available sukuk/debt yield for a company's Build-Up R calculation.
-    Priority:
-      1. Company-specific sukuk yield (from DB, coupon_rate or YTM)
-      2. Government Sukuk benchmark (from DB, closest G-type sukuk)
-      3. Hardcoded SAMA policy-rate fallback (5.5% repo)
-
-    This function is imported by rebh_unified_engine.py to determine Rf in Build-Up.
-    Company sukuk yield OUTRANKS the generic grade curve per Phase 4 requirement.
+    Uses in-memory cache to execute instantly across universe loops.
     """
-    db = SessionLocal()
+    eq_sym = str(equity_symbol)
     try:
-        # 1. Company-specific sukuk (best: YTM > coupon_rate)
-        co_sukuk = db.query(SukukMarketData).filter(
-            (SukukMarketData.parent_company_symbol == equity_symbol) |
-            (SukukMarketData.symbol == equity_symbol),
-            SukukMarketData.is_active == True
-        ).order_by(SukukMarketData.maturity_date.desc()).first()
-
-        if co_sukuk:
-            # Prefer YTM if explicitly available; else use coupon_rate as proxy
-            yield_val = co_sukuk.yield_to_maturity or co_sukuk.coupon_rate
-            if yield_val is not None:
-                return {
-                    "yield_pct":    float(yield_val),
-                    "source":       "company_sukuk_db",
-                    "symbol":       co_sukuk.symbol,
-                    "issuer":       co_sukuk.issuer_name,
-                    "bond_type":    co_sukuk.bond_type,
-                    "is_ytm":       co_sukuk.yield_to_maturity is not None,
-                    "is_fallback":  False,
-                    "as_of":        co_sukuk.as_of,
-                }
-
-        # 2. Government Sukuk benchmark (G-type, most recent maturity)
-        govt = db.query(SukukMarketData).filter(
-            SukukMarketData.bond_type == "G",
-            SukukMarketData.is_active == True
-        ).order_by(SukukMarketData.maturity_date.desc()).first()
+        company_map, govt = _get_sukuk_memory_cache()
+        if eq_sym in company_map:
+            return company_map[eq_sym]
 
         if govt:
-            yield_val = govt.yield_to_maturity or govt.coupon_rate
-            if yield_val is not None:
-                return {
-                    "yield_pct":    float(yield_val),
-                    "source":       "govt_sukuk_benchmark_db",
-                    "symbol":       govt.symbol,
-                    "issuer":       govt.issuer_name,
-                    "bond_type":    "G",
-                    "is_ytm":       govt.yield_to_maturity is not None,
-                    "is_fallback":  True,
-                    "reason":       f"No company-specific sukuk for {equity_symbol}; using KSA Government Benchmark",
-                    "as_of":        govt.as_of,
-                }
-
+            return {
+                "yield_pct":    govt["yield_pct"],
+                "source":       "govt_sukuk_benchmark_db",
+                "symbol":       govt["symbol"],
+                "issuer":       govt["issuer"],
+                "bond_type":    "G",
+                "is_ytm":       govt["is_ytm"],
+                "is_fallback":  True,
+                "reason":       f"No company-specific sukuk for {equity_symbol}; using KSA Government Benchmark",
+                "as_of":        govt["as_of"],
+            }
     except Exception as e:
-        logger.warning(f"[BUILD-UP] DB lookup failed for {equity_symbol}: {e}")
-    finally:
-        db.close()
+        logger.warning(f"[BUILD-UP] Sukuk lookup failed for {equity_symbol}: {e}")
 
     # 3. Hardcoded SAMA policy-rate fallback
     return {
