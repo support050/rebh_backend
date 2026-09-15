@@ -1523,7 +1523,7 @@ def get_classification_route(symbol: str) -> Dict[str, Any]:
     """
     sym = symbol.strip().upper()
     comp = get_company(sym)
-    sector = getattr(comp, "sector", None) if comp else None
+    sector = comp.meta.sector if (comp and hasattr(comp, "meta") and comp.meta) else None
     return rebh_classification_service.get_company_classification(symbol=sym, sector=sector)
 
 

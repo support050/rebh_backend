@@ -10,11 +10,11 @@ class SubstantialShareholderResponse(BaseModel):
     normalized_symbol: Optional[str] = None
     company_name: Optional[str] = None
     shareholder_name: Optional[str] = None
-    holding_percent_last_day: Optional[Decimal] = None
-    holding_percent_previous_day: Optional[Decimal] = None
-    change: Optional[Decimal] = None
-    managed_by_authorized_trading_day: Optional[Decimal] = None
-    managed_by_authorized_previous_day: Optional[Decimal] = None
+    holding_percent_last_day: Optional[str] = None
+    holding_percent_previous_day: Optional[str] = None
+    change: Optional[str] = None
+    managed_by_authorized_trading_day: Optional[str] = None
+    managed_by_authorized_previous_day: Optional[str] = None
     source_url: Optional[str] = None
     retrieval_timestamp: Optional[datetime] = None
     
@@ -27,9 +27,9 @@ class NetShortPositionResponse(BaseModel):
     symbol: Optional[str] = None
     normalized_symbol: Optional[str] = None
     company: Optional[str] = None
-    percent_over_outstanding: Optional[Decimal] = None
-    percent_over_free_float: Optional[Decimal] = None
-    ratio_over_avg_daily: Optional[Decimal] = None
+    percent_over_outstanding: Optional[str] = None
+    percent_over_free_float: Optional[str] = None
+    ratio_over_avg_daily: Optional[str] = None
     source_url: Optional[str] = None
     retrieval_timestamp: Optional[datetime] = None
     
@@ -42,9 +42,9 @@ class ForeignHeadroomResponse(BaseModel):
     symbol: Optional[str] = None
     normalized_symbol: Optional[str] = None
     company: Optional[str] = None
-    foreign_limit: Optional[Decimal] = None
-    actual_foreign_ownership: Optional[Decimal] = None
-    ownership_room: Optional[Decimal] = None
+    foreign_limit: Optional[str] = None
+    actual_foreign_ownership: Optional[str] = None
+    ownership_room: Optional[str] = None
     source_url: Optional[str] = None
     retrieval_timestamp: Optional[datetime] = None
     
@@ -57,9 +57,9 @@ class ShareBuybackResponse(BaseModel):
     symbol: Optional[str] = None
     normalized_symbol: Optional[str] = None
     company: Optional[str] = None
-    shares_approved: Optional[Decimal] = None
-    shares_purchased: Optional[Decimal] = None
-    percent_of_capital: Optional[Decimal] = None
+    shares_approved: Optional[str] = None
+    shares_purchased: Optional[str] = None
+    percent_of_capital: Optional[str] = None
     data: Optional[Dict[str, Any]] = None
     source_url: Optional[str] = None
     retrieval_timestamp: Optional[datetime] = None
@@ -73,9 +73,9 @@ class SBLPositionResponse(BaseModel):
     symbol: Optional[str] = None
     normalized_symbol: Optional[str] = None
     company: Optional[str] = None
-    total_issued_shares: Optional[Decimal] = None
-    lent_asset_quantity: Optional[Decimal] = None
-    percent_of_lent_asset: Optional[Decimal] = None
+    total_issued_shares: Optional[str] = None
+    lent_asset_quantity: Optional[str] = None
+    percent_of_lent_asset: Optional[str] = None
     source_url: Optional[str] = None
     retrieval_timestamp: Optional[datetime] = None
     
@@ -85,13 +85,13 @@ class SBLPositionResponse(BaseModel):
 class HistoricalReportResponse(BaseModel):
     id: int
     report_date: date
-    open_price: Optional[Decimal] = None
-    high_price: Optional[Decimal] = None
-    low_price: Optional[Decimal] = None
-    close_price: Optional[Decimal] = None
-    volume_traded: Optional[Decimal] = None
-    value_traded: Optional[Decimal] = None
-    no_of_trades: Optional[int] = None
+    open_price: Optional[str] = None
+    high_price: Optional[str] = None
+    low_price: Optional[str] = None
+    close_price: Optional[str] = None
+    volume_traded: Optional[str] = None
+    value_traded: Optional[str] = None
+    no_of_trades: Optional[str] = None
     source_url: Optional[str] = None
     retrieval_timestamp: Optional[datetime] = None
     

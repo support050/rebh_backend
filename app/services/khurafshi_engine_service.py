@@ -441,11 +441,23 @@ def _grade_metric(value: Optional[float], thresholds: List[tuple]) -> Dict[str, 
     return {"g": last[1], "p": last[2], "b": "sec"}
 
 
-def get_khurafshi_live_market_stats() -> Dict[str, Any]:
+import time
+
+_STATS_CACHE: Optional[Dict[str, Any]] = None
+_STATS_CACHE_TIMESTAMP: float = 0.0
+_STATS_CACHE_TTL_SECONDS: float = 300.0  # 5 minutes TTL
+
+
+def get_khurafshi_live_market_stats(force_refresh: bool = False) -> Dict[str, Any]:
     """
     Calculate live market aggregate metrics and audit rows across the XBRL database.
-    Placed strictly in khurafshi_engine_service to preserve architecture integrity.
+    Results are cached in memory for sub-millisecond response times.
     """
+    global _STATS_CACHE, _STATS_CACHE_TIMESTAMP
+    now = time.time()
+    if not force_refresh and _STATS_CACHE and (now - _STATS_CACHE_TIMESTAMP < _STATS_CACHE_TTL_SECONDS):
+        return _STATS_CACHE
+
     from app.services.xbrl_data_service import list_companies, get_company
 
     companies = list_companies()
@@ -525,7 +537,7 @@ def get_khurafshi_live_market_stats() -> Dict[str, Any]:
         }
     ]
 
-    return {
+    result = {
         "total_companies": total_companies,
         "balance_sheets_passed": verified_bs,
         "identity_pass_pct": 100.0,
@@ -535,13 +547,21 @@ def get_khurafshi_live_market_stats() -> Dict[str, Any]:
         "checklists_count": checklists_count,
         "audit_matrix": audit_matrix
     }
+_UNIVERSE_CACHE: Optional[List[Dict[str, Any]]] = None
+_UNIVERSE_CACHE_TIMESTAMP: float = 0.0
+_UNIVERSE_CACHE_TTL = 300.0  # 5 minutes cache
 
 
 def get_khurafshi_universe_data() -> List[Dict[str, Any]]:
     """
     Get full market dataset calculated directly from live XBRL records and real prices.
-    All metrics are computed from database — no hardcoded placeholder values.
+    All metrics are computed from database — cached for fast sub-second loading.
     """
+    global _UNIVERSE_CACHE, _UNIVERSE_CACHE_TIMESTAMP
+    now = time.time()
+    if _UNIVERSE_CACHE is not None and (now - _UNIVERSE_CACHE_TIMESTAMP) < _UNIVERSE_CACHE_TTL:
+        return _UNIVERSE_CACHE
+
     from app.services.xbrl_data_service import list_companies, get_company
 
     companies = list_companies()
@@ -723,6 +743,8 @@ def get_khurafshi_universe_data() -> List[Dict[str, Any]]:
                 "Balance": bal_grade,
             }
         })
+    _UNIVERSE_CACHE = results
+    _UNIVERSE_CACHE_TIMESTAMP = time.time()
     return results
 
 
