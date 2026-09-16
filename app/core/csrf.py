@@ -30,6 +30,7 @@ class CSRFMiddleware(BaseHTTPMiddleware):
                 "/api/ingest",
                 "/api/reports/admin",
                 "/api/rebh",
+                "/api/engine",
             )
             if not any(path_for_match.startswith(prefix) for prefix in excluded_prefixes):
                 csrf_header = request.headers.get("x-csrf-token")

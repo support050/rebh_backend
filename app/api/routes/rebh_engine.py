@@ -1106,6 +1106,7 @@ class AnalystNoteIn(BaseModel):
 
 
 @router.get("/notes/{symbol}")
+@engine_router.get("/notes/{symbol}")
 def get_analyst_note(
     symbol: str,
     db: Session = Depends(get_db),
@@ -1130,6 +1131,7 @@ def get_analyst_note(
 
 
 @router.post("/notes/{symbol}")
+@engine_router.post("/notes/{symbol}")
 def save_analyst_note(
     symbol: str,
     payload: AnalystNoteIn,
@@ -1165,6 +1167,33 @@ def save_analyst_note(
         "note": note_obj.note,
         "updated_at": str(note_obj.updated_at),
         "user_id": user_id
+    }
+
+
+@router.delete("/notes/{symbol}")
+@engine_router.delete("/notes/{symbol}")
+def delete_analyst_note(
+    symbol: str,
+    db: Session = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user_optional)
+) -> Dict[str, Any]:
+    """
+    Delete an analyst thesis note for a company symbol.
+    """
+    user_id = current_user.id if current_user else None
+    note_obj = db.query(AnalystNote).filter(
+        AnalystNote.symbol == symbol,
+        AnalystNote.user_id == user_id
+    ).first()
+
+    if note_obj:
+        db.delete(note_obj)
+        db.commit()
+
+    return {
+        "status": "success",
+        "symbol": symbol,
+        "deleted": True
     }
 
 

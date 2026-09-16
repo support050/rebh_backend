@@ -180,6 +180,16 @@ class BuyGateEvaluation(BaseModel):
     pass_conditions: List[str] = Field(default_factory=list)
 
 
+class CapitalStructure(BaseModel):
+    market_cap: Optional[float] = None
+    total_debt: Optional[float] = None
+    cash: Optional[float] = None
+    enterprise_value: Optional[float] = None
+    debt_to_equity_pct: Optional[float] = None
+    net_debt: Optional[float] = None
+    source_status: str = "° verified"
+
+
 class RebhUniversalContract(BaseModel):
     """
     Universal Company Engine Production Contract (Phase 0.2).
@@ -212,6 +222,8 @@ class RebhUniversalContract(BaseModel):
     market_rank: Optional[int] = None
     sector_rank: Optional[int] = None
     predictability: Optional[float] = None
+    predictability_stars: Optional[int] = None
+    capital_structure: Optional[CapitalStructure] = None
     safety: Dict[str, Any] = Field(default_factory=dict)
     porter: Optional[PorterAnalysis] = None
     build_up: Optional[BuildUpRequiredReturn] = None

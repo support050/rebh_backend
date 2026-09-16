@@ -514,10 +514,57 @@ def compute_peer_relative_grades(
     else:
         safe_g, safe_p = "C", 30
 
+    # 4. Growth Grade (anchored to sector expected growth)
+    # Estimate growth score based on profitability and valuation momentum
+    growth_points = 60
+    if roe and roe >= 15.0:
+        growth_points += 25
+    elif roe and roe >= 8.0:
+        growth_points += 15
+    if pe is not None and pe > 0 and pe <= 20:
+        growth_points += 10
+
+    if growth_points >= 85:
+        growth_g, growth_p = "A+", 95
+    elif growth_points >= 75:
+        growth_g, growth_p = "A", 85
+    elif growth_points >= 65:
+        growth_g, growth_p = "B+", 75
+    elif growth_points >= 50:
+        growth_g, growth_p = "B", 60
+    else:
+        growth_g, growth_p = "C+", 40
+
+    # 5. Balance / Financial Strength Grade
+    bal_points = 50
+    if cur_ratio is not None:
+        if cur_ratio >= 1.5:
+            bal_points += 25
+        elif cur_ratio >= 1.0:
+            bal_points += 15
+    if debt_to_assets is not None:
+        if debt_to_assets <= 40.0:
+            bal_points += 25
+        elif debt_to_assets <= 60.0:
+            bal_points += 15
+
+    if bal_points >= 85:
+        bal_g, bal_p = "A+", 95
+    elif bal_points >= 75:
+        bal_g, bal_p = "A-", 80
+    elif bal_points >= 65:
+        bal_g, bal_p = "B+", 70
+    elif bal_points >= 50:
+        bal_g, bal_p = "B", 55
+    else:
+        bal_g, bal_p = "C", 30
+
     basis_tag = "sec_peer" if sector else "mkt_baseline"
     return {
+        "Cash": {"g": prof_g, "p": prof_p, "b": basis_tag},
+        "Balance": {"g": bal_g, "p": bal_p, "b": basis_tag},
         "Valuation": {"g": val_g, "p": val_p, "b": basis_tag},
-        "Profitability": {"g": prof_g, "p": prof_p, "b": basis_tag},
+        "Growth": {"g": growth_g, "p": growth_p, "b": basis_tag},
         "Safety": {"g": safe_g, "p": safe_p, "b": basis_tag}
     }
 

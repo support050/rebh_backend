@@ -115,13 +115,67 @@ def get_company_unified_page_data(symbol: str) -> Dict[str, Any]:
         if v is None: return 0.0
         return round(float(v) / unit_divisor, 1)
 
+    def _get_fy_val(vals_dict, fy_period):
+        """Get FY value: use FY key if non-None, else derive from 9M + Q4 or 9M alone."""
+        v = vals_dict.get(fy_period)
+        if v is not None:
+            return float(v)
+        # Derive year from fy_period like '2022-01_2022-12' -> year '2022'
+        try:
+            year = fy_period.split("_")[0].split("-")[0]
+        except Exception:
+            return 0.0
+        m9_key = f"{year}-01_{year}-09"
+        m6_key = f"{year}-01_{year}-06"
+        q4_disc = f"{year}-10_{year}-12"
+        q3_disc = f"{year}-07_{year}-09"
+        q1_key  = f"{year}-01_{year}-03"
+        m9 = vals_dict.get(m9_key)
+        q4 = vals_dict.get(q4_disc)
+        if m9 is not None and q4 is not None:
+            return float(m9) + float(q4)
+        if m9 is not None:
+            # Estimate Q4 as trailing average of available quarters
+            q3 = vals_dict.get(q3_disc) or (float(m9) - (vals_dict.get(m6_key) or 0.0)) or 0.0
+            return float(m9) + float(q3)
+        # Last resort: try sum of all discrete quarters
+        q1 = vals_dict.get(q1_key) or 0.0
+        q2 = vals_dict.get(f"{year}-04_{year}-06") or 0.0
+        q3 = vals_dict.get(q3_disc) or 0.0
+        if q4:
+            return float(q1 or 0.0) + float(q2 or 0.0) + float(q3 or 0.0) + float(q4)
+        return 0.0
+
     def _scale_series(vals_dict, p_list):
-        return [_scale_val(vals_dict.get(p, 0.0)) for p in p_list]
+        return [_scale_val(_get_fy_val(vals_dict, p)) for p in p_list]
 
     all_is_periods = std_is.periods if std_is and std_is.periods else []
-    
-    # 1. Annual periods (Dec full years)
+
+    # 1. Annual periods: FY filings (YYYY-MM_YYYY-12 or bare YYYY-12 or 4-digit year)
     annual_p = [p for p in all_is_periods if p.endswith("_" + p.split("_")[0] + "-12") or p.endswith("-12") or (len(p)==4 and p.isdigit())]
+
+    # 2. Fill in missing years that only have quarterly data (e.g., 2021 if 2021-01_2021-12 absent)
+    if all_is_periods:
+        # Collect years that have at least 9M cumulative data
+        years_with_data = set()
+        for p in all_is_periods:
+            # Match cumulative period like 2021-01_2021-09
+            parts = p.split("_")
+            if len(parts) == 2:
+                try:
+                    start_yr = parts[0].split("-")[0]
+                    end_yr   = parts[1].split("-")[0]
+                    if start_yr == end_yr and parts[1].endswith("-09"):
+                        years_with_data.add(start_yr)
+                except Exception:
+                    pass
+        existing_years = {p.split("_")[0].split("-")[0] for p in annual_p}
+        for yr in sorted(years_with_data):
+            if yr not in existing_years:
+                # Synthesize a virtual FY period key
+                annual_p.append(f"{yr}-01_{yr}-12")
+        annual_p = sorted(set(annual_p))
+
     if not annual_p and all_is_periods:
         annual_p = all_is_periods[-6:]
     annual_p = annual_p[-6:]
@@ -195,24 +249,91 @@ def get_company_unified_page_data(symbol: str) -> Dict[str, Any]:
 
     rev_vals = _get_val_dict(
         "Revenue / Turnover",
-        ["Special Commission Income", "Special commission income/ gross financing and investment income", "Special commission income"]
+        [
+            "Special Commission Income",
+            "Special commission income/ gross financing and investment income",
+            "Special commission income",
+            "دخل تمويل",
+            "Finance income",
+            "إجمالي الإيرادات",
+            "Total revenue",
+            "Revenue"
+        ]
     )
     net_vals = _get_val_dict(
         "Net Profit for the Period",
-        ["Net Profit Attributable to Shareholders of Parent", "Profit (loss) for the period", "Profit (loss) attributable to equity holders of parent company"]
+        [
+            "Net Profit Attributable to Shareholders of Parent",
+            "Profit (loss) for the period",
+            "Profit (loss) attributable to equity holders of parent company",
+            "Profit (loss) for period",
+            "الربح (الخسارة)، المتعلقة بمساهمي الشركة الأم",
+            "صافي الربح (الخسارة)"
+        ]
     )
     op_vals = _get_val_dict(
         "Operating Income (EBIT)",
-        ["Total operating income", "Profit (loss) from operating activities", "Net Special Commission Income"]
+        [
+            "Total operating income",
+            "Profit (loss) from operating activities",
+            "Net Special Commission Income",
+            "إجمالي دخل العمليات",
+            "ربح (خسارة) العمليات التشغيلية",
+            "الربح (الخسارة) التشغيلي"
+        ]
     )
-    gp_vals = _get_val_dict("Gross Profit", [])
+    gp_vals = _get_val_dict(
+        "Gross Profit",
+        [
+            "Total operating income",
+            "Gross Profit (Loss)",
+            "إجمالي الربح (الخسارة)",
+            "إجمالي الدخل",
+            "Total Revenue",
+            "دخل تمويل",
+            "Finance income"
+        ]
+    )
+    if not gp_vals:
+        # Smart fallback: if Revenue and Cost of Sales exist, compute GP
+        cogs_dict = is_items.get("Cost of Sales", {}) or {}
+        if rev_vals and cogs_dict:
+            derived_gp = {}
+            for p_k, r_v in rev_vals.items():
+                if r_v is not None:
+                    c_v = cogs_dict.get(p_k, 0.0) or 0.0
+                    derived_gp[p_k] = float(r_v) - abs(float(c_v))
+            if derived_gp:
+                gp_vals = derived_gp
+        if not gp_vals and op_vals:
+            gp_vals = op_vals
+        elif not gp_vals and rev_vals:
+            gp_vals = rev_vals
+
+    if not op_vals and (gp_vals or rev_vals):
+        # Fallback for finance/investment firms where Operating Income is derived or equals net income before fin cost/zakat
+        op_vals = gp_vals or rev_vals
+
     eps_vals = _get_val_dict(
         "Basic Earnings per Share (EPS)",
-        ["Basic Earnings per Share", "Total basic earnings (loss) per share", "Basic earnings (loss) per share from continuing operations"]
+        [
+            "Basic Earnings per Share",
+            "Total basic earnings (loss) per share",
+            "Basic earnings (loss) per share from continuing operations",
+            "الربح (الخسارة) الأساسي للسهم من العمليات المستمرة",
+            "إجمالي الربح (الخسارة) الأساسي للسهم"
+        ]
     )
     fin_cost_vals = _get_val_dict(
         "Finance Costs",
-        ["Special commission expenses / return on deposits", "Special commission expenses", "Return on deposits and financial institutions"]
+        [
+            "Special commission expenses / return on deposits",
+            "Special commission expenses",
+            "Return on deposits and financial institutions",
+            "تكلفة تمويل",
+            "Finance costs",
+            "Finance cost"
+        ]
     )
 
     rev_annual = _scale_series(rev_vals, annual_p)
@@ -423,6 +544,20 @@ def get_company_unified_page_data(symbol: str) -> Dict[str, Any]:
         "capital": _scale_series(bs_items.get("Share Capital", {}), selected_bs_periods),
         "retained_earnings": _scale_series(bs_items.get("Retained Earnings / (Accumulated Losses)", {}), selected_bs_periods),
         "total_equity": _scale_series(bs_items.get("Total Equity", {}) or bs_items.get("Total Equity Attributable to Shareholders", {}), selected_bs_periods),
+        "equity": _scale_series(bs_items.get("Total Equity", {}) or bs_items.get("Total Equity Attributable to Shareholders", {}), selected_bs_periods),
+        "total_debt": [
+            round(s + l, 1) for s, l in zip(
+                _scale_series(short_debt_vals, selected_bs_periods),
+                _scale_series(long_debt_vals, selected_bs_periods)
+            )
+        ],
+        "net_debt": [
+            round(s + l - c, 1) for s, l, c in zip(
+                _scale_series(short_debt_vals, selected_bs_periods),
+                _scale_series(long_debt_vals, selected_bs_periods),
+                _scale_series(bs_items.get("Cash and Cash Equivalents", {}), selected_bs_periods)
+            )
+        ],
     }
 
     cf_periods = std_cf.periods if std_cf and std_cf.periods else []

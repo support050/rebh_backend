@@ -41,7 +41,8 @@ from app.schemas.rebh_contract import (
     BankMetrics,
     ShariahCompliance,
     RedFlagItem,
-    BuyGateEvaluation
+    BuyGateEvaluation,
+    CapitalStructure
 )
 
 
@@ -637,6 +638,54 @@ def calculate_full_company_payload(
     )
     f_score_val = piotroski_audit.get("score")
 
+    # 16. Capital Structure (SA card computed from verified balance sheet & market cap)
+    debt_sar_m = round(tot_debt / 1_000_000, 2) if tot_debt is not None else 0.0
+    cash_sar_m = round(cash / 1_000_000, 2) if cash is not None else 0.0
+    mc_val = mc or 0.0
+    ev_val = round(mc_val + debt_sar_m - cash_sar_m, 2) if mc_val > 0 else None
+    net_debt_val = round(debt_sar_m - cash_sar_m, 2)
+    de_pct = round((tot_debt / te * 100.0), 1) if (tot_debt is not None and te and te > 0) else None
+
+    cap_structure_payload = CapitalStructure(
+        market_cap=mc_val,
+        total_debt=debt_sar_m,
+        cash=cash_sar_m,
+        enterprise_value=ev_val,
+        debt_to_equity_pct=de_pct,
+        net_debt=net_debt_val,
+        source_status="° verified"
+    )
+
+    # 17. GF Business Predictability Stars (Stability of TTM Revenue over quarters)
+    predictability_stars_val = None
+    if quarterly_payload and quarterly_payload.revenue:
+        rev_q = [r for r in quarterly_payload.revenue if r is not None and r > 0]
+        if len(rev_q) >= 6:
+            import math
+            sums = []
+            for idx in range(3, len(rev_q)):
+                sums.append(rev_q[idx] + rev_q[idx-1] + rev_q[idx-2] + rev_q[idx-3])
+            gr = []
+            for idx in range(1, len(sums)):
+                if sums[idx-1] > 0:
+                    gr.append((sums[idx] / sums[idx-1]) - 1.0)
+            if len(gr) > 0:
+                mean_gr = sum(gr) / len(gr)
+                variance = sum((g - mean_gr) ** 2 for g in gr) / len(gr)
+                cv = math.sqrt(variance)
+                if cv < 0.015:
+                    predictability_stars_val = 5
+                elif cv < 0.03:
+                    predictability_stars_val = 4
+                elif cv < 0.06:
+                    predictability_stars_val = 3
+                elif cv < 0.12:
+                    predictability_stars_val = 2
+                else:
+                    predictability_stars_val = 1
+        elif len(rev_q) >= 4:
+            predictability_stars_val = 3  # baseline indicative
+
     return RebhUniversalContract(
         symbol=symbol,
         name=name,
@@ -691,6 +740,8 @@ def calculate_full_company_payload(
         shariah=shariah_payload,
         bank_metrics=bank_payload,
         piotroski=f_score_val,
+        capital_structure=cap_structure_payload,
+        predictability_stars=predictability_stars_val,
         magic_formula={"status": "°", "ev": mc, "ebit": ebit},
         provenance={
             "engine_version": "REBH-2.0",
