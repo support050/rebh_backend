@@ -68,58 +68,98 @@ METRIC_DEFINITIONS: Dict[str, Dict[str, Any]] = {
 
 def _extract_metric(company_data: dict, metric: str) -> Optional[float]:
     """
-    Extracts the latest-period value of the requested metric from a raw company dict.
-    Returns None if the data is absent or produces a degenerate result.
+    Extracts the latest-period value of the requested metric from a company dict.
+    Supports both raw XBRL objects (with sections) and unified statements dicts.
     """
-    is_ = company_data.get("income_statement", {})
-    bs   = company_data.get("bs", {})
-    cf   = company_data.get("cf", {})
+    sections = company_data.get("sections", {})
+    std_is = sections.get("standardized_income_statement") or sections.get("income_statement")
+    std_bs = sections.get("standardized_balance_sheet") or sections.get("balance_sheet")
+    std_cf = sections.get("standardized_cash_flow") or sections.get("cash_flow")
 
-    def last(arr) -> Optional[float]:
-        if not arr:
+    def _parse_items(sec) -> dict:
+        if not sec:
+            return {}
+        # If it's a dict (from model_dump / dict()), access key "items"
+        if isinstance(sec, dict):
+            raw_items = sec.get("items")
+            if isinstance(raw_items, list):
+                return {
+                    (it.get("label") if isinstance(it, dict) else getattr(it, "label", "")): 
+                    (it.get("values") if isinstance(it, dict) else getattr(it, "values", {}))
+                    for it in raw_items
+                }
+            return {}
+        # If it's a Pydantic object
+        if hasattr(sec, "items") and isinstance(sec.items, list):
+            return {
+                getattr(it, "label", ""): getattr(it, "values", {})
+                for it in sec.items
+                if not getattr(it, "is_unmapped", False)
+            }
+        return {}
+
+    is_items = _parse_items(std_is)
+    bs_items = _parse_items(std_bs)
+    cf_items = _parse_items(std_cf)
+
+    def get_latest(v_dict: dict) -> Optional[float]:
+        if not v_dict or not isinstance(v_dict, dict):
             return None
+        valid_vals = [float(v) for v in v_dict.values() if v is not None]
+        return valid_vals[-1] if valid_vals else None
+
+    # Fallback to flat arrays if passed from unified payload
+    is_ = company_data.get("income_statement", {})
+    bs  = company_data.get("bs", {})
+    cf  = company_data.get("cf", {})
+
+    def last_arr(arr) -> Optional[float]:
+        if not arr: return None
         v = arr[-1]
         return float(v) if v is not None and v != 0 else None
 
     try:
+        rev = get_latest(is_items.get("Revenue / Turnover") or is_items.get("Total revenue") or is_items.get("Special Commission Income") or is_items.get("Revenue")) or last_arr(is_.get("rev"))
+        net = get_latest(is_items.get("Net Profit for the Period") or is_items.get("Net Profit Attributable to Shareholders of Parent") or is_items.get("Profit (loss) for the period")) or last_arr(is_.get("net"))
+        gp = get_latest(is_items.get("Gross Profit") or is_items.get("إجمالي الربح") or is_items.get("Special commission income, net")) or last_arr(is_.get("gp"))
+        op = get_latest(is_items.get("Operating Income") or is_items.get("الربح التشغيلي") or is_items.get("Total operating income")) or last_arr(is_.get("op"))
+
+        eq = get_latest(bs_items.get("Total Equity") or bs_items.get("Total Equity Attributable to Shareholders") or bs_items.get("إجمالي حقوق الملكية")) or last_arr(bs.get("total_equity"))
+        ca = get_latest(bs_items.get("Total Current Assets") or bs_items.get("إجمالي الأصول المتداولة")) or last_arr(bs.get("current_assets"))
+        cl = get_latest(bs_items.get("Total Current Liabilities") or bs_items.get("إجمالي الالتزامات المتداولة")) or last_arr(bs.get("current_liabilities"))
+
+        st_b = get_latest(bs_items.get("Short-term Borrowings & Debt") or bs_items.get("Short-term Debt & Current Portion of Long-term Debt") or {}) or 0.0
+        cp_l = get_latest(bs_items.get("Current Portion of Long-term Debt") or {}) or 0.0
+        lt_b = get_latest(bs_items.get("Long-term Borrowings & Debt") or bs_items.get("مرابحات، غير متداولة") or bs_items.get("صكوك وسندات، غير متداولة") or {}) or 0.0
+        sd = (st_b + cp_l) if (st_b or cp_l) else (last_arr(bs.get("short_debt")) or 0.0)
+        ld = lt_b if lt_b else (last_arr(bs.get("long_debt")) or 0.0)
+
+        cfo = get_latest(cf_items.get("Net Cash from Operating Activities (CFO)") or cf_items.get("Net cash flows from (used in) operations") or {}) or last_arr(cf.get("cfo"))
+
         if metric == "nm":
-            rev = last(is_.get("rev"))
-            net = last(is_.get("net"))
-            if rev and net is not None:
-                return (net / rev) * 100
+            if rev and rev > 0 and net is not None:
+                return round((net / rev) * 100, 2)
         elif metric == "gm":
-            rev = last(is_.get("rev"))
-            gp  = last(is_.get("gp"))
-            if rev and gp is not None:
-                return (gp / rev) * 100
+            if rev and rev > 0 and gp is not None:
+                return round((gp / rev) * 100, 2)
         elif metric == "opm":
-            rev = last(is_.get("rev"))
-            op  = last(is_.get("op"))
-            if rev and op is not None:
-                return (op / rev) * 100
+            if rev and rev > 0 and op is not None:
+                return round((op / rev) * 100, 2)
         elif metric == "roe":
-            net = last(is_.get("net"))
-            eq  = last(bs.get("total_equity"))
             if eq and eq > 0 and net is not None:
-                return (net / eq) * 100
+                return round((net / eq) * 100, 2)
         elif metric == "de":
-            sd = last(bs.get("short_debt")) or 0.0
-            ld = last(bs.get("long_debt"))  or 0.0
-            eq = last(bs.get("total_equity"))
             if eq and eq > 0:
-                return (sd + ld) / eq
+                return round((sd + ld) / eq, 2)
         elif metric == "current":
-            ca = last(bs.get("current_assets"))
-            cl = last(bs.get("current_liabilities"))
             if ca and cl and cl > 0:
-                return ca / cl
+                return round(ca / cl, 2)
         elif metric == "cfo_ni":
-            cfo = last(cf.get("cfo"))
-            net = last(is_.get("net"))
             if cfo is not None and net and net != 0:
-                return (cfo / net) * 100
+                return round((cfo / net) * 100, 2)
         elif metric == "revenue":
-            return last(is_.get("rev"))
+            if rev is not None:
+                return round(rev / 1_000_000.0, 1) if rev > 50_000_000 else round(rev, 1)
     except Exception:
         pass
     return None

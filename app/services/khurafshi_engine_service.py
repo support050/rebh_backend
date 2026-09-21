@@ -547,6 +547,11 @@ def get_khurafshi_live_market_stats(force_refresh: bool = False) -> Dict[str, An
         "checklists_count": checklists_count,
         "audit_matrix": audit_matrix
     }
+    _STATS_CACHE = result
+    _STATS_CACHE_TIMESTAMP = now
+    return result
+
+
 _UNIVERSE_CACHE: Optional[List[Dict[str, Any]]] = None
 _UNIVERSE_CACHE_TIMESTAMP: float = 0.0
 _UNIVERSE_CACHE_TTL = 300.0  # 5 minutes cache

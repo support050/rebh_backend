@@ -514,10 +514,19 @@ def get_company_unified_page_data(symbol: str) -> Dict[str, Any]:
         selected_bs_periods.append(bs_periods[-1])
     selected_bs_periods = selected_bs_periods[-7:]
 
+    st_b = bs_items.get("Short-term Borrowings & Debt") or bs_items.get("قروض قصيرة الأجل") or {}
+    cp_ld = bs_items.get("Current Portion of Long-term Debt") or bs_items.get("الجزء المتداول من ديون طويلة الأجل") or {}
+    combined_short_debt = {}
+    all_st_keys = set(st_b.keys()) | set(cp_ld.keys())
+    for k in all_st_keys:
+        v1 = st_b.get(k)
+        v2 = cp_ld.get(k)
+        if v1 is not None or v2 is not None:
+            combined_short_debt[k] = (float(v1) if v1 is not None else 0.0) + (float(v2) if v2 is not None else 0.0)
+
     short_debt_vals = (
-        bs_items.get("Short-term Borrowings & Debt")
+        combined_short_debt
         or bs_items.get("Short-term Debt & Current Portion of Long-term Debt")
-        or bs_items.get("قروض قصيرة الأجل")
         or {}
     )
     long_debt_vals = (
@@ -542,7 +551,16 @@ def get_company_unified_page_data(symbol: str) -> Dict[str, Any]:
         "long_debt": _scale_series(long_debt_vals, selected_bs_periods),
         "total_liabilities": _scale_series(bs_items.get("Total Liabilities", {}), selected_bs_periods),
         "capital": _scale_series(bs_items.get("Share Capital", {}), selected_bs_periods),
-        "retained_earnings": _scale_series(bs_items.get("Retained Earnings / (Accumulated Losses)", {}), selected_bs_periods),
+        "retained_earnings": _scale_series(
+            bs_items.get("Retained Earnings / (Accumulated Losses)")
+            or bs_items.get("Retained Earnings")
+            or bs_items.get("Retained Earnings/(Accumulated Losses)")
+            or bs_items.get("الأرباح المبقاة / (الخسائر المتراكمة)")
+            or bs_items.get("أرباح مبقاة")
+            or bs_items.get("Reserves and Retained Earnings")
+            or {},
+            selected_bs_periods,
+        ),
         "total_equity": _scale_series(bs_items.get("Total Equity", {}) or bs_items.get("Total Equity Attributable to Shareholders", {}), selected_bs_periods),
         "equity": _scale_series(bs_items.get("Total Equity", {}) or bs_items.get("Total Equity Attributable to Shareholders", {}), selected_bs_periods),
         "total_debt": [
@@ -559,6 +577,16 @@ def get_company_unified_page_data(symbol: str) -> Dict[str, Any]:
             )
         ],
     }
+
+    # ── Fallback: derive retained_earnings from (equity − capital) when XBRL label was not matched ──
+    re_vals = bs_data["retained_earnings"]
+    if all(v == 0 for v in re_vals):
+        eq_vals = bs_data["total_equity"]
+        cap_vals = bs_data["capital"]
+        if any(e != 0 for e in eq_vals) and any(c != 0 for c in cap_vals):
+            bs_data["retained_earnings"] = [
+                round(e - c, 1) for e, c in zip(eq_vals, cap_vals)
+            ]
 
     cf_periods = std_cf.periods if std_cf and std_cf.periods else []
     selected_cf_periods = [p for p in cf_periods if p.endswith("_" + p.split("_")[0] + "-12") or p.endswith("-12")]

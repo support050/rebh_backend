@@ -1433,18 +1433,21 @@ def get_company_council_audit(
     Returns automated accounting red flags, forensics, bank flags (if applicable),
     plus saved interactive checklist scores for the specified company.
     """
-    sym = symbol.strip().upper()
+    sym = symbol.strip()
     comp = get_company(sym)
     if not comp:
         raise HTTPException(status_code=404, detail=f"Company {sym} not found")
 
     user_id = current_user.id if current_user else None
 
-    # Load saved user checklist if available
-    saved = db.query(CouncilCompanyChecklist).filter(
-        CouncilCompanyChecklist.user_id == user_id,
-        CouncilCompanyChecklist.symbol == sym
-    ).first()
+    # Anonymous users: skip DB entirely — no shared null-keyed rows.
+    # They still get the full automated audit, just no saved checklist.
+    saved = None
+    if user_id is not None:
+        saved = db.query(CouncilCompanyChecklist).filter(
+            CouncilCompanyChecklist.user_id == user_id,
+            CouncilCompanyChecklist.symbol == sym
+        ).first()
 
     fisher_saved = json.loads(saved.fisher_scores) if saved and saved.fisher_scores else {}
     danger_saved = json.loads(saved.danger_flags) if saved and saved.danger_flags else []
@@ -1457,35 +1460,63 @@ def get_company_council_audit(
     trust = get_trust_badge_status(sym)
 
     # Automated bank audit if banking sector
-    is_bank = False
+    meta = comp.meta if hasattr(comp, "meta") and comp.meta else None
+    sec = (getattr(meta, "sector", "") or "")
+    comp_name = (getattr(meta, "company_name", sym) or sym)
+
+    # Narrow list — insurance/investment/financing companies must NOT be treated as banks
+    BANK_KEYWORDS = ["bank", "بنك", "مصرف", "بنوك"]
+    is_bank = any(kw in sec.lower() for kw in BANK_KEYWORDS)
     bank_audit = None
-    sec = comp.get("sector") or ""
-    if "bank" in sec.lower() or "financial" in sec.lower():
-        is_bank = True
+    if is_bank:
         try:
             bank_audit = calculate_bank_metrics(sym)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("bank metrics failed for %s: %s", sym, e)
+
+    # Map signal types → checklist flag IDs for reliable pre-ticking.
+    # Only map when the signal *directly* calculates that specific item.
+    SIGNAL_TYPE_TO_FLAG_IDS: dict[str, list[str]] = {
+        "receivables_risk": ["receivables"],
+        "ocf_decline": ["ocf_decline"],
+        "inventory_cf_divergence": ["vanishing_cf"],
+    }
+    raw_signals = signals.get("signals", [])
+    auto_flag_ids: list[str] = []
+    auto_flag_reasons: dict[str, str] = {}
+    for sig in raw_signals:
+        if isinstance(sig, dict):
+            stype = sig.get("type", "")
+            sreason = sig.get("text", "")
+            for fid in SIGNAL_TYPE_TO_FLAG_IDS.get(stype, []):
+                if fid not in auto_flag_ids:
+                    auto_flag_ids.append(fid)
+                if fid not in auto_flag_reasons and sreason:
+                    auto_flag_reasons[fid] = sreason
 
     return {
         "symbol": sym,
-        "name_en": comp.get("name_en", sym),
-        "name_ar": comp.get("name_ar", sym),
+        "name_en": comp_name,
+        "name_ar": comp_name,
         "sector": sec,
         "is_bank": is_bank,
         "automated_audit": {
-            "signals": signals.get("signals", []),
+            "signals": raw_signals,
+            "auto_flag_ids": auto_flag_ids,
+            "auto_flag_reasons": auto_flag_reasons,
             "trust_badge": trust,
             "bank_flags": bank_audit.get("metrics", {}).get("flags", []) if bank_audit else []
         },
+        # None when the user has never saved — lets the frontend distinguish
+        # "never saved" from "saved with empty lists".
         "saved_checklist": {
             "fisher_scores": fisher_saved,
             "danger_flags": danger_saved,
             "red_flags": red_saved,
             "bank_flags": bank_saved,
             "notes": user_notes,
-            "updated_at": saved.updated_at.isoformat() if saved and saved.updated_at else None
-        }
+            "updated_at": saved.updated_at.isoformat() if saved.updated_at else None,
+        } if saved else None,
     }
 
 
@@ -1501,6 +1532,13 @@ def save_company_council_checklist(
     """
     sym = symbol.strip().upper()
     user_id = current_user.id if current_user else None
+
+    # Reject anonymous saves — prevents all visitors from sharing a single null-keyed row.
+    if user_id is None:
+        raise HTTPException(
+            status_code=401,
+            detail="يجب تسجيل الدخول لحفظ قائمة التدقيق"
+        )
 
     row = db.query(CouncilCompanyChecklist).filter(
         CouncilCompanyChecklist.user_id == user_id,

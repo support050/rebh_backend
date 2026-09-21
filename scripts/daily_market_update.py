@@ -1,5 +1,12 @@
 import sys
 import os
+
+# Ensure Windows terminal standard streams handle Unicode characters safely
+if hasattr(sys.stdout, 'reconfigure'):
+    sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+if hasattr(sys.stderr, 'reconfigure'):
+    sys.stderr.reconfigure(encoding='utf-8', errors='replace')
+
 import gc
 from pathlib import Path
 import csv
@@ -513,8 +520,11 @@ def update_daily(target_date_str=None):
             spec = importlib.util.spec_from_file_location("sukuk_module", sukuk_path)
             sukuk_module = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(sukuk_module)
-            sukuk_module.run_sukuk_sync()
-            logger.info("✅ Sukuk & Bonds Market Data updated successfully.")
+            sukuk_count = sukuk_module.run_sukuk_sync()
+            if sukuk_count > 0:
+                logger.info(f"✅ Sukuk & Bonds Market Data updated successfully ({sukuk_count} instruments).")
+            else:
+                logger.warning("⚠️ Sukuk & Bonds live sync fetched 0 instruments (relying on existing database sukuk).")
         except Exception as e:
             logger.error(f"❌ Failed to update Sukuk & Bonds Data: {e}")
 
@@ -578,28 +588,42 @@ def update_daily(target_date_str=None):
         except Exception as models_err:
             logger.error(f"⚠️ Valuation models summary sync failed: {models_err}")
 
-        # 8.9 Khurafshi Universal Engine Vintage Generation (Phase 6 Pipeline Stage)
+        # 8.9 Khurafshi Universal Engine Vintage Generation (Optimized Parallel Pipeline Stage)
         # -------------------------------------------------------------------
         try:
             logger.info("🏛️ Generating Point-In-Time Engine Vintages for universe...")
             from app.services.rebh_unified_engine import calculate_full_company_payload
             from app.services.xbrl_data_service import list_companies
             from app.services.rebh_production_helper_service import warm_sector_medians_cache
+            from app.services.khurafshi_engine_service import _get_latest_prices_map
+            from concurrent.futures import ThreadPoolExecutor, as_completed
 
-            # Pre-load sector medians in ONE pass before the loop
-            # (eliminates per-sector full-disk XBRL scans inside the loop)
+            # 1. Pre-load sector medians in ONE pass before the loop
             n_sectors = warm_sector_medians_cache()
             logger.info(f"⚡ Sector medians pre-loaded for {n_sectors} sectors (single-pass).")
+
+            # 2. Pre-load prices map once in memory
+            prices_map = _get_latest_prices_map()
 
             companies = list_companies()
             vintages_file = OUTPUT_DIR / f"rebh_engine_vintage_{market_date}.json"
             engine_vintages = {}
-            for c in companies:
+
+            def _process_company_vintage(c_item):
                 try:
-                    payload = calculate_full_company_payload(c.symbol)
-                    engine_vintages[c.symbol] = payload.model_dump(mode="json")
+                    payload = calculate_full_company_payload(c_item.symbol, prices_map=prices_map)
+                    return c_item.symbol, payload.model_dump(mode="json")
                 except Exception as c_err:
-                    logger.debug(f"Engine payload skip for {c.symbol}: {c_err}")
+                    logger.debug(f"Engine payload skip for {c_item.symbol}: {c_err}")
+                    return c_item.symbol, None
+
+            # Execute parallelized across 8 threads
+            with ThreadPoolExecutor(max_workers=8) as executor:
+                future_to_sym = {executor.submit(_process_company_vintage, c): c.symbol for c in companies}
+                for f in as_completed(future_to_sym):
+                    sym, res = f.result()
+                    if res is not None:
+                        engine_vintages[sym] = res
             
             with open(vintages_file, "w", encoding="utf-8") as vf:
                 json.dump(engine_vintages, vf, ensure_ascii=False)

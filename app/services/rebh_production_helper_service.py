@@ -670,29 +670,33 @@ def warm_sector_medians_cache() -> int:
                 c_sec = (cdata.get("meta", {}).get("sector") or "").strip()
                 if not c_sec:
                     continue
-                is_sec = cdata.get("sections", {}).get("income_statement", {})
-                items = is_sec.get("items", {})
+                is_sec = cdata.get("sections", {}).get("standardized_income_statement", {})
+                items = is_sec.get("items", [])
                 periods = is_sec.get("periods", [])
-                if not periods:
+                if not periods or not items:
                     continue
                 p_last = periods[-1]
+                p_prev = periods[-5] if len(periods) >= 5 else None
+
                 rev_curr = rev_prev = ni = None
-                for k, v in items.items():
-                    if re.search(r"Revenue|Turnover", k, re.IGNORECASE):
-                        rev_curr = v.get(p_last)
-                        if len(periods) >= 5:
-                            rev_prev = v.get(periods[-5])
-                    elif re.search(r"Net Profit|Net Income", k, re.IGNORECASE):
-                        ni = v.get(p_last)
+                for it in items:
+                    lbl = it.get("label") or ""
+                    vals = it.get("values", {})
+                    if lbl == "Revenue / Turnover":
+                        rev_curr = vals.get(p_last)
+                        if p_prev:
+                            rev_prev = vals.get(p_prev)
+                    elif lbl == "Net Profit for the Period":
+                        ni = vals.get(p_last)
 
                 bucket = buckets.setdefault(c_sec, {"npms": [], "growths": []})
                 if rev_curr and ni and rev_curr > 0 and ni > 0:
                     npm = (ni / rev_curr) * 100.0
-                    if 0.0 < npm < 80.0:
+                    if 0.0 < npm < 90.0:
                         bucket["npms"].append(npm)
                 if rev_curr and rev_prev and rev_curr > 0 and rev_prev > 0:
                     g = ((rev_curr / rev_prev) - 1.0) * 100.0
-                    if -40.0 < g < 60.0:
+                    if -50.0 < g < 80.0:
                         bucket["growths"].append(g)
             except Exception:
                 continue
@@ -700,11 +704,11 @@ def warm_sector_medians_cache() -> int:
         for sec_name, data in buckets.items():
             npms = data["npms"]
             growths = data["growths"]
-            if len(npms) >= 3:
+            if len(npms) >= 1:
                 _SECTOR_MEDIANS_CACHE[sec_name] = {
                     "sector": sec_name,
                     "median_npm_pct": round(statistics.median(npms), 1),
-                    "expected_growth_pct": round(statistics.median(growths), 1) if len(growths) >= 3 else 7.0,
+                    "expected_growth_pct": round(statistics.median(growths), 1) if growths else 7.0,
                     "sample_size": len(npms),
                     "growth_sample_size": len(growths),
                     "source": "Data-Derived Sector Medians (Full XBRL Universe — pre-loaded)",
@@ -722,8 +726,7 @@ def get_sector_margin_and_growth(sector: str) -> Dict[str, Any]:
 
     - If warm_sector_medians_cache() was called beforehand (universe loop),
       this is an O(1) dict lookup — zero disk I/O.
-    - If not pre-warmed, falls back to single-sector on-demand derivation
-      (legacy behaviour) then stores the result in the cache.
+    - If not pre-warmed or not found, uses calibrated baseline and caches result.
     """
     global _SECTOR_MEDIANS_CACHE
 
@@ -731,62 +734,7 @@ def get_sector_margin_and_growth(sector: str) -> Dict[str, Any]:
     if sector in _SECTOR_MEDIANS_CACHE:
         return _SECTOR_MEDIANS_CACHE[sector]
 
-    # Slow path: on-demand derivation for this one sector (not pre-warmed)
-    try:
-        import json, statistics
-        from app.services.xbrl_data_service import _all_json_files
-
-        sector_npms: list = []
-        sector_growths: list = []
-        target_s = (sector or "").lower()
-
-        for fp in _all_json_files():
-            try:
-                with open(fp, encoding="utf-8") as f:
-                    cdata = json.load(f)
-                c_sec = (cdata.get("meta", {}).get("sector") or "").lower()
-                if not (c_sec and (c_sec == target_s or any(w in c_sec for w in target_s.split() if len(w) > 3))):
-                    continue
-                is_sec = cdata.get("sections", {}).get("income_statement", {})
-                items = is_sec.get("items", {})
-                periods = is_sec.get("periods", [])
-                if not periods:
-                    continue
-                p_last = periods[-1]
-                rev_curr = rev_prev = ni = None
-                for k, v in items.items():
-                    if re.search(r"Revenue|Turnover", k, re.IGNORECASE):
-                        rev_curr = v.get(p_last)
-                        if len(periods) >= 5:
-                            rev_prev = v.get(periods[-5])
-                    elif re.search(r"Net Profit|Net Income", k, re.IGNORECASE):
-                        ni = v.get(p_last)
-                if rev_curr and ni and rev_curr > 0 and ni > 0:
-                    npm = (ni / rev_curr) * 100.0
-                    if 0.0 < npm < 80.0:
-                        sector_npms.append(npm)
-                if rev_curr and rev_prev and rev_curr > 0 and rev_prev > 0:
-                    g = ((rev_curr / rev_prev) - 1.0) * 100.0
-                    if -40.0 < g < 60.0:
-                        sector_growths.append(g)
-            except Exception:
-                continue
-
-        if len(sector_npms) >= 3:
-            res = {
-                "sector": sector,
-                "median_npm_pct": round(statistics.median(sector_npms), 1),
-                "expected_growth_pct": round(statistics.median(sector_growths), 1) if len(sector_growths) >= 3 else 7.0,
-                "sample_size": len(sector_npms),
-                "growth_sample_size": len(sector_growths),
-                "source": "Data-Derived Sector Medians (Full XBRL Universe)",
-            }
-            _SECTOR_MEDIANS_CACHE[sector] = res
-            return res
-    except Exception:
-        pass
-
-    # Baseline calibrated defaults
+    # Baseline calibrated defaults cached immediately to avoid repeated lookups
     res = _sector_baseline(sector)
     _SECTOR_MEDIANS_CACHE[sector] = res
     return res

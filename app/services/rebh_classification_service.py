@@ -38,30 +38,34 @@ _SECTOR_LOOKUP_CACHE: Dict[str, Any] = {"timestamp": 0.0, "data": {}}
 
 def get_sector_from_prices_db(symbol: str) -> Optional[str]:
     """
-    Directly query the official sector for a company from the PostgreSQL prices table.
-    No CSV dependencies, no hardcoded mappings, 100% real database records.
+    Directly query official sectors using a single indexed bulk query on the latest date.
+    Cached in-memory to eliminate 238 roundtrips to Postgres.
     """
     import time
     global _SECTOR_LOOKUP_CACHE
     now = time.time()
     sym_str = str(symbol).strip().upper()
+
     if _SECTOR_LOOKUP_CACHE["data"] and (now - _SECTOR_LOOKUP_CACHE["timestamp"] < 300):
-        if sym_str in _SECTOR_LOOKUP_CACHE["data"]:
-            return _SECTOR_LOOKUP_CACHE["data"][sym_str]
+        return _SECTOR_LOOKUP_CACHE["data"].get(sym_str)
 
     from app.core.database import SessionLocal
-    from app.models.price import Price
-    from sqlalchemy import desc
+    from sqlalchemy import text as sa_text
 
     db = SessionLocal()
+    m: Dict[str, str] = {}
     try:
-        row = db.query(Price.sector).filter(Price.symbol == sym_str).filter(Price.sector.isnot(None)).order_by(desc(Price.date)).first()
-        if row and row[0]:
-            if not _SECTOR_LOOKUP_CACHE["data"]:
-                _SECTOR_LOOKUP_CACHE["data"] = {}
-            _SECTOR_LOOKUP_CACHE["data"][sym_str] = row[0]
-            _SECTOR_LOOKUP_CACHE["timestamp"] = now
-            return row[0]
+        # One fast indexed query for all latest sectors
+        rows = db.execute(sa_text("""
+            SELECT DISTINCT ON (symbol) symbol, sector 
+            FROM prices 
+            WHERE sector IS NOT NULL AND sector != ''
+            ORDER BY symbol, date DESC
+        """)).fetchall()
+        for r in rows:
+            m[str(r[0]).strip().upper()] = r[1]
+        _SECTOR_LOOKUP_CACHE = {"timestamp": now, "data": m}
+        return m.get(sym_str)
     except Exception:
         pass
     finally:
@@ -102,7 +106,11 @@ def _get_all_classification_overrides():
     return _CLASSIFICATION_OVERRIDES_CACHE["data"]
 
 
-def get_company_classification(symbol: str, sector: Optional[str] = None) -> Dict[str, Any]:
+def get_company_classification(
+    symbol: str, 
+    sector: Optional[str] = None,
+    comp: Optional[Any] = None
+) -> Dict[str, Any]:
     """
     Returns the classification for a company, strictly powered by:
     1. Owner-editable DB override (if saved in company_classification_overrides).
@@ -115,8 +123,9 @@ def get_company_classification(symbol: str, sector: Optional[str] = None) -> Dic
     if sym_str in overrides_map:
         return overrides_map[sym_str]
 
-    from app.services.xbrl_data_service import get_company
-    comp = get_company(sym_str)
+    if comp is None:
+        from app.services.xbrl_data_service import get_company
+        comp = get_company(sym_str)
     
     # 1. Resolve official sector directly from PostgreSQL prices table
     real_sector = sector or get_sector_from_prices_db(sym_str)

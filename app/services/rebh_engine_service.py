@@ -212,24 +212,135 @@ calculate_provisions_signal = calculate_provisions_watch
 provisions_watch = calculate_provisions_watch
 
 
+def calculate_receivables_risk(
+    rec_now: Optional[float],
+    rec_prev: Optional[float],
+    rev_now: Optional[float],
+    rev_prev: Optional[float]
+) -> Optional[Dict[str, Any]]:
+    """
+    Detect receivables rising substantially faster than sales.
+    Trigger when:
+      - Receivables grow at least 5% YoY
+      - Receivables YoY exceeds Revenue YoY by more than 10 percentage points
+    """
+    if None in (rec_now, rec_prev, rev_now, rev_prev):
+        return None
+    if rec_prev <= 0 or rev_prev <= 0:
+        return None
+
+    rec_yoy = ((rec_now / rec_prev) - 1.0) * 100.0
+    rev_yoy = ((rev_now / rev_prev) - 1.0) * 100.0
+    gap = rec_yoy - rev_yoy
+
+    if rec_yoy > 5.0 and gap > 10.0:
+        return {
+            "type": "receivables_risk",
+            "neg": True,
+            "status": "danger",
+            "rule": "الذمم المدينة ترتفع أسرع من المبيعات",
+            "text": f"نمو الذمم المدينة ({_pct(rec_yoy)}) فاق نمو المبيعات ({_pct(rev_yoy)}) بفارق {gap:.1f} نقطة — بيع دون تحصيل نقدي"
+        }
+    return None
+
+
+def calculate_ocf_decline(
+    cfo_now: Optional[float],
+    cfo_prev: Optional[float]
+) -> Optional[Dict[str, Any]]:
+    """
+    Detect operating cash flow that was positive and is now declining sharply (> 15% YoY).
+    """
+    if cfo_now is None or cfo_prev is None:
+        return None
+
+    # Base was healthy (> 0)
+    if cfo_prev > 0:
+        cfo_yoy = ((cfo_now / cfo_prev) - 1.0) * 100.0
+        if cfo_yoy < -15.0:
+            if cfo_now < 0:
+                text = f"تحول التدفق النقدي التشغيلي إلى سالب ({cfo_now:,.0f} مقابل {cfo_prev:,.0f} سابقاً)"
+            else:
+                text = f"تراجع التدفق النقدي التشغيلي بنسبة {abs(cfo_yoy):.1f}% (من {cfo_prev:,.0f} إلى {cfo_now:,.0f})"
+            return {
+                "type": "ocf_decline",
+                "neg": True,
+                "status": "danger",
+                "rule": "تراجع التدفق النقدي التشغيلي",
+                "text": text
+            }
+    elif cfo_prev <= 0 and cfo_now < cfo_prev:
+        return {
+            "type": "ocf_decline",
+            "neg": True,
+            "status": "danger",
+            "rule": "تراجع التدفق النقدي التشغيلي",
+            "text": f"تفاقم العجز في التدفق التشغيلي من {cfo_prev:,.0f} إلى {cfo_now:,.0f}"
+        }
+    return None
+
+
+def calculate_vanishing_cf(
+    inv_now: Optional[float],
+    inv_prev: Optional[float],
+    cfo_now: Optional[float],
+    cfo_prev: Optional[float]
+) -> Optional[Dict[str, Any]]:
+    """
+    Detect inventory accumulating (> 10% YoY) while operating cash flow contracts (> 10% decline).
+    """
+    if None in (inv_now, inv_prev, cfo_now, cfo_prev):
+        return None
+    if inv_prev <= 0:
+        return None
+
+    inv_yoy = ((inv_now / inv_prev) - 1.0) * 100.0
+
+    cfo_declining = False
+    cfo_yoy_val = 0.0
+    if cfo_prev > 0:
+        cfo_yoy_val = ((cfo_now / cfo_prev) - 1.0) * 100.0
+        if cfo_yoy_val < -10.0:
+            cfo_declining = True
+    elif cfo_now < cfo_prev:
+        cfo_declining = True
+        cfo_yoy_val = -100.0
+
+    if inv_yoy > 10.0 and cfo_declining:
+        return {
+            "type": "inventory_cf_divergence",
+            "neg": True,
+            "status": "danger",
+            "rule": "تدفق نقدي متلاشٍ مع تراكم المخزون",
+            "text": f"تراكم المخزون ({_pct(inv_yoy)}) بالتزامن مع انكماش التدفق التشغيلي ({_pct(cfo_yoy_val)})"
+        }
+    return None
+
+
 def get_company_signals(symbol: str) -> Dict[str, Any]:
     """Extract all active financial signals for a given symbol."""
     company = get_company(symbol)
     if not company:
         return {"symbol": symbol, "signals": []}
     
-    sections = company.sections
+    sections = company.sections or {}
     std_is = sections.get("standardized_income_statement")
+    std_bs = sections.get("standardized_balance_sheet")
+    std_cf = sections.get("standardized_cash_flow")
+
     if not std_is or not std_is.items:
         return {"symbol": symbol, "signals": []}
     
     is_items = {it.label: it.values for it in std_is.items if not getattr(it, "is_unmapped", False)}
-    periods = std_is.periods
+    bs_items = {it.label: it.values for it in (std_bs.items if std_bs else []) if not getattr(it, "is_unmapped", False)}
+    cf_items = {it.label: it.values for it in (std_cf.items if std_cf else []) if not getattr(it, "is_unmapped", False)}
+
+    is_periods = std_is.periods
     
-    # Extract quarterly sequences
-    q_net = [is_items.get("Net Profit for the Period", {}).get(p) for p in periods]
-    q_rev = [is_items.get("Revenue / Turnover", {}).get(p) for p in periods]
-    q_op = [is_items.get("Operating Income (EBIT)", {}).get(p) for p in periods]
+    # Extract quarterly sequences from income statement
+    q_net = [is_items.get("Net Profit for the Period", {}).get(p) for p in is_periods]
+    q_rev = [is_items.get("Revenue / Turnover", {}).get(p) for p in is_periods]
+    q_op = [is_items.get("Operating Income (EBIT)", {}).get(p) for p in is_periods]
     
     signals = []
     
@@ -252,6 +363,114 @@ def get_company_signals(symbol: str) -> Dict[str, Any]:
         s_lev = calculate_operating_leverage(latest_rev_yoy, latest_op_yoy)
         if s_lev:
             signals.append(s_lev)
+
+    # 4. Forensics / Red Flags calculation using BS, IS, and CF
+    meta = company.meta if hasattr(company, "meta") and company.meta else None
+    sec = (getattr(meta, "sector", "") or "").lower()
+
+    # Financial / banking / insurance companies have distinct business models:
+    # - "Receivables" and "Inventories" are manufacturing/commercial concepts and not applicable.
+    is_financial_institution = any(k in sec for k in ["bank", "بنك", "مصرف", "بنوك", "insurance", "تأمين", "financial"])
+
+    def _find_yoy_prior_period(periods: List[str], target_p: str) -> Optional[str]:
+        """
+        Find exact 1-year prior period (same quarter of previous year).
+        Handles:
+          - Balance sheet dates: 'YYYY-MM' -> 'YYYY-1-MM'
+          - Cash flow cumulative / ranges: 'YYYY-01_YYYY-MM' -> 'YYYY-1-01_YYYY-1-MM'
+        Prevents comparison distortion if historical quarters are skipped in XBRL filings.
+        """
+        if not target_p:
+            return None
+        if len(target_p) == 7 and target_p[4] == "-":
+            try:
+                y, m = int(target_p[:4]), target_p[5:]
+                prior = f"{y - 1:04d}-{m}"
+                return prior if prior in periods else None
+            except ValueError:
+                pass
+        if "_" in target_p:
+            parts = target_p.split("_")
+            if len(parts) == 2 and len(parts[0]) == 7 and len(parts[1]) == 7:
+                try:
+                    y1, m1 = int(parts[0][:4]), parts[0][5:]
+                    y2, m2 = int(parts[1][:4]), parts[1][5:]
+                    prior = f"{y1 - 1:04d}-{m1}_{y2 - 1:04d}-{m2}"
+                    return prior if prior in periods else None
+                except ValueError:
+                    pass
+        # Fallback: if period list is long enough and exact match wasn't found by string,
+        # use 4 quarters back ONLY if at least 5 quarters exist
+        if len(periods) >= 5 and target_p == periods[-1]:
+            return periods[-5]
+        return None
+
+    # Balance sheet items
+    rec_dict = bs_items.get("Trade and Other Receivables", {})
+    inv_dict = bs_items.get("Inventories", {}) or bs_items.get("Inventory", {})
+    bs_periods = [p for p in (std_bs.periods if std_bs else []) if p in rec_dict or p in inv_dict]
+
+    # Cash flow items (NOTE: In Saudi XBRL filings, quarterly cash flows are cumulative
+    # within the fiscal year e.g. 3M, 6M, 9M, 12M. Comparing the same period YoY e.g.
+    # 2026-01_2026-03 with 2025-01_2025-03 compares identical cumulative windows, avoiding distortion).
+    cfo_dict = (
+        cf_items.get("Net Cash from Operating Activities (CFO)", {})
+        or cf_items.get("Net Cash Flows from Operating Activities", {})
+    )
+    cf_periods = [p for p in (std_cf.periods if std_cf else []) if p in cfo_dict]
+
+    rev_dict = is_items.get("Revenue / Turnover", {})
+
+    # 4a. Receivables vs Sales Risk (Commercial / Industrial only)
+    if not is_financial_institution and bs_periods:
+        p_now_bs = bs_periods[-1]
+        p_prev_bs = _find_yoy_prior_period(bs_periods, p_now_bs)
+        if p_prev_bs:
+            rec_now = rec_dict.get(p_now_bs)
+            rec_prev = rec_dict.get(p_prev_bs)
+
+            # Match corresponding Revenue periods
+            rev_now = None
+            rev_prev = None
+            for ip in is_periods:
+                if ip.endswith(p_now_bs):
+                    rev_now = rev_dict.get(ip)
+                if ip.endswith(p_prev_bs):
+                    rev_prev = rev_dict.get(ip)
+
+            s_rec = calculate_receivables_risk(rec_now, rec_prev, rev_now, rev_prev)
+            if s_rec:
+                signals.append(s_rec)
+
+    # 4b. OCF Decline (Applies across operating companies)
+    if cf_periods:
+        p_now_cf = cf_periods[-1]
+        p_prev_cf = _find_yoy_prior_period(cf_periods, p_now_cf)
+        if p_prev_cf:
+            cfo_now = cfo_dict.get(p_now_cf)
+            cfo_prev = cfo_dict.get(p_prev_cf)
+
+            s_ocf = calculate_ocf_decline(cfo_now, cfo_prev)
+            if s_ocf:
+                signals.append(s_ocf)
+
+    # 4c. Vanishing Cash Flow with Inventory Pile-up (Commercial / Industrial only)
+    if not is_financial_institution and bs_periods and cf_periods:
+        p_now_bs = bs_periods[-1]
+        p_prev_bs = _find_yoy_prior_period(bs_periods, p_now_bs)
+
+        p_now_cf = cf_periods[-1]
+        p_prev_cf = _find_yoy_prior_period(cf_periods, p_now_cf)
+
+        if p_prev_bs and p_prev_cf:
+            inv_now = inv_dict.get(p_now_bs)
+            inv_prev = inv_dict.get(p_prev_bs)
+            cfo_now = cfo_dict.get(p_now_cf)
+            cfo_prev = cfo_dict.get(p_prev_cf)
+
+            s_van = calculate_vanishing_cf(inv_now, inv_prev, cfo_now, cfo_prev)
+            if s_van:
+                signals.append(s_van)
             
     company_name = getattr(company.meta, "company_name", None) if company.meta else None
     return {

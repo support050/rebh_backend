@@ -227,7 +227,8 @@ def calculate_nine_box(
 def calculate_full_company_payload(
     symbol: str,
     price_override: Optional[float] = None,
-    market_cap_override: Optional[float] = None
+    market_cap_override: Optional[float] = None,
+    prices_map: Optional[Dict[str, Any]] = None
 ) -> RebhUniversalContract:
     """
     Produces the universal contract payload for any Tadawul company.
@@ -247,15 +248,16 @@ def calculate_full_company_payload(
 
     # Classification Pillars (Dynamic & Owner-Editable)
     from app.services.rebh_classification_service import get_company_classification
-    classification = get_company_classification(symbol, sector=sec)
+    classification = get_company_classification(symbol, sector=sec, comp=company)
     ind_class = classification.get("industry_class", sec)
     mkt_form = classification.get("market_form", "Oligopoly")
     elasticity_val = classification.get("price_elasticity", "Unit Elastic")
     bcg_val = classification.get("bcg_position", "Cash Cows")
 
-    # 1. Price and Market Cap
-    from app.services.khurafshi_engine_service import _get_latest_prices_map
-    prices_map = _get_latest_prices_map()
+    # 1. Price and Market Cap (Fast In-Memory Map or fallback query)
+    if prices_map is None:
+        from app.services.khurafshi_engine_service import _get_latest_prices_map
+        prices_map = _get_latest_prices_map()
     pr_row = prices_map.get(str(symbol), {})
     px = price_override if price_override is not None else pr_row.get("close")
     mc_sar = market_cap_override * 1_000_000 if market_cap_override is not None else pr_row.get("market_cap")
