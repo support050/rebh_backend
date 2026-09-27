@@ -27,7 +27,8 @@ def calculate_bank_metrics(symbol: str) -> Dict[str, Any]:
     9. CASA ratio = (Current Accounts + Savings Accounts) / Total Customer Deposits
     10. 12 Structured Course Banking Flags
     """
-    company = get_company(symbol)
+    clean_sym = symbol.replace(".SR", "").replace(".sr", "").strip() if symbol else symbol
+    company = get_company(clean_sym)
     if not company:
         return {"symbol": symbol, "is_bank": False, "metrics": {}}
 

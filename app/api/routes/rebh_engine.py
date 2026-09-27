@@ -896,7 +896,8 @@ def get_quarantine_records() -> Dict[str, Any]:
         sec = item.get("sec")
         fresh = item.get("fresh", False)
         flags = item.get("flags", [])
-        bs_ok = item.get("bs_ok", True)
+        # None = unknown/missing (not a health pass); False = explicit failure
+        bs_ok = item.get("bs_ok", None)
         
         reasons = []
         structured_reasons = []
@@ -906,7 +907,8 @@ def get_quarantine_records() -> Dict[str, Any]:
         elif not fresh:
             reasons.append("قوائم مالية متأخرة أو غير مكتملة (Stale / Incomplete)")
             structured_reasons.append({"code": "STALE", "kind": "stale", "label": "قوائم مالية متأخرة أو غير مكتملة (Stale / Incomplete)"})
-        if not bs_ok:
+        # Only flag corruption when bs_ok is explicitly False — None means data absent, not corrupted
+        if bs_ok is False:
             reasons.append("خلل في هوية الميزانية A ≠ L + E")
             structured_reasons.append({"code": "BALANCE_IDENTITY", "kind": "corruption", "label": "خلل في هوية الميزانية A ≠ L + E"})
         if "⚑incomplete-source" in flags:
@@ -931,12 +933,14 @@ def get_quarantine_records() -> Dict[str, Any]:
                 "flags": flags
             })
             
+    from datetime import datetime, timezone
     return {
         "count": len(quarantined),
         "total_universe": len(universe),
         "quarantined_companies": quarantined,
         "status": "° verified",
-        "source": "REBH Forensic Gate & Quarantine Engine"
+        "source": "REBH Forensic Gate & Quarantine Engine",
+        "generated_at": datetime.now(timezone.utc).isoformat()
     }
 
 

@@ -38,36 +38,104 @@ from app.core.database import engine
 
 DEFAULT_OUTPUT_DIR = BACKEND_ROOT / "output" / "full_history_export"
 
+# ─── إعادة تسمية الأعمدة للعرض النهائي في الـ CSV ────────────────────────────
+# اليسار: اسم العمود في قاعدة البيانات → اليمين: الاسم المطلوب في ملف CSV
+COLUMN_RENAME_MAP = {
+    "industry_group":    "Industry Group",
+    "symbol":            "Symbol",
+    "company_name":      "Company Name",
+    "date":              "Date",
+    "open":              "Open",
+    "high":              "High",
+    "low":               "Low",
+    "close":             "Close",
+    "change":            "Change",
+    "change_percent":    "% Change",
+    "volume_traded":     "Volume Traded",
+    "value_traded_sar":  "Value Traded (SAR)",
+    "no_of_trades":      "No. of Trades",
+    # باقي أعمدة الأسعار
+    "market_cap":        "Market Cap",
+    "sector":            "Sector",
+    "industry":          "Industry",
+    "sub_industry":      "Sub Industry",
+}
+
+# الأعمدة المطلوبة إلزامياً في الملف النهائي (13 عمود)
+REQUIRED_COLUMNS = [
+    "industry_group", "symbol", "company_name", "date",
+    "open", "high", "low", "close",
+    "change", "change_percent",
+    "volume_traded", "value_traded_sar", "no_of_trades",
+]
+
 
 def get_columns_to_select():
     """
     استخراج أسماء الأعمدة من الجدولين بدقة لتفادي تكرار (symbol, date, close, company_name, id).
+    الترتيب مهم: الأعمدة الأساسية أولاً ثم المؤشرات الفنية.
     """
     insp = inspect(engine)
     price_cols_meta = insp.get_columns("prices")
     ind_cols_meta = insp.get_columns("stock_indicators")
 
-    price_cols = [c["name"] for c in price_cols_meta]
-    ind_cols = [c["name"] for c in ind_cols_meta]
+    price_cols_in_db = {c["name"] for c in price_cols_meta}
+    ind_cols_in_db = {c["name"] for c in ind_cols_meta}
 
-    # أعمدة أسعار التداول الأساسية المراد استخراجها
+    # ── أعمدة الأسعار الأساسية بالترتيب المطلوب (الأعمدة الـ 13 المطلوبة أولاً) ──
     core_price_cols = [
-        "symbol", "company_name", "date",
-        "open", "high", "low", "close",
-        "change", "change_percent",
-        "volume_traded", "value_traded_sar", "no_of_trades", "market_cap",
-        "sector", "industry", "sub_industry", "industry_group"
+        "industry_group",          # Industry Group  ← مطلوب صريحاً
+        "symbol",                  # Symbol
+        "company_name",            # Company Name
+        "date",                    # Date
+        "open",                    # Open
+        "high",                    # High
+        "low",                     # Low
+        "close",                   # Close
+        "change",                  # Change
+        "change_percent",          # % Change
+        "volume_traded",           # Volume Traded
+        "value_traded_sar",        # Value Traded (SAR)
+        "no_of_trades",            # No. of Trades
+        # أعمدة إضافية من جدول الأسعار
+        "market_cap",
+        "sector",
+        "industry",
+        "sub_industry",
     ]
-    selected_price_cols = [f"p.{c}" for c in core_price_cols if c in price_cols]
+    selected_price_cols = [f"p.{c}" for c in core_price_cols if c in price_cols_in_db]
 
-    # استبعاد الأعمدة المتكررة أو أعمدة النظام من جدول المؤشرات
+    # ── فحص الأعمدة المطلوبة إلزامياً ──────────────────────────────────────────
+    missing = [c for c in REQUIRED_COLUMNS if c not in price_cols_in_db]
+    if missing:
+        print(f"\n⚠️  تحذير: الأعمدة التالية غير موجودة في جدول prices:")
+        for m in missing:
+            print(f"   ✖ {m}  (كان المفترض إظهاره بالاسم: '{COLUMN_RENAME_MAP.get(m, m)}')") 
+        print("   ← سيتم المتابعة بدون هذه الأعمدة.\n")
+    else:
+        print(" ✔ جميع الأعمدة الـ 13 المطلوبة موجودة في قاعدة البيانات ✅")
+
+    # ── أعمدة المؤشرات الفنية (كل ما هو غير مكرر) ──────────────────────────────
     excluded_from_ind = {
         "id", "symbol", "date", "company_name", "close",
         "created_at", "updated_at"
     }
-    selected_ind_cols = [f"si.{c}" for c in ind_cols if c not in excluded_from_ind]
+    # مراعاة الترتيب بأخذ الأعمدة بنفس ترتيبها في قاعدة البيانات
+    selected_ind_cols = [
+        f"si.{c['name']}" for c in ind_cols_meta
+        if c["name"] not in excluded_from_ind
+    ]
 
     return selected_price_cols, selected_ind_cols
+
+
+def apply_renames(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    إعادة تسمية الأعمدة من أسماء DB إلى الأسماء المقروءة المطلوبة في الـ CSV النهائي.
+    الأعمدة التي لا يوجد لها تعريف في COLUMN_RENAME_MAP تُترك كما هي.
+    """
+    rename = {col: COLUMN_RENAME_MAP[col] for col in df.columns if col in COLUMN_RENAME_MAP}
+    return df.rename(columns=rename)
 
 
 def build_sql_query(price_cols, ind_cols, symbol=None, from_date=None, to_date=None):
@@ -155,7 +223,8 @@ def export_data(symbol=None, from_date=None, to_date=None, split_by_symbol=False
                     sym_file = out_dir / f"TASI_{sym}_full.csv"
                     # إذا كان أول مرة نكتب في ملف هذا السهم نكتب الـ header
                     write_header = not sym_file.exists()
-                    group.to_csv(sym_file, mode="a", index=False, header=write_header, encoding="utf-8-sig")
+                    group_renamed = apply_renames(group)
+                    group_renamed.to_csv(sym_file, mode="a", index=False, header=write_header, encoding="utf-8-sig")
 
                 elapsed = round(time.time() - start_time, 1)
                 print(f"   ↳ تم معالجة {total_rows:,} صف... ({elapsed} ثانية)")
@@ -186,7 +255,8 @@ def export_data(symbol=None, from_date=None, to_date=None, split_by_symbol=False
                 rows_in_chunk = len(chunk)
                 total_rows += rows_in_chunk
 
-                chunk.to_csv(
+                chunk_renamed = apply_renames(chunk)
+                chunk_renamed.to_csv(
                     out_file,
                     mode="w" if first_chunk else "a",
                     index=False,

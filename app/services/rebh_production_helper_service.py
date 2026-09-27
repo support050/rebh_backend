@@ -562,6 +562,7 @@ def compute_peer_relative_grades(
     basis_tag = "sec_peer" if sector else "mkt_baseline"
     return {
         "Cash": {"g": prof_g, "p": prof_p, "b": basis_tag},
+        "Profitability": {"g": prof_g, "p": prof_p, "b": basis_tag},
         "Balance": {"g": bal_g, "p": bal_p, "b": basis_tag},
         "Valuation": {"g": val_g, "p": val_p, "b": basis_tag},
         "Growth": {"g": growth_g, "p": growth_p, "b": basis_tag},

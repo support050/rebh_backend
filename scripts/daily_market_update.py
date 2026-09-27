@@ -252,7 +252,26 @@ def update_daily(target_date_str=None):
 
 
 
-        # 3. Saving Prices
+        # 3. Pre-load previous close for all symbols (one DB query)
+        # ─────────────────────────────────────────────────────────
+        # This allows us to calculate change & change_percent ourselves
+        # instead of trusting the scraper's unreliable "Change %" value.
+        logger.info("📦 Loading previous close prices from DB...")
+        prev_close_map = {}
+        try:
+            prev_close_rows = db.execute(text("""
+                SELECT DISTINCT ON (symbol)
+                    symbol, close
+                FROM prices
+                WHERE date < :market_date AND close > 0
+                ORDER BY symbol, date DESC
+            """), {"market_date": market_date}).fetchall()
+            prev_close_map = {str(row[0]): float(row[1]) for row in prev_close_rows}
+            logger.info(f"  ← Loaded prev_close for {len(prev_close_map)} symbols.")
+        except Exception as e:
+            logger.warning(f"⚠️ Could not load prev_close map: {e}. Will fallback to scraper values.")
+
+        # 4. Saving Prices
         success_count = 0
         for item in scraped_data:
             symbol = str(item.get("Symbol"))
@@ -266,6 +285,26 @@ def update_daily(target_date_str=None):
             try:
                 close_val = float(item.get("Close", 0.0) or 0)
 
+                # Skip corrupt data: close=0 or negative is never a real price
+                if close_val <= 0:
+                    logger.warning(f"⚠️ Skipped {symbol}: close={close_val} (corrupt/missing data)")
+                    continue
+
+                # Calculate change & change_percent from prev_close in DB
+                # (not from the scraper's "Change %" which is unreliable)
+                prev_close = prev_close_map.get(symbol)
+                if prev_close and prev_close > 0:
+                    calc_change = round(close_val - prev_close, 4)
+                    calc_change_pct = round(((close_val / prev_close) - 1.0) * 100.0, 4)
+                else:
+                    # Fallback for first-ever trading session (no prev_close)
+                    scraper_pct = float(item.get("Change %", 0) or 0)
+                    calc_change_pct = round(scraper_pct, 4)
+                    if abs(100.0 + scraper_pct) > 0.001:
+                        calc_change = round(close_val * scraper_pct / (100.0 + scraper_pct), 4)
+                    else:
+                        calc_change = 0.0
+
                 price_data = {
                     "symbol": symbol,
                     "date": market_date,
@@ -273,12 +312,8 @@ def update_daily(target_date_str=None):
                     "high": item.get("Highest", 0.0),
                     "low": item.get("Lowest", 0.0),
                     "close": close_val,
-                    # Derive absolute change from close + change% when scraper doesn't return it directly
-                    "change": item.get("Change") if item.get("Change") is not None else round(
-                        float(item.get("Close", 0) or 0) * float(item.get("Change %", 0) or 0) / 
-                        (100.0 + float(item.get("Change %", 0) or 0)), 4
-                    ),
-                    "change_percent": item.get("Change %", 0.0),
+                    "change": calc_change,
+                    "change_percent": calc_change_pct,
                     "volume_traded": int(item.get("Volume Traded", 0)),
                     "value_traded_sar": float(item.get("Value Traded", 0.0)),
                     "no_of_trades": int(item.get("No. of Trades", 0)),
