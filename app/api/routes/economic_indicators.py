@@ -254,7 +254,7 @@ def trigger_scrape_specific(indicator_code: str, mode: str = Query("update", des
         
         url = "https://www.gurufocus.com/economic_indicators/151/sp-500-earnings-yield"
         
-        # mode == "update" → incremental (3 pages), mode == "historical" → full (all pages)
+        # mode == "update" -> incremental (3 pages), mode == "historical" -> full (all pages)
         guru_mode = "incremental" if mode == "update" else "full"
         max_pages = 3 if guru_mode == "incremental" else None
         

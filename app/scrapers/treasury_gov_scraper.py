@@ -177,6 +177,8 @@ def scrape_treasury_gov(mode: str = "incremental"):
             if not records:
                 continue
 
+            from sqlalchemy.dialects.postgresql import insert as pg_insert
+
             for rec in records:
                 rd = rec["report_date"]
                 update_values = {}
@@ -188,26 +190,17 @@ def scrape_treasury_gov(mode: str = "incremental"):
                     total_skipped += 1
                     continue
 
-                existing = db.query(TreasuryYieldCurve).filter(
-                    TreasuryYieldCurve.report_date == rd
-                ).first()
-
-                if existing:
-                    # Update existing row
-                    has_changes = False
-                    for k, v in update_values.items():
-                        if getattr(existing, k) != v:
-                            setattr(existing, k, v)
-                            has_changes = True
-                    if has_changes:
-                        total_updated += 1
-                    else:
-                        total_skipped += 1
-                else:
-                    # Insert new row
-                    new_obj = TreasuryYieldCurve(report_date=rd, **update_values)
-                    db.add(new_obj)
-                    total_inserted += 1
+                # Atomic UPSERT using ON CONFLICT on report_date
+                stmt = pg_insert(TreasuryYieldCurve).values(
+                    report_date=rd,
+                    **update_values
+                )
+                stmt = stmt.on_conflict_do_update(
+                    index_elements=['report_date'],
+                    set_=update_values
+                )
+                db.execute(stmt)
+                total_updated += 1
 
             db.commit()
             time.sleep(0.5)  # Be polite to Treasury servers

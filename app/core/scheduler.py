@@ -101,21 +101,22 @@ def job_monthly_scrapers():
         "app.scrapers.sp500_pe_scraper", fromlist=["scrape_sp500_pe"]
     ).scrape_sp500_pe())
 
-    _safe("GuruFocus EY", lambda: __import__(
-        "app.scrapers.gurufocus_scraper", fromlist=["scrape_gurufocus_indicator"]
-    ).scrape_gurufocus_indicator(
-        url="https://www.gurufocus.com/economic_indicators/151/sp-500-earnings-yield",
-        indicator_code="SP500_EY",
-        mode="incremental",
-    ))
-
-    _safe("GuruFocus PE", lambda: __import__(
-        "app.scrapers.gurufocus_scraper", fromlist=["scrape_gurufocus_indicator"]
-    ).scrape_gurufocus_indicator(
-        url="https://www.gurufocus.com/economic_indicators/57/sp-500-pe-ratio",
-        indicator_code="SP500_PE",
-        mode="incremental",
-    ))
+    # GuruFocus uses heavy headless Chrome Selenium which consumes high RAM/CPU on server.
+    # Kept available in app/scrapers/gurufocus_scraper.py for manual on-demand triggers.
+    # _safe("GuruFocus EY", lambda: __import__(
+    #     "app.scrapers.gurufocus_scraper", fromlist=["scrape_gurufocus_indicator"]
+    # ).scrape_gurufocus_indicator(
+    #     url="https://www.gurufocus.com/economic_indicators/151/sp-500-earnings-yield",
+    #     indicator_code="SP500_EY",
+    #     mode="incremental",
+    # ))
+    # _safe("GuruFocus PE", lambda: __import__(
+    #     "app.scrapers.gurufocus_scraper", fromlist=["scrape_gurufocus_indicator"]
+    # ).scrape_gurufocus_indicator(
+    #     url="https://www.gurufocus.com/economic_indicators/57/sp-500-pe-ratio",
+    #     indicator_code="SP500_PE",
+    #     mode="incremental",
+    # ))
 
     _clear_cache()
     logger.info("🗓️ [Scheduler] MONTHLY scrapers finished.")

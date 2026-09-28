@@ -12,8 +12,9 @@ import os
 import requests
 import time
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Optional, List, Dict, Any
+from sqlalchemy import func
 
 from app.core.config import settings
 from app.core.database import SessionLocal
@@ -221,42 +222,62 @@ def scrape_fred_indicator(indicator_code: str) -> bool:
     series_id = config["series_id"]
     extra_params = config.get("params")
 
-    logger.info(f"Fetching {indicator_code} (series_id: {series_id}) from official FRED API...")
-
-    parsed_data = fetch_fred_observations(series_id, extra_params=extra_params)
-    logger.info(f"Parsed {len(parsed_data)} valid records for {indicator_code}")
-
-    if not parsed_data:
-        logger.warning(f"No observations received for {indicator_code}")
-        return False
-
     db = SessionLocal()
     try:
-        # Load existing dates in a single query to prevent duplicate records
-        existing_dates = {
-            row[0]
-            for row in db.query(EconomicIndicator.report_date)
-                          .filter(EconomicIndicator.indicator_code == indicator_code)
-                          .all()
-        }
+        # Check latest date in DB to fetch only incremental new records
+        latest_date = db.query(func.max(EconomicIndicator.report_date)).filter(
+            EconomicIndicator.indicator_code == indicator_code
+        ).scalar()
 
-        new_objects = [
-            EconomicIndicator(
-                report_date=item["date"],
-                indicator_code=indicator_code,
-                value=item["value"],
-            )
+        # ── Determine Lookback Window for Incremental Fetch ──
+        # Monthly macroeconomic series with frequent historical revisions need a 365-day lookback.
+        # Other daily/weekly series use a 90-day lookback.
+        MONTHLY_REVISED_SERIES = {
+            "CPIAUCSL_PC1", "M1SL", "M2SL", "UNRATE", "PAYEMS",
+            "TLAACBW027SBOG", "TOTLL", "BOGMBASE"
+        }
+        lookback_days = 365 if indicator_code in MONTHLY_REVISED_SERIES else 90
+
+        observation_start = None
+        if latest_date:
+            safe_start = latest_date - timedelta(days=lookback_days)
+            observation_start = safe_start.strftime("%Y-%m-%d")
+            logger.info(f"   📅 Latest in DB: {latest_date}. Fetching revisions/new from {observation_start} ({lookback_days}d lookback)...")
+        else:
+            logger.info(f"   📅 First run for {indicator_code} — fetching full historical series...")
+
+        parsed_data = fetch_fred_observations(
+            series_id,
+            extra_params=extra_params,
+            observation_start=observation_start
+        )
+        logger.info(f"Parsed {len(parsed_data)} valid records for {indicator_code}")
+
+        if not parsed_data:
+            logger.info(f"ℹ️ {indicator_code}: already up-to-date (0 new records)")
+            return True
+
+        # ── Atomic UPSERT using ON CONFLICT (report_date, indicator_code) ──
+        from sqlalchemy.dialects.postgresql import insert as pg_insert
+
+        records_to_insert = [
+            {
+                "report_date": item["date"],
+                "indicator_code": indicator_code,
+                "value": item["value"],
+            }
             for item in parsed_data
-            if item["date"] not in existing_dates
         ]
 
-        if new_objects:
-            db.bulk_save_objects(new_objects)
-            db.commit()
-            logger.info(f"✅ {indicator_code}: inserted {len(new_objects)} new records (total fetched: {len(parsed_data)})")
-        else:
-            logger.info(f"ℹ️ {indicator_code}: already up-to-date (0 new records)")
+        stmt = pg_insert(EconomicIndicator).values(records_to_insert)
+        stmt = stmt.on_conflict_do_update(
+            constraint="uq_economic_indicator_date_code",
+            set_={"value": stmt.excluded.value}
+        )
 
+        db.execute(stmt)
+        db.commit()
+        logger.info(f"✅ {indicator_code}: processed {len(records_to_insert)} records via atomic UPSERT (new & revised values updated).")
         return True
 
     except Exception as e:

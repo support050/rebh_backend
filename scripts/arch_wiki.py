@@ -19,7 +19,11 @@ from typing import Any
 from urllib.parse import urlparse
 
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
+_SCRIPT_PATH = Path(__file__).resolve()
+if (_SCRIPT_PATH.parent / "backend" / "app").exists():
+    REPO_ROOT = _SCRIPT_PATH.parent
+else:
+    REPO_ROOT = _SCRIPT_PATH.parent.parent
 BACKEND_APP = REPO_ROOT / "backend" / "app"
 MAIN_FILE = BACKEND_APP / "main.py"
 
