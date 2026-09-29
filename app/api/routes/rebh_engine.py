@@ -420,8 +420,25 @@ def get_rebh_council_scorecard() -> Dict[str, Any]:
 def get_rebh_universe() -> Any:
     """
     Get full market dataset with factor percentiles, sector rankings, and peer pools.
+    Served from the pre-computed DB snapshot when available (millisecond reads);
+    falls back to a live compute only if no snapshot batch exists yet.
     """
+    snapshot = khurafshi_engine_service.get_universe_snapshot()
+    if snapshot is not None:
+        return snapshot
     return khurafshi_engine_service.get_khurafshi_universe_data()
+
+
+@router.get("/peers")
+def get_rebh_peers(sector: str) -> Any:
+    """
+    Sector peers comparison — filtered server-side from the universe snapshot.
+    Returns only companies in the same sector (main-sector match), sorted by market cap.
+    Keeps the response small so the frontend no longer downloads the whole market.
+    """
+    if not sector or sector.strip() in ("", "—"):
+        return []
+    return khurafshi_engine_service.get_rebh_peers(sector)
 
 
 @router.get("/stats")
@@ -887,7 +904,7 @@ def get_quarantine_records() -> Dict[str, Any]:
     Identifies failed identity checks, corrupted scale, or missing income statements.
     Optimized for sub-second responses using cached engine universe records.
     """
-    universe = khurafshi_engine_service.get_khurafshi_universe_data()
+    universe = khurafshi_engine_service.get_universe_snapshot() or khurafshi_engine_service.get_khurafshi_universe_data()
     quarantined = []
     
     for item in universe:

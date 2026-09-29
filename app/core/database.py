@@ -59,6 +59,8 @@ from app.models.market_reports import (  # noqa: E402,F401
 from app.models.sukuk_bonds import SukukMarketData  # noqa: E402,F401
 from app.models.saudi_macro import SaudiEconomicIndicator  # noqa: E402,F401
 from app.models.update_status import UpdateStatus  # noqa: E402,F401
+from app.models.rebh_engine_vintage import RebhEngineVintage  # noqa: E402,F401
+from app.models.rebh_universe_snapshot import RebhUniverseSnapshot  # noqa: E402,F401
 
 
 def create_tables():

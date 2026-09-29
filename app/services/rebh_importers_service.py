@@ -287,10 +287,21 @@ def run_engine_vintages_job(limit: Optional[int] = None) -> Dict[str, Any]:
         _IMPORTER_STATUS["engine_vintages"]["records_processed"] = processed
         _IMPORTER_STATUS["engine_vintages"]["error"] = None
         logger.info(f"✅ Engine Vintage Snapshot complete: {processed} evaluated, {persisted} persisted to DB, {quarantined} in quarantine.")
+
+        # Rebuild the DB-backed universe snapshot so /peers + /universe reflect the new batch.
+        universe_persisted = None
+        try:
+            from app.services.khurafshi_engine_service import build_universe_snapshot
+            universe_persisted = build_universe_snapshot(snapshot_date=now_dt.date(), batch_id=batch_id)
+            logger.info(f"✅ Universe snapshot refreshed for {universe_persisted} companies.")
+        except Exception as snap_err:
+            logger.warning(f"⚠️ Universe snapshot refresh failed: {snap_err}")
+
         return {
             "status": "ok",
             "evaluated_companies": processed,
             "persisted_snapshots": persisted,
+            "universe_snapshot": universe_persisted,
             "quarantined": quarantined,
             "timestamp": now_str
         }

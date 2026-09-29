@@ -475,14 +475,14 @@ _UNIVERSE_CACHE_TIMESTAMP: float = 0.0
 _UNIVERSE_CACHE_TTL = 300.0
 
 
-def get_khurafshi_universe_data() -> List[Dict[str, Any]]:
+def get_khurafshi_universe_data(force_refresh: bool = False) -> List[Dict[str, Any]]:
     """
     Get full market dataset calculated directly from live XBRL records and real prices.
     Fully normalized to Millions SAR with unit-scale detection and period-matching.
     """
     global _UNIVERSE_CACHE, _UNIVERSE_CACHE_TIMESTAMP
     now = time.time()
-    if _UNIVERSE_CACHE is not None and (now - _UNIVERSE_CACHE_TIMESTAMP) < _UNIVERSE_CACHE_TTL:
+    if not force_refresh and _UNIVERSE_CACHE is not None and (now - _UNIVERSE_CACHE_TIMESTAMP) < _UNIVERSE_CACHE_TTL:
         return _UNIVERSE_CACHE
 
     companies = list_companies()
@@ -831,3 +831,129 @@ def get_khurafshi_universe_data() -> List[Dict[str, Any]]:
     _UNIVERSE_CACHE = results
     _UNIVERSE_CACHE_TIMESTAMP = time.time()
     return results
+
+
+# ══════════════════════════════════════════════════════════════════════════
+#  UNIVERSE SNAPSHOT (DB-backed, pre-computed daily)
+#  Read paths serve from this table so the full TASI universe is never
+#  recomputed from hundreds of XBRL JSON files at request time.
+# ══════════════════════════════════════════════════════════════════════════
+
+_UNIVERSE_SNAPSHOT_MEMCACHE: Dict[str, Any] = {"timestamp": 0.0, "data": None}
+_SNAPSHOT_MEMCACHE_TTL = 120.0  # seconds — rows are light, cheap to reload
+
+
+def _normalize_sector(sector: Optional[str]) -> str:
+    """Main-sector key: strip sub-industry after '|' and normalize case/whitespace."""
+    if not sector:
+        return ""
+    return str(sector).split("|")[0].strip().lower()
+
+
+def build_universe_snapshot(snapshot_date: Optional[date] = None, batch_id: Optional[str] = None) -> int:
+    """
+    Compute the full universe once and persist it as a new `is_latest` batch.
+    Called from the daily pipeline. Returns the number of companies stored.
+    """
+    import json as _json
+    from app.core.database import SessionLocal
+    from app.models.rebh_universe_snapshot import RebhUniverseSnapshot
+
+    target_date = snapshot_date or date.today()
+    results = get_khurafshi_universe_data(force_refresh=True)
+
+    db = SessionLocal()
+    try:
+        # Idempotent re-runs for the same date: drop prior rows first.
+        db.query(RebhUniverseSnapshot).filter(
+            RebhUniverseSnapshot.snapshot_date == target_date
+        ).delete(synchronize_session=False)
+        # Demote previously active batch.
+        db.query(RebhUniverseSnapshot).filter(
+            RebhUniverseSnapshot.is_latest.is_(True)
+        ).update({RebhUniverseSnapshot.is_latest: False}, synchronize_session=False)
+
+        for item in results:
+            db.add(RebhUniverseSnapshot(
+                snapshot_date=target_date,
+                batch_id=batch_id,
+                symbol=str(item.get("sym")),
+                company_name=item.get("n"),
+                sector=item.get("sec"),
+                px=item.get("px"),
+                mc=item.get("mc"),
+                pe=item.get("pe"),
+                pb=item.get("pb"),
+                roe=item.get("roe"),
+                nm=item.get("nm"),
+                de=item.get("de"),
+                g_net=item.get("g_net"),
+                fcf_yield=item.get("fcf_yield"),
+                f_score=item.get("f_score"),
+                is_latest=True,
+                payload_json=_json.dumps(item, ensure_ascii=False),
+            ))
+        db.commit()
+        # Invalidate in-memory read cache so the new batch is picked up immediately.
+        _UNIVERSE_SNAPSHOT_MEMCACHE["timestamp"] = 0.0
+        _UNIVERSE_SNAPSHOT_MEMCACHE["data"] = None
+        return len(results)
+    except Exception:
+        db.rollback()
+        raise
+    finally:
+        db.close()
+
+
+def get_universe_snapshot(force_refresh: bool = False) -> Optional[List[Dict[str, Any]]]:
+    """
+    Read the latest universe batch from the DB (memory-cached).
+    Returns None if no snapshot exists yet (caller should fall back to live compute).
+    """
+    import json as _json
+    from app.core.database import SessionLocal
+    from app.models.rebh_universe_snapshot import RebhUniverseSnapshot
+
+    now = time.time()
+    if (
+        not force_refresh
+        and _UNIVERSE_SNAPSHOT_MEMCACHE["data"] is not None
+        and (now - _UNIVERSE_SNAPSHOT_MEMCACHE["timestamp"]) < _SNAPSHOT_MEMCACHE_TTL
+    ):
+        return _UNIVERSE_SNAPSHOT_MEMCACHE["data"]
+
+    db = SessionLocal()
+    try:
+        rows = (
+            db.query(RebhUniverseSnapshot)
+            .filter(RebhUniverseSnapshot.is_latest.is_(True))
+            .all()
+        )
+        if not rows:
+            return None
+        data = [_json.loads(r.payload_json) for r in rows if r.payload_json]
+        _UNIVERSE_SNAPSHOT_MEMCACHE["data"] = data
+        _UNIVERSE_SNAPSHOT_MEMCACHE["timestamp"] = time.time()
+        return data
+    finally:
+        db.close()
+
+
+def get_rebh_peers(sector: str) -> List[Dict[str, Any]]:
+    """
+    Return same-sector peer companies from the latest universe snapshot, sorted by market cap.
+    Matches either the exact sector string or the same main sector (before '|').
+    Falls back to a live compute only when no snapshot is present.
+    """
+    universe = get_universe_snapshot()
+    if universe is None:
+        universe = get_khurafshi_universe_data()
+
+    clean_target = _normalize_sector(sector)
+    peers = [
+        c for c in universe
+        if c.get("sec") and (c["sec"] == sector or _normalize_sector(c["sec"]) == clean_target)
+    ]
+    peers.sort(key=lambda a: (a.get("mc") or 0), reverse=True)
+    return peers
+

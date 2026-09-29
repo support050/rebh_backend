@@ -78,8 +78,17 @@ def _run_scraper_with_own_driver(scrape_fn, save_fn, name):
 
 
 def save_substantial_shareholders(data):
-    count = 0
+    if not data:
+        logger.warning("No Substantial Shareholders data to save.")
+        return
+    new_date = data[0].get('report_date')
     with SessionLocal() as db:
+        # Purge older records so only the latest scraped day remains
+        deleted = db.query(SubstantialShareholder).filter(SubstantialShareholder.report_date != new_date).delete()
+        if deleted > 0:
+            logger.info(f"Purged {deleted} older Substantial Shareholders records.")
+
+        count = 0
         for item in data:
             existing = db.query(SubstantialShareholder).filter(
                 SubstantialShareholder.report_date == item['report_date'],
@@ -91,13 +100,24 @@ def save_substantial_shareholders(data):
                 obj = SubstantialShareholder(**item)
                 db.add(obj)
                 count += 1
+            else:
+                for k, v in item.items():
+                    setattr(existing, k, v)
         db.commit()
-    logger.info(f"Added {count} new Substantial Shareholders records.")
+    logger.info(f"Saved {len(data)} Substantial Shareholders records for {new_date} (new: {count}).")
 
 
 def save_net_short_positions(data):
-    count = 0
+    if not data:
+        logger.warning("No Net Short Positions data to save.")
+        return
+    new_date = data[0].get('report_date')
     with SessionLocal() as db:
+        deleted = db.query(NetShortPosition).filter(NetShortPosition.report_date != new_date).delete()
+        if deleted > 0:
+            logger.info(f"Purged {deleted} older Net Short Positions records.")
+
+        count = 0
         for item in data:
             existing = db.query(NetShortPosition).filter(
                 NetShortPosition.report_date == item['report_date'],
@@ -108,13 +128,24 @@ def save_net_short_positions(data):
                 obj = NetShortPosition(**item)
                 db.add(obj)
                 count += 1
+            else:
+                for k, v in item.items():
+                    setattr(existing, k, v)
         db.commit()
-    logger.info(f"Added {count} new Net Short Positions records.")
+    logger.info(f"Saved {len(data)} Net Short Positions records for {new_date} (new: {count}).")
 
 
 def save_foreign_headroom(data):
-    count = 0
+    if not data:
+        logger.warning("No Foreign Headroom data to save.")
+        return
+    new_date = data[0].get('report_date')
     with SessionLocal() as db:
+        deleted = db.query(ForeignHeadroom).filter(ForeignHeadroom.report_date != new_date).delete()
+        if deleted > 0:
+            logger.info(f"Purged {deleted} older Foreign Headroom records.")
+
+        count = 0
         for item in data:
             existing = db.query(ForeignHeadroom).filter(
                 ForeignHeadroom.report_date == item['report_date'],
@@ -125,13 +156,24 @@ def save_foreign_headroom(data):
                 obj = ForeignHeadroom(**item)
                 db.add(obj)
                 count += 1
+            else:
+                for k, v in item.items():
+                    setattr(existing, k, v)
         db.commit()
-    logger.info(f"Added {count} new Foreign Headroom records.")
+    logger.info(f"Saved {len(data)} Foreign Headroom records for {new_date} (new: {count}).")
 
 
 def save_share_buybacks(data):
-    count = 0
+    if not data:
+        logger.warning("No Share Buybacks data to save.")
+        return
+    new_date = data[0].get('report_date')
     with SessionLocal() as db:
+        deleted = db.query(ShareBuyback).filter(ShareBuyback.report_date != new_date).delete()
+        if deleted > 0:
+            logger.info(f"Purged {deleted} older Share Buybacks records.")
+
+        count = 0
         for item in data:
             existing = db.query(ShareBuyback).filter(
                 ShareBuyback.report_date == item['report_date'],
@@ -142,13 +184,24 @@ def save_share_buybacks(data):
                 obj = ShareBuyback(**item)
                 db.add(obj)
                 count += 1
+            else:
+                for k, v in item.items():
+                    setattr(existing, k, v)
         db.commit()
-    logger.info(f"Added {count} new Share Buybacks records.")
+    logger.info(f"Saved {len(data)} Share Buybacks records for {new_date} (new: {count}).")
 
 
 def save_sbl_positions(data):
-    count = 0
+    if not data:
+        logger.warning("No SBL Positions data to save.")
+        return
+    new_date = data[0].get('report_date')
     with SessionLocal() as db:
+        deleted = db.query(SBLPosition).filter(SBLPosition.report_date != new_date).delete()
+        if deleted > 0:
+            logger.info(f"Purged {deleted} older SBL Positions records.")
+
+        count = 0
         for item in data:
             existing = db.query(SBLPosition).filter(
                 SBLPosition.report_date == item['report_date'],
@@ -159,8 +212,11 @@ def save_sbl_positions(data):
                 obj = SBLPosition(**item)
                 db.add(obj)
                 count += 1
+            else:
+                for k, v in item.items():
+                    setattr(existing, k, v)
         db.commit()
-    logger.info(f"Added {count} new SBL Positions records.")
+    logger.info(f"Saved {len(data)} SBL Positions records for {new_date} (new: {count}).")
 
 
 def main():

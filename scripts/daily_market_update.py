@@ -666,6 +666,20 @@ def update_daily(target_date_str=None):
         except Exception as vintage_err:
             logger.error(f"⚠️ Engine vintage archiving failed: {vintage_err}")
 
+        # 8.10 Universe Snapshot Persistence (DB-backed, powers /peers + /universe reads)
+        # -------------------------------------------------------------------
+        try:
+            logger.info("🌐 Building REBH universe snapshot for DB-backed reads...")
+            from app.services.khurafshi_engine_service import build_universe_snapshot
+            snap_date = dt_module.datetime.strptime(str(market_date), "%Y-%m-%d").date()
+        except Exception:
+            snap_date = None
+        try:
+            n_snap = build_universe_snapshot(snapshot_date=snap_date, batch_id=str(market_date))
+            logger.info(f"✅ Universe snapshot persisted for {n_snap} companies (sector peers now served from DB).")
+        except Exception as snap_err:
+            logger.error(f"⚠️ Universe snapshot build failed: {snap_err}")
+
 
         # 9. Finalize Update Status (Atomic Switch)
         # -------------------------------------------------------------------

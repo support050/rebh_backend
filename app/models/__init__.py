@@ -28,3 +28,4 @@ from app.models.tasi_components import TasiComponent
 from app.models.Corporate_actions import CorporateAction
 from app.models.rebh_user_data import AnalystNote, TradeJournal, UserWatchlist
 from app.models.rebh_engine_vintage import RebhEngineVintage
+from app.models.rebh_universe_snapshot import RebhUniverseSnapshot

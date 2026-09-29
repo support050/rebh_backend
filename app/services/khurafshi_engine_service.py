@@ -29,6 +29,9 @@ from app.services.market_universe_service import (
     _get_latest_prices_map,
     get_khurafshi_live_market_stats,
     get_khurafshi_universe_data,
+    build_universe_snapshot,
+    get_universe_snapshot,
+    get_rebh_peers,
     _UNIVERSE_CACHE,
     _PRICES_MAP_CACHE,
     _STATS_CACHE,
@@ -52,4 +55,7 @@ __all__ = [
     "_get_latest_prices_map",
     "get_khurafshi_live_market_stats",
     "get_khurafshi_universe_data",
+    "build_universe_snapshot",
+    "get_universe_snapshot",
+    "get_rebh_peers",
 ]

@@ -13,7 +13,6 @@ import app.models.contact
 import app.models.industry_group
 import app.models.price
 import app.models.financials
-import app.models.financial_metrics
 import app.models.official_filings
 import app.models.rs_daily
 import app.models.scraped_reports
@@ -35,6 +34,8 @@ import app.models.tasi_components
 import app.models.aporia
 import app.models.Corporate_actions
 import app.models.update_status
+import app.models.rebh_engine_vintage
+import app.models.rebh_universe_snapshot
 
 config = context.config
 from app.core.config import settings
