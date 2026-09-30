@@ -181,6 +181,7 @@ def evaluate_red_flags(
             "title_ar": "تدفق نقدي حر سالب",
             "title_en": "Negative Free Cash Flow",
             "detail": f"التدفق النقدي الحر يبلغ {round(fcf, 1)} وهو ما يمثل ضغطاً على السيولة والتمويل الذاتي.",
+            "detail_en": f"Free Cash Flow is negative ({round(fcf, 1)} M SAR), indicating pressure on internal liquidity and self-financing.",
             "status_symbol": "⚑"
         })
         
@@ -193,6 +194,7 @@ def evaluate_red_flags(
                 "title_ar": "توزيعات نقدية تفوق التدفق الحر",
                 "title_en": "Dividends Exceed FCF",
                 "detail": "الشركة تمول التوزيعات من خلال الاقتراض أو السيولة النقدية السابقة بدلاً من التدفقات الجارية.",
+                "detail_en": "The company is funding cash dividends through borrowings or cash reserves rather than current organic cash flows.",
                 "status_symbol": "⚑"
             })
             
@@ -207,6 +209,7 @@ def evaluate_red_flags(
                 "title_ar": "ضعف تحويل الأرباح إلى كاش",
                 "title_en": "Weak FCF / Net Income Conversion",
                 "detail": f"نسبة تحويل الأرباح إلى تدفق حر تبلغ {int(conversion * 100)}% (أقل من الحد الصحي 70%).",
+                "detail_en": f"Earnings-to-FCF conversion is {int(conversion * 100)}% (below healthy benchmark of 70%).",
                 "status_symbol": "⚑"
             })
 
@@ -222,6 +225,7 @@ def evaluate_red_flags(
                     "title_ar": "تباعد الإيرادات والأرباح",
                     "title_en": "Sales Rising while Earnings Fall",
                     "detail": "نمو في المبيعات يتزامن مع انكماش في صافي الأرباح مما يشير لتآكل الهوامش الربحية.",
+                    "detail_en": "Revenue growth accompanies contracting net earnings, signalling margin compression or surging operating expenses.",
                     "status_symbol": "⚑"
                 })
 
@@ -239,6 +243,7 @@ def evaluate_red_flags(
                     "title_ar": "انحدار هامش الدخل الإجمالي",
                     "title_en": "Gross Margin Contraction",
                     "detail": f"انخفض هامش إجمالي الربح من {int(gm_prev*100)}% إلى {int(gm_now*100)}%.",
+                    "detail_en": f"Gross profit margin declined from {int(gm_prev*100)}% to {int(gm_now*100)}% YoY.",
                     "status_symbol": "⚑"
                 })
 
@@ -251,6 +256,7 @@ def evaluate_red_flags(
                 "title_ar": "نمو المدينين أسرع من المبيعات",
                 "title_en": "Receivables Growing Faster than Sales",
                 "detail": "تراكم مستحقات العملاء بوتيرة أسرع من نمو المبيعات (مؤشر جودة إيرادات).",
+                "detail_en": "Trade receivables expanding faster than revenue growth, signalling potential revenue quality and collection friction.",
                 "status_symbol": "⚑"
             })
 
@@ -264,6 +270,7 @@ def evaluate_red_flags(
                 "title_ar": "تراجع التدفقات النقدية التشغيلية",
                 "title_en": "Operating Cash Flow Decline",
                 "detail": "انخفاض التدفقات النقدية من الأنشطة التشغيلية مقارنة بالفترة المماثلة.",
+                "detail_en": "Operating cash flow contracted compared to the same prior-year period.",
                 "status_symbol": "⚑"
             })
 

@@ -243,7 +243,9 @@ def calculate_full_company_payload(
 
     meta = company.meta
     sec = getattr(meta, "sector", "Other") or "Other"
+    sec_en = getattr(meta, "sector_en", None) or getattr(meta, "sec_en", None) or sec
     name = getattr(meta, "company_name", symbol) or symbol
+    name_en = getattr(meta, "name_en", None) or getattr(meta, "company_name_en", None) or getattr(meta, "company_name", None) or name
     is_bank_sector = any(k in sec.lower() for k in ["bank", "financial", "insurance"])
 
     # Classification Pillars (Dynamic & Owner-Editable)
@@ -691,7 +693,9 @@ def calculate_full_company_payload(
     return RebhUniversalContract(
         symbol=symbol,
         name=name,
+        en=name_en,
         sector=sec,
+        sec_en=sec_en,
         industry_class=ind_class,
         market_form=mkt_form,
         elasticity=elasticity_val,

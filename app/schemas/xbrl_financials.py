@@ -46,6 +46,7 @@ class CompanyFinancials(BaseModel):
 class CompanyListItem(BaseModel):
     symbol: str
     company_name: str
+    name_en: str | None = None
     sector: str | None = None
     report_end: str | None = None
     periods_count: int = 0

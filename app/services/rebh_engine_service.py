@@ -117,7 +117,8 @@ def get_trust_badge_status(symbol: str) -> Dict[str, Any]:
     return {
         "symbol": symbol,
         "verified": all_passed,
-        "badge_label": "قوائم مدققة آلياً ✓" if all_passed else "قيد المراجعة ⚠",
+        "badge_label": "Statements Verified ✓" if all_passed else "Under Review ⚠",
+        "badge_text": "Statements Verified ✓" if all_passed else "Under Review ⚠",
         "badge_status": "pass" if all_passed else "warning",
         "pass_rate_pct": round(pass_rate, 1),
         "total_periods_checked": len(bs_checks),
@@ -149,23 +150,23 @@ def calculate_acceleration_signal(label: str, quarters: List[Optional[float]]) -
         return {
             "type": "acceleration",
             "neg": False,
-            "rule": "التسارع المتصل (O'Neil/StockBee)",
-            "text": f"{label}: تسارع {rising + 1} أرباع متتالية ({history})"
+            "rule": "Continuous Acceleration (O'Neil/StockBee)",
+            "text": f"{label}: accelerating for {rising + 1} consecutive quarters ({history})"
         }
     if rising >= 2 and ys[-1] <= 0:
         history = " ← ".join(_pct(y) for y in ys[-3:])
         return {
             "type": "easing_contraction",
             "neg": False,
-            "rule": "انكماش يتباطأ — تعافٍ دوري مبكر محتمل (Peter Lynch)",
-            "text": f"{label}: وتيرة الانكماش تتحسن ({history}) — تحسن دوري"
+            "rule": "Easing Contraction — Possible Early Cyclical Recovery (Peter Lynch)",
+            "text": f"{label}: contraction pace improving ({history}) — cyclical recovery"
         }
     if len(ys) >= 2 and ys[-1] < ys[-2] and ys[-2] >= 20:
         return {
             "type": "deceleration",
             "neg": True,
-            "rule": "كسر نمط التسارع — التباطؤ بعد الذروة",
-            "text": f"{label}: تباطؤ من {_pct(ys[-2])} إلى {_pct(ys[-1])} — بند مراقبة"
+            "rule": "Acceleration Pattern Broken — Deceleration After Peak",
+            "text": f"{label}: slowing from {_pct(ys[-2])} to {_pct(ys[-1])} — watch item"
         }
     return None
 
@@ -179,8 +180,8 @@ def calculate_operating_leverage(income_yoy: Optional[float], opex_yoy: Optional
         return {
             "type": "operating_leverage",
             "neg": False,
-            "rule": "نمو الدخل − نمو المصاريف > 2 نقطة",
-            "text": f"رافعة تشغيلية إيجابية: فارق نمو الإيرادات عن المصاريف {gap:.1f} نقطة"
+            "rule": "Revenue Growth − Opex Growth > 2 pts",
+            "text": f"Positive operating leverage: revenue outpacing expenses by {gap:.1f} pts"
         }
     return None
 
@@ -194,16 +195,16 @@ def calculate_provisions_watch(prov_yoy: Optional[float], income_yoy: Optional[f
             "type": "provisions_warning",
             "neg": True,
             "status": "danger",
-            "rule": "provisions_watch",
-            "text": f"المخصصات {_pct(prov_yoy)} مقابل دخل {_pct(income_yoy)} — ضغط على جودة الأرباح"
+            "rule": "Provisions Watch",
+            "text": f"Provisions {_pct(prov_yoy)} vs income {_pct(income_yoy)} — earnings quality under pressure"
         }
     if prov_yoy < 0 and income_yoy > 0:
         return {
             "type": "provisions_release",
             "neg": False,
             "status": "success",
-            "rule": "provisions_release",
-            "text": "تحرير مخصصات مع نمو الدخل — داعم مؤقت لربح الفترة"
+            "rule": "Provisions Release",
+            "text": "Provision reversal with income growth — temporary earnings support"
         }
     return None
 
@@ -238,8 +239,8 @@ def calculate_receivables_risk(
             "type": "receivables_risk",
             "neg": True,
             "status": "danger",
-            "rule": "الذمم المدينة ترتفع أسرع من المبيعات",
-            "text": f"نمو الذمم المدينة ({_pct(rec_yoy)}) فاق نمو المبيعات ({_pct(rev_yoy)}) بفارق {gap:.1f} نقطة — بيع دون تحصيل نقدي"
+            "rule": "Receivables Rising Faster Than Sales",
+            "text": f"Receivables growth ({_pct(rec_yoy)}) outpaced sales ({_pct(rev_yoy)}) by {gap:.1f} pts — selling without collecting cash"
         }
     return None
 
@@ -259,14 +260,14 @@ def calculate_ocf_decline(
         cfo_yoy = ((cfo_now / cfo_prev) - 1.0) * 100.0
         if cfo_yoy < -15.0:
             if cfo_now < 0:
-                text = f"تحول التدفق النقدي التشغيلي إلى سالب ({cfo_now:,.0f} مقابل {cfo_prev:,.0f} سابقاً)"
+                text = f"Operating cash flow turned negative ({cfo_now:,.0f} vs {cfo_prev:,.0f} prior)"
             else:
-                text = f"تراجع التدفق النقدي التشغيلي بنسبة {abs(cfo_yoy):.1f}% (من {cfo_prev:,.0f} إلى {cfo_now:,.0f})"
+                text = f"Operating cash flow declined {abs(cfo_yoy):.1f}% (from {cfo_prev:,.0f} to {cfo_now:,.0f})"
             return {
                 "type": "ocf_decline",
                 "neg": True,
                 "status": "danger",
-                "rule": "تراجع التدفق النقدي التشغيلي",
+                "rule": "Operating Cash Flow Decline",
                 "text": text
             }
     elif cfo_prev <= 0 and cfo_now < cfo_prev:
@@ -274,8 +275,8 @@ def calculate_ocf_decline(
             "type": "ocf_decline",
             "neg": True,
             "status": "danger",
-            "rule": "تراجع التدفق النقدي التشغيلي",
-            "text": f"تفاقم العجز في التدفق التشغيلي من {cfo_prev:,.0f} إلى {cfo_now:,.0f}"
+            "rule": "Operating Cash Flow Decline",
+            "text": f"Operating cash deficit deepening from {cfo_prev:,.0f} to {cfo_now:,.0f}"
         }
     return None
 
@@ -311,8 +312,8 @@ def calculate_vanishing_cf(
             "type": "inventory_cf_divergence",
             "neg": True,
             "status": "danger",
-            "rule": "تدفق نقدي متلاشٍ مع تراكم المخزون",
-            "text": f"تراكم المخزون ({_pct(inv_yoy)}) بالتزامن مع انكماش التدفق التشغيلي ({_pct(cfo_yoy_val)})"
+            "rule": "Vanishing Cash Flow with Inventory Build-up",
+            "text": f"Inventory accumulating ({_pct(inv_yoy)}) while operating cash flow contracting ({_pct(cfo_yoy_val)})"
         }
     return None
 
@@ -345,12 +346,12 @@ def get_company_signals(symbol: str) -> Dict[str, Any]:
     signals = []
     
     # 1. Net profit acceleration
-    s_net = calculate_acceleration_signal("صافي الربح", q_net)
+    s_net = calculate_acceleration_signal("Net Profit", q_net)
     if s_net:
         signals.append(s_net)
         
     # 2. Revenue acceleration
-    s_rev = calculate_acceleration_signal("الإيرادات", q_rev)
+    s_rev = calculate_acceleration_signal("Revenue", q_rev)
     if s_rev:
         signals.append(s_rev)
         

@@ -461,7 +461,7 @@ def get_company_unified_page_data(symbol: str) -> Dict[str, Any]:
     live_roe_peers = []
     for p in sec_peers:
         p_sym = p["sym"]
-        p_name = p.get("name") or p_sym
+        p_name = p.get("name_en") or p.get("name") or p_sym
         calc_roe = _compute_peer_real_roe(p_sym)
         if calc_roe is None:
             calc_roe = p.get("roe") or 0.0
@@ -471,11 +471,12 @@ def get_company_unified_page_data(symbol: str) -> Dict[str, Any]:
 
     live_roe_peers = sorted(live_roe_peers, key=lambda x: x[2], reverse=True)[:10]
 
+    _en = lambda p: p.get("name_en") or p.get("name") or p["sym"]
     peers_map = {
         "roe": live_roe_peers,
-        "nm": sorted([[p["sym"], p["name"], p["nm"] or 0.0] for p in sec_peers if p.get("nm") is not None], key=lambda x: x[2], reverse=True)[:10],
-        "pe": sorted([[p["sym"], p["name"], p["pe"] or 999.0] for p in sec_peers if p.get("pe") is not None], key=lambda x: x[2])[:10],
-        "g_net": sorted([[p["sym"], p["name"], p["g_net"] or -999.0] for p in sec_peers if p.get("g_net") is not None], key=lambda x: x[2], reverse=True)[:10]
+        "nm": sorted([[p["sym"], _en(p), p["nm"] or 0.0] for p in sec_peers if p.get("nm") is not None], key=lambda x: x[2], reverse=True)[:10],
+        "pe": sorted([[p["sym"], _en(p), p["pe"] or 999.0] for p in sec_peers if p.get("pe") is not None], key=lambda x: x[2])[:10],
+        "g_net": sorted([[p["sym"], _en(p), p["g_net"] or -999.0] for p in sec_peers if p.get("g_net") is not None], key=lambda x: x[2], reverse=True)[:10]
     }
 
     def _calc_pct(val, peer_key, higher_is_better=True):
@@ -537,21 +538,8 @@ def get_company_unified_page_data(symbol: str) -> Dict[str, Any]:
         or {}
     )
 
-    bs_data = {
-        "periods": selected_bs_periods,
-        "cash": _scale_series(bs_items.get("Cash and Cash Equivalents", {}), selected_bs_periods),
-        "receivables": _scale_series(bs_items.get("Trade and Other Receivables", {}), selected_bs_periods),
-        "inventory": _scale_series(bs_items.get("Inventories", {}) or bs_items.get("Inventory", {}), selected_bs_periods),
-        "payables": _scale_series(bs_items.get("Trade and Other Payables", {}), selected_bs_periods),
-        "current_assets": _scale_series(bs_items.get("Total Current Assets", {}), selected_bs_periods),
-        "ppe": _scale_series(bs_items.get("Property, Plant and Equipment (PPE)", {}), selected_bs_periods),
-        "total_assets": _scale_series(bs_items.get("Total Assets", {}), selected_bs_periods),
-        "short_debt": _scale_series(short_debt_vals, selected_bs_periods),
-        "current_liabilities": _scale_series(bs_items.get("Total Current Liabilities", {}), selected_bs_periods),
-        "long_debt": _scale_series(long_debt_vals, selected_bs_periods),
-        "total_liabilities": _scale_series(bs_items.get("Total Liabilities", {}), selected_bs_periods),
-        "capital": _scale_series(bs_items.get("Share Capital", {}), selected_bs_periods),
-        "retained_earnings": _scale_series(
+    def _build_bs_data(p_list):
+        re_series = _scale_series(
             bs_items.get("Retained Earnings / (Accumulated Losses)")
             or bs_items.get("Retained Earnings")
             or bs_items.get("Retained Earnings/(Accumulated Losses)")
@@ -559,34 +547,70 @@ def get_company_unified_page_data(symbol: str) -> Dict[str, Any]:
             or bs_items.get("أرباح مبقاة")
             or bs_items.get("Reserves and Retained Earnings")
             or {},
-            selected_bs_periods,
-        ),
-        "total_equity": _scale_series(bs_items.get("Total Equity", {}) or bs_items.get("Total Equity Attributable to Shareholders", {}), selected_bs_periods),
-        "equity": _scale_series(bs_items.get("Total Equity", {}) or bs_items.get("Total Equity Attributable to Shareholders", {}), selected_bs_periods),
-        "total_debt": [
-            round(s + l, 1) for s, l in zip(
-                _scale_series(short_debt_vals, selected_bs_periods),
-                _scale_series(long_debt_vals, selected_bs_periods)
-            )
-        ],
-        "net_debt": [
-            round(s + l - c, 1) for s, l, c in zip(
-                _scale_series(short_debt_vals, selected_bs_periods),
-                _scale_series(long_debt_vals, selected_bs_periods),
-                _scale_series(bs_items.get("Cash and Cash Equivalents", {}), selected_bs_periods)
-            )
-        ],
-    }
+            p_list,
+        )
+        eq_series = _scale_series(bs_items.get("Total Equity", {}) or bs_items.get("Total Equity Attributable to Shareholders", {}), p_list)
+        cap_series = _scale_series(bs_items.get("Share Capital", {}), p_list)
+        if all(v == 0 for v in re_series) and any(e != 0 for e in eq_series) and any(c != 0 for c in cap_series):
+            re_series = [round(e - c, 1) for e, c in zip(eq_series, cap_series)]
 
-    # ── Fallback: derive retained_earnings from (equity − capital) when XBRL label was not matched ──
-    re_vals = bs_data["retained_earnings"]
-    if all(v == 0 for v in re_vals):
-        eq_vals = bs_data["total_equity"]
-        cap_vals = bs_data["capital"]
-        if any(e != 0 for e in eq_vals) and any(c != 0 for c in cap_vals):
-            bs_data["retained_earnings"] = [
-                round(e - c, 1) for e, c in zip(eq_vals, cap_vals)
-            ]
+        return {
+            "periods": p_list,
+            "cash": _scale_series(bs_items.get("Cash and Cash Equivalents", {}), p_list),
+            "receivables": _scale_series(bs_items.get("Trade and Other Receivables", {}), p_list),
+            "inventory": _scale_series(bs_items.get("Inventories", {}) or bs_items.get("Inventory", {}), p_list),
+            "payables": _scale_series(bs_items.get("Trade and Other Payables", {}), p_list),
+            "current_assets": _scale_series(bs_items.get("Total Current Assets", {}), p_list),
+            "ppe": _scale_series(bs_items.get("Property, Plant and Equipment (PPE)", {}), p_list),
+            "total_assets": _scale_series(bs_items.get("Total Assets", {}), p_list),
+            "short_debt": _scale_series(short_debt_vals, p_list),
+            "current_liabilities": _scale_series(bs_items.get("Total Current Liabilities", {}), p_list),
+            "long_debt": _scale_series(long_debt_vals, p_list),
+            "total_liabilities": _scale_series(bs_items.get("Total Liabilities", {}), p_list),
+            "capital": cap_series,
+            "retained_earnings": re_series,
+            "total_equity": eq_series,
+            "equity": eq_series,
+            "total_debt": [
+                round(s + l, 1) for s, l in zip(
+                    _scale_series(short_debt_vals, p_list),
+                    _scale_series(long_debt_vals, p_list)
+                )
+            ],
+            "net_debt": [
+                round(s + l - c, 1) for s, l, c in zip(
+                    _scale_series(short_debt_vals, p_list),
+                    _scale_series(long_debt_vals, p_list),
+                    _scale_series(bs_items.get("Cash and Cash Equivalents", {}), p_list)
+                )
+            ],
+        }
+
+    bs_data = _build_bs_data(selected_bs_periods)
+    # Quarterly Balance Sheet: last 8 available discrete periods
+    q_bs_periods = bs_periods[-8:] if bs_periods else []
+    bs_data_q = _build_bs_data(q_bs_periods)
+
+    def _build_cf_data(p_list):
+        cfo_s = _scale_series(cf_items.get("Net Cash from Operating Activities (CFO)", {}) or cf_items.get("Net cash flows from (used in) operations", {}), p_list)
+        capex_s = _scale_series(cf_items.get("Capital Expenditures (CapEx)", {}) or cf_items.get("شراء ممتلكات وآلات ومعدات", {}), p_list)
+        cfi_s = _scale_series(cf_items.get("Net Cash Used in Investing Activities (CFI)", {}), p_list)
+        cff_s = _scale_series(cf_items.get("Net Cash from Financing Activities (CFF)", {}) or cf_items.get("Net Proceeds (Repayments) of Borrowings", {}), p_list)
+        fcf_s = [round(cfo - abs(cx), 1) for cfo, cx in zip(cfo_s, capex_s)] if cfo_s and capex_s else cfo_s
+
+        return {
+            "periods": p_list,
+            "cfo": cfo_s,
+            "inventory": _scale_series(cf_items.get("Changes in Working Capital", {}) or cf_items.get("Adjustments for decrease (increase) in inventory real estate properties", {}), p_list),
+            "finance_paid": _scale_series(cf_items.get("Finance Costs Paid", {}) or cf_items.get("Interest paid, classified as operating activities", {}), p_list),
+            "capex": capex_s,
+            "other_investing": _scale_series(cf_items.get("Other Investing Activities", {}), p_list),
+            "cfi": cfi_s,
+            "borrowings": _scale_series(cf_items.get("Net Proceeds (Repayments) of Borrowings", {}), p_list),
+            "cff": cff_s,
+            "net_change": _scale_series(cf_items.get("Net Change in Cash and Cash Equivalents", {}) or cf_items.get("Increase (decrease) in cash and cash equivalents before effect of exchange rate changes", {}), p_list),
+            "fcf": fcf_s,
+        }
 
     cf_periods = std_cf.periods if std_cf and std_cf.periods else []
     selected_cf_periods = [p for p in cf_periods if p.endswith("_" + p.split("_")[0] + "-12") or p.endswith("-12")]
@@ -594,33 +618,9 @@ def get_company_unified_page_data(symbol: str) -> Dict[str, Any]:
         selected_cf_periods = cf_periods[-6:]
     selected_cf_periods = selected_cf_periods[-6:]
 
-    cfo_s = _scale_series(cf_items.get("Net Cash from Operating Activities (CFO)", {}) or cf_items.get("Net cash flows from (used in) operations", {}), selected_cf_periods)
-    capex_s = _scale_series(cf_items.get("Capital Expenditures (CapEx)", {}) or cf_items.get("شراء ممتلكات وآلات ومعدات", {}), selected_cf_periods)
-    cfi_s = _scale_series(cf_items.get("Net Cash Used in Investing Activities (CFI)", {}), selected_cf_periods)
-    cff_s = _scale_series(cf_items.get("Net Cash from Financing Activities (CFF)", {}) or cf_items.get("Net Proceeds (Repayments) of Borrowings", {}), selected_cf_periods)
-    
-    # Pure Free Cash Flow = CFO - abs(CapEx)
-    fcf_s = [round(cfo - abs(cx), 1) for cfo, cx in zip(cfo_s, capex_s)] if cfo_s and capex_s else cfo_s
-
-    inventory_s = _scale_series(cf_items.get("Changes in Working Capital", {}) or cf_items.get("Adjustments for decrease (increase) in inventory real estate properties", {}), selected_cf_periods)
-    finance_paid_s = _scale_series(cf_items.get("Finance Costs Paid", {}) or cf_items.get("Interest paid, classified as operating activities", {}), selected_cf_periods)
-    other_inv_s = _scale_series(cf_items.get("Other Investing Activities", {}), selected_cf_periods)
-    borrowings_s = _scale_series(cf_items.get("Net Proceeds (Repayments) of Borrowings", {}), selected_cf_periods)
-    net_change_s = _scale_series(cf_items.get("Net Change in Cash and Cash Equivalents", {}) or cf_items.get("Increase (decrease) in cash and cash equivalents before effect of exchange rate changes", {}), selected_cf_periods)
-
-    cf_data = {
-        "periods": selected_cf_periods,
-        "cfo": cfo_s,
-        "inventory": inventory_s,
-        "finance_paid": finance_paid_s,
-        "capex": capex_s,
-        "other_investing": other_inv_s,
-        "cfi": cfi_s,
-        "borrowings": borrowings_s,
-        "cff": cff_s,
-        "net_change": net_change_s,
-        "fcf": fcf_s,
-    }
+    cf_data = _build_cf_data(selected_cf_periods)
+    q_cf_periods = cf_periods[-8:] if cf_periods else []
+    cf_data_q = _build_cf_data(q_cf_periods)
 
     full_is_data = {
         "periods": human_annual_p,
@@ -678,7 +678,9 @@ def get_company_unified_page_data(symbol: str) -> Dict[str, Any]:
         "cur": cur_dict,
         "pct": pct_dict,
         "bs": bs_data,
+        "bs_quarterly": bs_data_q,
         "cf": cf_data,
+        "cf_quarterly": cf_data_q,
         "peers": {
             "sym": sym,
             "name": name_en,

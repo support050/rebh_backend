@@ -71,6 +71,7 @@ def list_companies() -> list[CompanyListItem]:
                 CompanyListItem(
                     symbol=meta.get("symbol", fp.stem.split("_")[0]),
                     company_name=meta.get("company_name", "Unknown"),
+                    name_en=meta.get("name_en") or meta.get("company_name") or None,
                     sector=meta.get("sector"),
                     report_end=meta.get("report_end"),
                     periods_count=len(all_periods),

@@ -171,6 +171,7 @@ class RedFlagItem(BaseModel):
     title_ar: str
     title_en: str
     detail: str
+    detail_en: Optional[str] = None
     status_symbol: str = "⚑"
 
 
@@ -201,7 +202,9 @@ class RebhUniversalContract(BaseModel):
     """
     symbol: str
     name: str
+    en: Optional[str] = None
     sector: str
+    sec_en: Optional[str] = None
     industry_class: str
     market_form: str = "TADAWUL_MAIN"
     elasticity: Optional[str] = None

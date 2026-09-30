@@ -74,7 +74,9 @@ def get_rebh_company(
         # Seamless backward compatibility keys for legacy frontend components
         data["sym"] = contract.symbol
         data["n"] = contract.name
+        data["en"] = contract.en or contract.name
         data["sec"] = contract.sector
+        data["sec_en"] = contract.sec_en or contract.sector
         data["px"] = contract.price
         data["mc"] = contract.market_cap
         data["pe"] = round(contract.market_cap / (contract.TTM.net_profit / 1_000_000), 1) if (contract.market_cap and contract.TTM.net_profit and contract.TTM.net_profit > 0) else None
@@ -97,8 +99,8 @@ def get_rebh_company(
             "vs": contract.margin_of_safety or 0.0
         }
         data["wl"] = [
-            ["g", "القوائم المالية مطابقة ومحققة بفحص الهويات (A = L + E)"] if contract.balance_identity.is_valid else ["r", "فشل فحص الهوية المحاسبية للميزانية العمومية"],
-            ["g", "الشركة مجتازة لمعايير السلامة المالية"] if not contract.quarantine_reason else ["w", contract.quarantine_reason]
+            ["g", "Financial statements verified by accounting identities (A = L + E)"] if contract.balance_identity.is_valid else ["r", "Balance sheet accounting identity check failed"],
+            ["g", "Company passed financial safety criteria"] if not contract.quarantine_reason else ["w", contract.quarantine_reason]
         ]
         data["khurafshi"] = {
             "safety_score": contract.safety.get("raw_score", 0),
@@ -223,13 +225,17 @@ def get_rebh_council_scorecard() -> Dict[str, Any]:
     categories = [
         {
             "id": "1",
-            "name": "الهوية المحاسبية والتحقق الجنائي",
+            "name": "Accounting Identities & Forensic Validation",
             "nameEn": "Accounting Identities & Forensic Validation",
             "score": 10, "max": 10, "status": "PASS",
             "authority": "Michael Burry / Forensic Team",
             "detail": (
-                f"مطابقة معادلة A = L + E و CFO+CFI+CFF = ΔCash على {pass_count} شركة من أصل {total_n}. "
-                f"تم إصلاح {fixed_n} حالة، وحجب {withheld_n} قيمة فاسدة، واستبعاد {corrupt_n} شركة نهائياً."
+                f"Reconciled A = L + E and CFO+CFI+CFF = ΔCash across {pass_count} of {total_n} companies. "
+                f"Recovered {fixed_n} cases, withheld {withheld_n} corrupt values, and completely quarantined {corrupt_n} symbols."
+            ),
+            "detailEn": (
+                f"Reconciled A = L + E and CFO+CFI+CFF = ΔCash across {pass_count} of {total_n} companies. "
+                f"Recovered {fixed_n} cases, withheld {withheld_n} corrupt values, and completely quarantined {corrupt_n} symbols."
             ),
             "evidence": {
                 "forensic_pass": pass_count, "total_universe": total_n,
@@ -240,14 +246,17 @@ def get_rebh_council_scorecard() -> Dict[str, Any]:
         },
         {
             "id": "2",
-            "name": "حداثة البيانات وبوابات الحجر المالي",
+            "name": "Data Freshness & Munger Quarantine",
             "nameEn": "Data Freshness & Munger Quarantine",
             "score": 10, "max": 10, "status": "PASS",
             "authority": "Charlie Munger",
             "detail": (
-                f"{fresh_n} شركة لديها قوائم حديثة (آخر 18 شهراً) من أصل {total_n}. "
-                f"{stale_n} شركة محجورة تلقائياً (Too-Hard Pile) — ممنوع تسعيرها داخل المحرك "
-                f"اعتباراً من {today.strftime('%Y-%m-%d')}."
+                f"{fresh_n} companies have up-to-date statements (last 18 months) out of {total_n}. "
+                f"{stale_n} companies automatically quarantined (Too-Hard Pile) — barred from engine pricing as of {today.strftime('%Y-%m-%d')}."
+            ),
+            "detailEn": (
+                f"{fresh_n} companies have up-to-date statements (last 18 months) out of {total_n}. "
+                f"{stale_n} companies automatically quarantined (Too-Hard Pile) — barred from engine pricing as of {today.strftime('%Y-%m-%d')}."
             ),
             "evidence": {
                 "fresh_companies": fresh_n, "stale_quarantined": stale_n,
@@ -257,14 +266,19 @@ def get_rebh_council_scorecard() -> Dict[str, Any]:
         },
         {
             "id": "3",
-            "name": "تفكيك العائد المطلوب (Build-Up R)",
+            "name": "Cost of Capital & Sovereign Sukuk Benchmark",
             "nameEn": "Cost of Capital & Sovereign Sukuk Benchmark",
             "score": 10, "max": 10, "status": "PASS",
             "authority": "Khurafshi Engine Core",
             "detail": (
-                f"نموذج Build-Up R مُطبَّق على {non_fin_n} شركة غير مالية. "
-                f"نموذج منفصل لـ {len(bank_syms)} بنكاً. "
-                f"{len(ins_syms)} تأمين + {len(reit_syms)} ريت موقوفة (Sprint 4) — غياب صريح لا نتيجة مزيفة."
+                f"Build-Up R model applied to {non_fin_n} non-financial corporations. "
+                f"Separate dedicated model for {len(bank_syms)} commercial banks. "
+                f"{len(ins_syms)} Insurance + {len(reit_syms)} REITs intentionally halted (Sprint 4) — declared absence over fake figures."
+            ),
+            "detailEn": (
+                f"Build-Up R model applied to {non_fin_n} non-financial corporations. "
+                f"Separate dedicated model for {len(bank_syms)} commercial banks. "
+                f"{len(ins_syms)} Insurance + {len(reit_syms)} REITs intentionally halted (Sprint 4) — declared absence over fake figures."
             ),
             "evidence": {
                 "non_financial_buildup": non_fin_n, "banks_separate_model": len(bank_syms),
@@ -274,14 +288,19 @@ def get_rebh_council_scorecard() -> Dict[str, Any]:
         },
         {
             "id": "4",
-            "name": "مصفوفة الصناديق التسعة ونطاقات الأسعار",
+            "name": "Nine-Box Matrix & Fair Value Bands",
             "nameEn": "Nine-Box Matrix & Fair Value Bands",
             "score": 10, "max": 10, "status": "PASS",
             "authority": "Valuation Board",
             "detail": (
-                f"نطاقات القيمة العادلة (ذهبي/فضي/برونزي) محسوبة لـ {pass_count} شركة مجتازة للفحص الجنائي، "
-                f"مع بيانات سعرية حية لـ {live_price_syms} رمزاً. "
-                f"{mixed_n} شركة بتقدير مختلط — تُعرض مع تحذير ولا تُدخل في التسعير القطعي."
+                f"Fair value bands (Gold / Silver / Bronze) computed for {pass_count} companies passing forensic audit, "
+                f"paired with live market prices for {live_price_syms} tickers. "
+                f"{mixed_n} companies with mixed estimates flagged with warnings and excluded from hard pricing."
+            ),
+            "detailEn": (
+                f"Fair value bands (Gold / Silver / Bronze) computed for {pass_count} companies passing forensic audit, "
+                f"paired with live market prices for {live_price_syms} tickers. "
+                f"{mixed_n} companies with mixed estimates flagged with warnings and excluded from hard pricing."
             ),
             "evidence": {
                 "valuation_eligible": pass_count, "live_price_symbols": live_price_syms,
@@ -290,14 +309,17 @@ def get_rebh_council_scorecard() -> Dict[str, Any]:
         },
         {
             "id": "5",
-            "name": "التدفق النقدي الحر وتوزيعات الأرباح",
+            "name": "Free Cash Flow & Owner Earnings",
             "nameEn": "Free Cash Flow & Owner Earnings",
             "score": 10, "max": 10, "status": "PASS",
             "authority": "Warren Buffett",
             "detail": (
-                f"FCF = CFO − CapEx محسوب على {pass_count} شركة. "
-                f"المحرك يكتشف تلقائياً غياب الـ CapEx ويضع إشارة حجب على {withheld_n} حالة "
-                f"بدلاً من اختراع الرقم. لا يُقبَل الاكتفاء بصافي الأرباح المحاسبية."
+                f"FCF = CFO − CapEx computed for {pass_count} companies. "
+                f"The engine detects missing CapEx and applies honest withholding on {withheld_n} cases rather than inventing numbers."
+            ),
+            "detailEn": (
+                f"FCF = CFO − CapEx computed for {pass_count} companies. "
+                f"The engine detects missing CapEx and applies honest withholding on {withheld_n} cases rather than inventing numbers."
             ),
             "evidence": {
                 "fcf_computed": pass_count, "withheld_missing_capex": withheld_n,
@@ -306,14 +328,17 @@ def get_rebh_council_scorecard() -> Dict[str, Any]:
         },
         {
             "id": "6",
-            "name": "فحص السلامة المالية وأوزان بيوتروسكي",
+            "name": "Financial Safety & Piotroski F-Score",
             "nameEn": "Financial Safety & Piotroski F-Score",
             "score": 10, "max": 10, "status": "PASS",
             "authority": "Benjamin Graham / Piotroski",
             "detail": (
-                f"الاختبارات التسعة الصارمة لبيوتروسكي مُطبَّقة على {len(rich_periods)} شركة "
-                f"لديها ≥ 6 فترات مالية للمقارنة السنوية. "
-                f"{total_n - len(rich_periods)} شركة تحصل على ⚑missing-f-score — لا رقم مخترع."
+                f"Strict 9 Piotroski tests executed on {len(rich_periods)} companies with ≥ 6 reporting periods for YoY audits. "
+                f"{total_n - len(rich_periods)} companies flagged with ⚑missing-f-score — zero unearned assumptions."
+            ),
+            "detailEn": (
+                f"Strict 9 Piotroski tests executed on {len(rich_periods)} companies with ≥ 6 reporting periods for YoY audits. "
+                f"{total_n - len(rich_periods)} companies flagged with ⚑missing-f-score — zero unearned assumptions."
             ),
             "evidence": {
                 "piotroski_eligible": len(rich_periods),
@@ -323,14 +348,17 @@ def get_rebh_council_scorecard() -> Dict[str, Any]:
         },
         {
             "id": "7",
-            "name": "عدة التحليل المصرفي المتخصص (Banks Toolkit)",
+            "name": "Specialized Banking Analytics",
             "nameEn": "Specialized Banking Analytics",
             "score": 10, "max": 10, "status": "PASS",
             "authority": "Banking & Macro Council",
             "detail": (
-                f"نموذج NIM/CASA/LDR مخصص لـ {len(bank_syms)} بنكاً سعودياً. "
-                f"التأمين ({len(ins_syms)} شركة) والريت ({len(reit_syms)} صندوق) موقوفان — "
-                f"غياب صريح لا نتيجة مزيفة."
+                f"Tailored NIM/CASA/LDR models dedicated to {len(bank_syms)} Saudi banks. "
+                f"Insurance ({len(ins_syms)} companies) and REITs ({len(reit_syms)} funds) halted with clear disclosures."
+            ),
+            "detailEn": (
+                f"Tailored NIM/CASA/LDR models dedicated to {len(bank_syms)} Saudi banks. "
+                f"Insurance ({len(ins_syms)} companies) and REITs ({len(reit_syms)} funds) halted with clear disclosures."
             ),
             "evidence": {
                 "banks_covered": len(bank_syms), "insurance_halted": len(ins_syms),
@@ -340,13 +368,17 @@ def get_rebh_council_scorecard() -> Dict[str, Any]:
         },
         {
             "id": "8",
-            "name": "تصنيف ركائز العمل التنافسية الـ 7",
+            "name": "7-Pillar Business Classification & Moat",
             "nameEn": "7-Pillar Business Classification & Moat",
             "score": 10, "max": 10, "status": "PASS",
             "authority": "Philip Fisher / Strategy Guild",
             "detail": (
-                f"تصنيف هيكل السوق لـ {total_n} شركة عبر {unique_sectors} قطاعاً مستخرجاً من XBRL. "
-                f"مصفوفة BCG والهيمنة التنافسية محسوبة على {non_fin_n} شركة غير مالية."
+                f"Market structure classified for {total_n} companies across {unique_sectors} sectors extracted from XBRL. "
+                f"BCG matrix and competitive dominance computed on {non_fin_n} non-financial businesses."
+            ),
+            "detailEn": (
+                f"Market structure classified for {total_n} companies across {unique_sectors} sectors extracted from XBRL. "
+                f"BCG matrix and competitive dominance computed on {non_fin_n} non-financial businesses."
             ),
             "evidence": {
                 "classified_companies": total_n, "unique_sectors": unique_sectors,
@@ -355,14 +387,17 @@ def get_rebh_council_scorecard() -> Dict[str, Any]:
         },
         {
             "id": "9",
-            "name": "غرفة المحركات الربعية وسلسلة الـ 9 فصول",
+            "name": "Discrete 9-Quarter Engine Room",
             "nameEn": "Discrete 9-Quarter Engine Room",
             "score": 10, "max": 10, "status": "PASS",
             "authority": "William O'Neil / Quant Team",
             "detail": (
-                f"سلسلة Q1–Q9 مبنية بالفروق التلقائية (Discrete) على {len(rich_periods)} شركة "
-                f"لديها ≥ 6 فترات مُبلّغة. "
-                f"{total_n - len(rich_periods)} شركة ناقصة البيانات تُعلَّم صراحةً — لا إكمال مصطنع."
+                f"Discrete Q1–Q9 series constructed automatically for {len(rich_periods)} companies with ≥ 6 reported periods. "
+                f"{total_n - len(rich_periods)} companies with incomplete data flagged explicitly without interpolation."
+            ),
+            "detailEn": (
+                f"Discrete Q1–Q9 series constructed automatically for {len(rich_periods)} companies with ≥ 6 reported periods. "
+                f"{total_n - len(rich_periods)} companies with incomplete data flagged explicitly without interpolation."
             ),
             "evidence": {
                 "quarterly_engine_eligible": len(rich_periods),
@@ -372,14 +407,17 @@ def get_rebh_council_scorecard() -> Dict[str, Any]:
         },
         {
             "id": "10",
-            "name": "لجنة الخبراء الـ 31 وسجل التوقيع والمصادقة",
+            "name": "The Council 31 & Certified Sign-Off",
             "nameEn": "The Council 31 & Certified Sign-Off",
             "score": 10, "max": 10, "status": "PASS",
             "authority": "The 31 Investment Council",
             "detail": (
-                f"المجلس الـ 31 صادق على منهجية مُطبَّقة على {total_n} شركة و{live_price_syms} رمزاً حياً. "
-                f"{len(audit_checks)} نقطة تحقق جنائية مُعلنة، "
-                f"{len(audit.get('refuse_list', []))} حالة رفض موثّقة ومنشورة علناً."
+                f"The 31-member Council certified the methodology deployed on {total_n} companies and {live_price_syms} live symbols. "
+                f"{len(audit_checks)} forensic audit checkpoints published with {len(audit.get('refuse_list', []))} refuse cases documented."
+            ),
+            "detailEn": (
+                f"The 31-member Council certified the methodology deployed on {total_n} companies and {live_price_syms} live symbols. "
+                f"{len(audit_checks)} forensic audit checkpoints published with {len(audit.get('refuse_list', []))} refuse cases documented."
             ),
             "evidence": {
                 "council_members": 31, "verified_universe": total_n,
@@ -916,30 +954,35 @@ def get_quarantine_records() -> Dict[str, Any]:
         # None = unknown/missing (not a health pass); False = explicit failure
         bs_ok = item.get("bs_ok", None)
         
+        name_en = item.get("en") or item.get("name_en") or name
+        sec_en = item.get("sec_en") or item.get("sector_en") or sec
+
         reasons = []
         structured_reasons = []
         if not name and not sec:
-            reasons.append("غياب الإفصاحات من المصدر (No filings at source)")
-            structured_reasons.append({"code": "NO_FILINGS", "kind": "no-filings", "label": "غياب الإفصاحات من المصدر (No filings at source)"})
+            reasons.append("No filings at source")
+            structured_reasons.append({"code": "NO_FILINGS", "kind": "no-filings", "label": "No filings at source"})
         elif not fresh:
-            reasons.append("قوائم مالية متأخرة أو غير مكتملة (Stale / Incomplete)")
-            structured_reasons.append({"code": "STALE", "kind": "stale", "label": "قوائم مالية متأخرة أو غير مكتملة (Stale / Incomplete)"})
+            reasons.append("Stale or incomplete financial statements")
+            structured_reasons.append({"code": "STALE", "kind": "stale", "label": "Stale or incomplete financial statements"})
         # Only flag corruption when bs_ok is explicitly False — None means data absent, not corrupted
         if bs_ok is False:
-            reasons.append("خلل في هوية الميزانية A ≠ L + E")
-            structured_reasons.append({"code": "BALANCE_IDENTITY", "kind": "corruption", "label": "خلل في هوية الميزانية A ≠ L + E"})
+            reasons.append("Balance sheet identity mismatch (A ≠ L + E)")
+            structured_reasons.append({"code": "BALANCE_IDENTITY", "kind": "corruption", "label": "Balance sheet identity mismatch (A ≠ L + E)"})
         if "⚑incomplete-source" in flags:
-            reasons.append("نقص في بنود قائمة الدخل أو المركز المالي")
-            structured_reasons.append({"code": "EMPTY_STATEMENT", "kind": "empty-statement", "label": "نقص في بنود قائمة الدخل أو المركز المالي"})
+            reasons.append("Missing financial statement line items")
+            structured_reasons.append({"code": "EMPTY_STATEMENT", "kind": "empty-statement", "label": "Missing financial statement line items"})
         if "⚑low-f-score" in flags:
-            reasons.append("درجة بيوتروسكي متدنية (F-Score ≤ 2)")
-            structured_reasons.append({"code": "LOW_F_SCORE", "kind": "other", "label": "درجة بيوتروسكي متدنية (F-Score ≤ 2)"})
+            reasons.append("Low Piotroski score (F-Score ≤ 2)")
+            structured_reasons.append({"code": "LOW_F_SCORE", "kind": "other", "label": "Low Piotroski score (F-Score ≤ 2)"})
             
         if reasons:
             quarantined.append({
                 "symbol": sym,
                 "name": name,
+                "en": name_en,
                 "sector": sec,
+                "sec_en": sec_en,
                 "reason": " • ".join(reasons),
                 "reasons_list": reasons,
                 "reasons_structured": structured_reasons,

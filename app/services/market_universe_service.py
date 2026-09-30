@@ -416,42 +416,42 @@ def get_khurafshi_live_market_stats(force_refresh: bool = False) -> Dict[str, An
         {
             "metric": "Company Coverage",
             "metricAr": "تغطية الشركات المدرجة",
-            "state": f"{total_companies} شركة مسجلة",
+            "state": f"{total_companies} Companies Covered",
             "stateType": "ok",
-            "detail": f"تمت تغطية وتحليل {total_companies} شركة من السوق السعودي عبر مستورد XBRL الحي.",
-            "fix": "تحديث مستمر للشركات الجديدة وصناديق الريت."
+            "detail": f"{total_companies} companies covered and parsed across Tadawul via live XBRL importer.",
+            "fix": "Continuous ingestion of newly listed companies and REIT funds."
         },
         {
             "metric": "Balance-Sheet Identity (A = L + E)",
             "metricAr": "المعادلة المحاسبية (الأصول = الالتزامات + الملكية)",
-            "state": f"{verified_bs} / {verified_bs} اجتياز (100%)",
+            "state": f"{verified_bs} / {verified_bs} Passed (100%)",
             "stateType": "ok",
-            "detail": f"تم التحقق من مطابقة المعادلة المحاسبية لـ {verified_bs} ميزانية عمومية في قاعدة البيانات.",
-            "fix": "معادلة الاسترداد الذاتي: TA_true = (TA_std + CA) / 2"
+            "detail": f"Accounting identity A = L + E verified for {verified_bs} balance sheets in the database.",
+            "fix": "Self-recovery formula applied: TA_true = (TA_std + CA) / 2"
         },
         {
             "metric": "Income Statements Tagging",
             "metricAr": "بيانات قوائم الدخل",
-            "state": f"{valued} مكتملة · {missing_is} قيد المعالجة",
+            "state": f"{valued} Complete · {missing_is} In Review",
             "stateType": "warn" if missing_is > 0 else "ok",
-            "detail": f"{valued} شركة مكتملة قوائم الدخل بالكامل و{missing_is} شركة جاري ربط وسومها.",
-            "fix": "إصلاح مصفوفة وسوم قائمة الدخل (Tag-Mapper) لربط الشركات المتبقية."
+            "detail": f"{valued} companies have complete income statements; {missing_is} companies have tags being mapped.",
+            "fix": "Income statement tag-mapper update to cover remaining edge cases."
         },
         {
             "metric": "Data Freshness & Pricing Rule",
             "metricAr": "حداثة القوائم وقواعد التسعير الصارمة",
-            "state": f"{valued} محدثة · {quarantine} في سلة مونجر",
+            "state": f"{valued} Fresh · {quarantine} in Munger Quarantine",
             "stateType": "warn" if quarantine > 0 else "ok",
-            "detail": f"{quarantine} شركة محظورة من التسعير الآلي بأمانة لحين اكتمال قوائمها الحديثة.",
-            "fix": "تحديث القوائم المالية ربع السنوية وفك حظر التسعير تلقائياً."
+            "detail": f"{quarantine} companies barred from automatic pricing until statements are fully updated.",
+            "fix": "Periodic quarterly statements refresh automatically lifts the valuation block."
         },
         {
             "metric": "Signals Honesty & Guards",
             "metricAr": "حراسة الأمانة الحسابية ومنع التضليل",
-            "state": "مطبقة بالكامل (Enforced)",
+            "state": "Enforced (100%)",
             "stateType": "ok",
-            "detail": "حظر احتساب نسب النمو السالبة المقلوبة (Sign-flip) · تقييد صافي الربح بألا يتجاوز 120% من الإيرادات.",
-            "fix": "محرك الحماية الحسابي الذاتي يعمل باستمرار مع كل عملية تقييم."
+            "detail": "Sign-flip prevention for negative growth rates · Net income capped at 120% of revenue plausibility guard.",
+            "fix": "Autonomous arithmetic guard engine runs with every valuation request."
         }
     ]
 
@@ -492,7 +492,9 @@ def get_khurafshi_universe_data(force_refresh: bool = False) -> List[Dict[str, A
     for c in companies:
         comp = get_company(c.symbol)
         sec = getattr(c, "sector", "Other") or "Other"
+        sec_en = getattr(c, "sector_en", None) or getattr(comp.meta if comp and hasattr(comp, "meta") else None, "sector_en", None) or sec
         name = getattr(c, "company_name", c.symbol) or c.symbol
+        name_en = getattr(c, "name_en", None) or getattr(comp.meta if comp and hasattr(comp, "meta") else None, "name_en", None) or getattr(comp.meta if comp and hasattr(comp, "meta") else None, "company_name_en", None) or name
         sym = str(c.symbol)
 
         price_row = price_map.get(sym, {})
@@ -793,7 +795,9 @@ def get_khurafshi_universe_data(force_refresh: bool = False) -> List[Dict[str, A
         results.append({
             "sym": sym,
             "n": name,
+            "en": name_en,
             "sec": sec,
+            "sec_en": sec_en,
             "px": px,
             "mc": mc,
             "pe": pe,
@@ -931,7 +935,16 @@ def get_universe_snapshot(force_refresh: bool = False) -> Optional[List[Dict[str
         )
         if not rows:
             return None
-        data = [_json.loads(r.payload_json) for r in rows if r.payload_json]
+        data = []
+        for r in rows:
+            if not r.payload_json:
+                continue
+            item = _json.loads(r.payload_json)
+            if not item.get("en"):
+                item["en"] = getattr(r, "name_en", None) or item.get("n")
+            if not item.get("sec_en"):
+                item["sec_en"] = getattr(r, "sector_en", None) or item.get("sec")
+            data.append(item)
         _UNIVERSE_SNAPSHOT_MEMCACHE["data"] = data
         _UNIVERSE_SNAPSHOT_MEMCACHE["timestamp"] = time.time()
         return data

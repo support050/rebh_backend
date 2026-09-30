@@ -202,6 +202,7 @@ def get_all_ratios_data() -> List[Dict[str, Any]]:
         rows.append({
             "sym": sym,
             "name": c.company_name or sym,
+            "name_en": getattr(c, "name_en", None) or c.company_name or sym,
             "sector": c.sector or "General",
             "mc": mc_v,
             "pe": pe_val,
