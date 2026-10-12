@@ -1,0 +1,232 @@
+# TASI Market Breadth Engine — configuration
+# All thresholds live here. Nothing is hard-coded in the modules.
+
+paths:
+  raw_prices_csv: "raw/TASI_prices_ALL_20260929_181127.csv"   # relative to storage/
+  raw_index_csv:  "raw/historical_reports_tasi_2026-09-30.csv"
+  storage_dir:    "storage"                                     # parquet root
+  overrides_csv:  "config/corporate_actions_override.csv"       # manual overrides (optional)
+
+universe:
+  exclude_symbol_ranges:        # REITs live in 4330-4359; NOMU (9xxx) and ETFs are not in the file
+    - [4330, 4359]
+  exclude_symbols: []
+  # Symbol whose "Industry Group" is wrong in the source (Alawwal Bank labelled "TASI")
+  industry_group_fixes:
+    1040: "Banks"
+  # Industry Group -> GICS-style sector (deterministic map, used where source Sector is empty)
+  industry_group_to_sector:
+    "Banks": "Financials"
+    "Financial Services": "Financials"
+    "Insurance": "Financials"
+    "Capital Goods": "Industrials"
+    "Commercial & Professional Svc": "Industrials"
+    "Transportation": "Industrials"
+    "Materials": "Materials"
+    "Energy": "Energy"
+    "Utilities": "Utilities"
+    "Food & Beverages": "Consumer Staples"
+    "Consumer Staples Distribution & Retail": "Consumer Staples"
+    "Household & Personal Products": "Consumer Staples"
+    "Consumer Discretionary Distribution & Retail": "Consumer Discretionary"
+    "Consumer Durables & Apparel": "Consumer Discretionary"
+    "Consumer Services": "Consumer Discretionary"
+    "Health Care Equipment & Svc": "Health Care"
+    "Pharma &  Biotech & Life Science": "Health Care"
+    "Media and Entertainment": "Communication Services"
+    "Telecommunication Services": "Communication Services"
+    "Software & Services": "Information Technology"
+    "Real Estate Mgmt & Dev't": "Real Estate"
+    "REITs": "Real Estate"
+  # New listings with no classification in the source — TO BE CONFIRMED by the user
+  industry_group_manual:
+    4328: "Capital Goods"            # LADUN (verify)
+    6022: "Consumer Services"        # ARMAH (verify)
+    7205: "Software & Services"      # DBS (verify)
+
+cleaning:
+  # A row is a suspension / no-trade day if any of these hold. Close is set to NaN on such rows.
+  suspended_if_volume_zero: true
+  suspended_if_close_zero: true
+  # Missing rows between a symbol's first and last date are re-inserted as suspended rows
+  fill_missing_days_as_suspended: true
+  # Open==0 (or High/Low==0) with volume>0 means "missing", not zero
+  zero_ohl_is_missing: true
+  # High/Low are widened to contain Open and Close when the source violates the range (rounding artefacts)
+  clamp_high_low: true
+  # Ignore the first row of each symbol for return calculations (source 'Change' is garbage there)
+  drop_first_row_return: true
+
+corporate_actions:
+  # The source history is back-adjusted up to this date (verified: no unadjusted event 2010-2025-11).
+  # From this date on, events are detected from the data and adjusted automatically.
+  detect_from_date: "2025-11-01"
+  # Detection rule: |ex-day open / previous valid close - 1| > jump_threshold
+  jump_threshold: 0.15
+  # Ignore the first N trading days of a listing (IPO price-discovery band is +/-30%)
+  ignore_first_n_days: 3
+  # Minimum reference price: below this, tick size alone can exceed the threshold
+  min_price: 3.0
+  # Adjustment factor = prev_close / ex_day_open ("gap splice"). If the implied share ratio from
+  # Market Cap agrees within this tolerance, the event is classified bonus_split; else rights/capital_change
+  share_ratio_tolerance: 0.05
+  # Factors for bonus_split events are snapped to the nearest common ratio when within snap_tolerance
+  # written as fractions (new shares / old shares + 1), parsed exactly
+  snap_ratios: ["21/20", "16/15", "11/10", "10/9", "9/8", "8/7", "7/6", "6/5", "5/4", "4/3", "7/5", "3/2", "8/5", "5/3", "7/4", "2", "5/2", "3", "4", "5"]
+  snap_tolerance: 0.025
+
+index:
+  equal_weight_base_date: "2002-01-01"
+  equal_weight_base_value: 1000.0
+  # A stock enters the EW index on a day only if it traded that day (not suspended) and has a valid previous close
+  min_stocks_per_day: 20
+
+# ---------------------------------------------------------------- Phase 2: indicators
+indicators:
+  # Which price is used for level-type metrics (MAs, NH/NL): last valid adjusted close (ffilled on suspension)
+  level_price: "last_close_adj"
+  participation:
+    ema_windows: [10]
+    sma_windows: [20, 50, 100, 150, 200]   # 100 added (Barchart / MarketInOut convention)
+    # a stock is eligible for an MA metric only after `window` trading days since listing
+    min_history_factor: 1.0
+    # Weinstein: 30-week MA ≈ 150 trading days; slope measured over `slope_lookback` days
+    weinstein_ma: 150
+    weinstein_slope_lookback: 20
+    # Minervini trend template
+    minervini:
+      ma_fast: 50
+      ma_mid: 150
+      ma_slow: 200
+      ma_slow_rising_days: 20          # MA200 must be above its value 20 days ago (>= 1 month)
+      above_52w_low_pct: 0.25          # close >= 1.25 x 52w low
+      within_52w_high_pct: 0.25        # close >= 0.75 x 52w high
+      rs_lookback: 126                 # RS = 6-month return percentile within universe
+      rs_min_percentile: 70
+    new_high_low_window: 252           # 52 weeks
+    high_low_index_ma: 10
+  # classic breadth library (Fosback, Miekka, Swenlin, McClellan volume, Zweig 9:1, ...) — see indicators/classic.py
+  classic:
+    hlli_window: 50                    # Fosback: 10-week MA
+    hindenburg_pct: 0.022              # NH and NL each >= 2.2% of issues (Miekka); 1.5% / 3.0% tested: same sign
+  # Point & Figure Bullish Percent Index (Dorsey / Chartcraft)
+  pnf:
+    box_pct: 0.02                      # 2% boxes (log scale), 3-box reversal
+    reversal: 3
+    min_age: 60
+  advance_decline:
+    mcclellan_fast: 19
+    mcclellan_slow: 39
+    trin_ma: 10
+    lowry_threshold: 0.90              # 90% up / 90% down days
+    # minimum number of stocks with a valid return for a day to be scored
+    min_stocks: 30
+
+# ---------------------------------------------------------------- Phase 3: thrusts & momentum
+thrusts:
+  cooldown_days: 20                 # a signal cannot repeat within this many trading days
+  zweig:
+    ema_span: 10                    # 10-day EMA of A/(A+D)
+    low: 0.40
+    high: 0.615
+    window: 10                      # low -> high within this many trading days
+  whaley:
+    days: 5                         # 5-day sum(A) / sum(D)
+    ratio: 3.0
+  deemer:
+    days: 10                        # 10-day sum(A) / sum(D)  (Breakaway Momentum)
+    ratio: 1.97                     # Phase 3: no edge on TASI at any ratio beyond Zweig/Whaley -> drop candidate
+  pct50_thrust:
+    low: 20.0                       # % above 50DMA from below `low`
+    high: 55.0                      # ... to above `high`
+    window: 15                      # within this many trading days (calibrated Phase 3: 20->55 in 15d)
+  lowry:
+    threshold: 0.95                 # calibrated Phase 3: 90% is not rare on TASI; only 95% DOWN days carry a 60d edge
+    # Lowry's sequence rule: a 90%-down day followed by a 90%-up day within a few days = major bottom.
+    # Tested on TASI (expert review, Sep-2026): 95%-down then >=85/90%-up within 5/10/15 days -> n=34..56,
+    # +0.4..+1.6% / 60d — WORSE than the 95%-down day alone. Kept as a displayed marker, not scored.
+    sequence_up_threshold: 0.90
+    sequence_window: 10
+  # "rare" variants requested by the expert review: thresholds chosen so the signal fires <= ~10 times
+  # since 2007 with a 60-day cooldown. Reported with their forward returns on the Signals page.
+  rare:
+    cooldown_days: 60
+    zweig_high: 0.66                # ZBT 99th percentile ≈ 0.676; 0.66 -> 9 signals, 60d −1.5% (NO edge: rarity kills it on TASI)
+    deemer_ratio: 2.6               # 10-day A/D >= 2.6 -> 4 signals, +6.6%/60d (75%) — too few to trust; indicative only
+  # calibration grid (used by breadth.backtest.calibrate_thrusts)
+  grid:
+    zweig_high: [0.58, 0.60, 0.615, 0.63, 0.65]
+    zweig_low: [0.35, 0.40, 0.45]
+    whaley_ratio: [2.0, 2.5, 3.0, 3.5]
+    deemer_ratio: [1.7, 1.85, 1.97, 2.1, 2.3]
+    pct50_high: [50, 55, 60, 65]
+    pct50_window: [10, 15, 20, 30]
+    lowry_threshold: [0.80, 0.85, 0.90, 0.95]
+
+momentum:
+  move_threshold: 0.04              # Stockbee 4% rule (3% / 5% tested in Phase 3)
+  test_thresholds: [0.03, 0.04, 0.05]
+  require_volume_up: true           # up/down day counted only if volume > previous day's volume
+  ratio_windows: [5, 10]
+  month_days: 21
+  quarter_days: 63
+  month_pct: 0.25                   # >= 25% in a month
+  month_big_pct: 0.50               # >= 50% in a month
+  quarter_pct: 0.25                 # >= 25% in a quarter
+  d34_days: 34
+  d34_pct: 0.13                     # +/- 13% in 34 days
+
+# ---------------------------------------------------------------- Phase 4: sectors, concentration, divergences
+sectors:
+  group_field: "industry_group"       # TASI industry groups (closest to Tadawul sector indices)
+  min_stocks: 5                       # groups with fewer eligible stocks on a day are pooled into "Other"
+  ad_window: 10                       # 10-day sum(A)/(A+D) per sector
+  mom_window: 10                      # 10-day up4/(up4+down4) per sector
+  # sector health score = average of 4 sub-scores (0-100), each = the metric itself on a 0-100 scale:
+  #   %>50DMA, %>200DMA, 100*(1+net_nh_nl/n)/2 (NH-NL normalised), 100*A/(A+D) over ad_window
+  healthy_threshold: 60               # sector is "healthy" when its score >= this
+  weak_threshold: 40
+
+concentration:
+  spread_windows: [20, 60]            # EW-TASI minus TASI return over N days (pct points)
+  ratio_ma: 50                        # MA of EW/TASI ratio (trend of the spread)
+  top_n: 5                            # contribution of top-N names (needs market cap: 2026-01-29+)
+  weight_cap: 0.15                    # single-stock weight cap for the cap-weighted proxy (TASI-like)
+
+divergences:
+  index_window: 60                    # index makes a new N-day high/low
+  confirm_window: 60                  # breadth metric must also make an N-day high/low ...
+  tolerance_days: 5                   # ... within this many days around the index extreme
+  min_gap_days: 20                    # dedupe: one divergence per metric per 20 days
+  metrics: ["ad_line", "net_nh_nl_10", "pct_above_sma50", "mcclellan_sum"]
+
+# ---------------------------------------------------------------- Phase 5: composite score & regimes
+composite:
+  rank_window: 1260               # rolling percentile window (≈5 years of trading days), strictly past values
+  rank_min_periods: 250
+  # family -> metrics (each metric is percentile-ranked 0-100, then averaged within the family)
+  families:
+    A_participation: ["pct_above_sma200", "pct_above_sma50", "hl_index"]
+    B_advance_decline: ["mcclellan_osc", "ad_line_chg20"]
+    E_sectors: ["pct_healthy", "median_score"]
+    # F_concentration ["spread_60"] and G_confirmation ["confirmation"] were DROPPED in Phase 6:
+    # walk-forward 2014-2026 quintile spread (Q5-Q1, 60d) = -0.31 with them vs +1.17 without.
+    # They remain computed in features/ for the dashboard (context), not in the score.
+  # weights are DERIVED in-sample (breadth.composite.fit_weights) and written to `weights`; never hand-edited
+  in_sample_end: "2017-12-31"
+  weight_method: "corr_shrink"    # "corr_shrink" (default, robust) or "nnls" — both reported by --fit
+  shrink: 0.0                     # λ: 0 = equal weights (FINAL, Phase 6: fitted weights add nothing out-of-sample)
+  weights: {"A_participation": 0.3333, "B_advance_decline": 0.3333, "E_sectors": 0.3333}   # derived in-sample by breadth.composite.run --fit; do not hand-edit
+  # oversold / thrust overlay (families C and D + TRIN + Lowry 95% down) — used for Washout, not for the score
+  overlay:
+    metrics: ["trin_10", "ratio_10_inv", "pct_down_x_10d", "lowry95_down_recent", "thrust_recent"]
+    thrust_lookback: 20           # days a thrust stays "recent"
+    lowry_lookback: 10
+  regimes:
+    boundaries: [40, 60, 75]      # Weak | Neutral | Healthy | Strong
+    smooth_span: 5                # regimes read a 5-day EMA of the score (the score itself is unsmoothed)
+    hysteresis: 8                 # points beyond a boundary needed to switch   (Phase 5 grid: avg regime ≈ 28 days)
+    min_days: 5                   # minimum days in a regime before switching
+    washout_score_max: 45         # Washout = score <= this AND overlay >= washout_overlay_min
+    washout_overlay_min: 75
+    washout_exit_overlay: 55

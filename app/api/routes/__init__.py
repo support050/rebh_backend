@@ -20,23 +20,10 @@
 
 
 
-# from .stocks import router as stocks_router
-# from .financials import router as financials_router
-# from .cache import router as cache_router
-# # from .profile import router as profile_router
-# # from .quote import router as quote_router
-# from .statistics import router as statistics_router
-# from .technical_indicators import router as technical_indicators_router  # ⭐ الجديد
+# 2026-10-06: the old commented-out block referencing .financials / .statistics /
+# .technical_indicators routers was removed — those modules do not exist and the
+# technical_indicators table was dropped (0 rows, no model, no live route).
 
-# __all__ = [
-#     "stocks_router", 
-#     "financials_router", 
-#     "cache_router", 
-#     # "profile_router", 
-#     # "quote_router",
-#     "statistics_router",
-#     "technical_indicators_router"  # ⭐ الجديد
-# ]
 # backend/app/api/endpoints/__init__.py
 
 from . import stocks

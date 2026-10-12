@@ -96,6 +96,7 @@ class StockIndicator(Base):
     cfg_w = Column(Numeric(12, 4), nullable=True)
     cfg_sma4_w = Column(Numeric(12, 4), nullable=True)         # ✅ S4CFG Weekly
     cfg_sma9_w = Column(Numeric(12, 4), nullable=True)
+    cfg_sma20_w = Column(Numeric(12, 4), nullable=True)        # SMA20(CFG) Weekly
     cfg_ema20_w = Column(Numeric(12, 4), nullable=True)
     cfg_ema45_w = Column(Numeric(12, 4), nullable=True)
     cfg_wma45_w = Column(Numeric(12, 4), nullable=True)
@@ -103,7 +104,7 @@ class StockIndicator(Base):
     # CFG Components
     rsi_14_9days_ago_cfg = Column(Numeric(12, 4), nullable=True)  # RSI14[9] للـ CFG
     rsi_14_minus_9 = Column(Numeric(12, 4), nullable=True)        # RSI14 - RSI14[9]
-    rsi_14_minus_9_w = Column(Numeric(12, 4), nullable=True)
+    rsi_14_minus_9_w = Column(Numeric(12, 4), nullable=True)      # RSI14_w - RSI14_w[9]
     rsi_14_w_shifted = Column(Numeric(12, 4), nullable=True)      # ta.rsi(close[9], 14) Weekly
     
     # CFG Conditions

@@ -432,6 +432,27 @@ async def invalidate_terminal_all_cache() -> None:
     await invalidate_patterns([f"{PREFIX_TERMINAL}:*"])
 
 
+# ============================================================================
+# REBH ENGINE Cache Key Generators & Invalidation
+# ============================================================================
+
+def make_rebh_engine_key(symbol: str, price: Optional[float] = None, market_cap: Optional[float] = None) -> str:
+    """Key: rebh:engine:{symbol}:{price}:{market_cap} — per-company universal contract."""
+    sym_norm = normalize_string(symbol)
+    price_norm = normalize_float(price)
+    mc_norm = normalize_float(market_cap)
+    return f"{PREFIX_REBH}:engine:{sym_norm}:{price_norm}:{mc_norm}"
+
+
+async def invalidate_rebh_engine_cache(symbol: Optional[str] = None) -> None:
+    """Invalidate REBH engine caches for a specific symbol or the whole universe"""
+    if symbol:
+        sym_norm = normalize_string(symbol)
+        await invalidate_patterns([f"{PREFIX_REBH}:engine:{sym_norm}:*"])
+    else:
+        await invalidate_patterns([f"{PREFIX_REBH}:engine:*"])
+
+
 async def invalidate_all_caches() -> None:
     """
     Invalidate all application caches (use with caution).
@@ -444,6 +465,7 @@ async def invalidate_all_caches() -> None:
         f"{PREFIX_TECHNICAL_SCREENER}:*",
         f"{PREFIX_PRICES}:*",
         f"{PREFIX_INDUSTRY_GROUPS}:*",
-        f"{PREFIX_TERMINAL}:*"
+        f"{PREFIX_TERMINAL}:*",
+        f"{PREFIX_REBH}:*"
     ])
 

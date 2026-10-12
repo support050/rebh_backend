@@ -1,4 +1,4 @@
-﻿Symbol,Industry Group,Sector,Industry,Sub-Industry
+Symbol,Industry Group,Sector,Industry,Sub-Industry
 4322,Real Estate Mgmt & Dev't,Real Estate,Real Estate Management and Development,Real Estate Development 
 4325,Real Estate Mgmt & Dev't,Real Estate,Real Estate Management and Development,Diversified Real Estate Activities 
 4327,Real Estate Mgmt & Dev't,Real Estate,Real Estate Management and Development,Real Estate Development 
@@ -12,7 +12,6 @@
 4310,Real Estate Mgmt & Dev't,Real Estate,Real Estate Management and Development,Real Estate Development 
 4320,Real Estate Mgmt & Dev't,Real Estate,Real Estate Management and Development,Real Estate Operating Companies
 4321,Real Estate Mgmt & Dev't,Real Estate,Real Estate Management and Development,Real Estate Operating Companies
-4322,Real Estate Mgmt & Dev't,Real Estate,Real Estate Management and Development,Real Estate Development 
 4326,Real Estate Mgmt & Dev't,Real Estate,Real Estate Management and Development,Real Estate Development 
 4323,Real Estate Mgmt & Dev't,Real Estate,Real Estate Management and Development,Real Estate Development 
 4324,Real Estate Mgmt & Dev't,Real Estate,Real Estate Management and Development,Real Estate Operating Companies
@@ -266,3 +265,10 @@
 7204,Software & Services,Information Technology,IT Services,IT Consulting and Other Services
 7211,Software & Services,Information Technology,IT Services,IT Consulting and Other Services
 4165,Household & Personal Products,Consumer Staples,Personal Care Products,Personal Care Products
+1324,Materials,Materials,,
+2288,Food & Beverages,Consumer Staples,,
+4148,Capital Goods,Industrials,,
+4328,Capital Goods,Industrials,,
+6022,Consumer Services,Consumer Discretionary,,
+7205,Software & Services,Information Technology,,
+1325,Materials,Materials,,

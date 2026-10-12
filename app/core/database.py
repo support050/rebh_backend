@@ -30,7 +30,6 @@ from app.models.price import Price  # noqa: E402,F401
 from app.models.rs_daily import RSDaily  # noqa: E402,F401
 from app.models.official_filings import CompanyOfficialFiling  # noqa: E402,F401
 from app.models.economic_indicators import EconomicIndicator  # noqa: E402,F401
-from app.models.naaim_exposure import NaaimExposure  # noqa: E402,F401
 from app.models.market_pulse import MarketPulse  # noqa: E402,F401
 from app.models.tasi_settings import TasiSettings  # noqa: E402,F401
 from app.models.wallet import WalletPosition, WalletTrade, WalletSetting, WalletWeeklyStudy  # noqa: E402,F401
@@ -46,7 +45,9 @@ from app.models.aporia import AporiaAnalytics  # noqa: E402,F401
 from app.models.Corporate_actions import CorporateAction  # noqa: E402,F401
 from app.models.stock_indicators import StockIndicator  # noqa: E402,F401
 from app.models.scraped_reports import Company, FinancialReport  # noqa: E402,F401
-from app.models.financials import IncomeStatement, BalanceSheet, CashFlow  # noqa: E402,F401
+# 2026-10-06: IncomeStatement / BalanceSheet / CashFlow removed — the financial
+# statements are served from XBRL JSON (app/services/xbrl_data_service.py, Cloudflare
+# R2), never from Postgres. Those three tables held 0 rows since creation.
 from app.models.market_reports import (  # noqa: E402,F401
     SubstantialShareholder,
     NetShortPosition,
@@ -61,6 +62,10 @@ from app.models.saudi_macro import SaudiEconomicIndicator  # noqa: E402,F401
 from app.models.update_status import UpdateStatus  # noqa: E402,F401
 from app.models.rebh_engine_vintage import RebhEngineVintage  # noqa: E402,F401
 from app.models.rebh_universe_snapshot import RebhUniverseSnapshot  # noqa: E402,F401
+from app.models.job_run import JobRun  # noqa: E402,F401
+# 2026-10-12: was invisible to Base.metadata (imported only by its router and
+# services), so create_all() and Alembic autogenerate never saw it.
+from app.models.weekly_market_report import WeeklyMarketReport  # noqa: E402,F401
 
 
 def create_tables():

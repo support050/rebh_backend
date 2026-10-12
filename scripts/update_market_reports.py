@@ -90,6 +90,12 @@ def save_substantial_shareholders(data):
 
         count = 0
         for item in data:
+            # The source page carries the company NAME only. This report is stored
+            # exactly as published — NO name->symbol resolution (removed 2026-10-11
+            # on request), so symbol / normalized_symbol are always NULL and no
+            # external lookup runs.
+            item = {**item, "symbol": None, "normalized_symbol": None}
+
             existing = db.query(SubstantialShareholder).filter(
                 SubstantialShareholder.report_date == item['report_date'],
                 SubstantialShareholder.company_name == item['company_name'],
@@ -242,4 +248,8 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    # Tracking lives here, not inside main(), so the same job is never recorded
+    # twice when APScheduler or the admin endpoint already wrapped its own call.
+    from app.services.job_tracking import track_job
+    with track_job("market_reports", "manual"):
+        main()

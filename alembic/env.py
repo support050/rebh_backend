@@ -12,7 +12,8 @@ import app.models.user
 import app.models.contact
 import app.models.industry_group
 import app.models.price
-import app.models.financials
+# app.models.financials removed 2026-10-06 with the income_statements /
+# balance_sheets / cash_flows tables (revision 2026_10_06_drop_legacy).
 import app.models.official_filings
 import app.models.rs_daily
 import app.models.scraped_reports
@@ -21,7 +22,6 @@ import app.models.sukuk_bonds
 import app.models.saudi_macro
 import app.models.stock_indicators
 import app.models.economic_indicators
-import app.models.naaim_exposure
 import app.models.market_pulse
 import app.models.tasi_settings
 import app.models.wallet
@@ -36,6 +36,7 @@ import app.models.Corporate_actions
 import app.models.update_status
 import app.models.rebh_engine_vintage
 import app.models.rebh_universe_snapshot
+import app.models.job_run
 
 config = context.config
 from app.core.config import settings

@@ -159,6 +159,23 @@ class IndicatorsDataService:
             rsi_14_9days_ago_w.append(rsi_w[i-9] if i >= 9 and rsi_w[i-9] is not None else None)
         
         df_weekly['rsi_14_9days_ago_w'] = pd.Series(rsi_14_9days_ago_w, index=df_weekly.index)
+
+        # CFG Term 1 (Weekly): RSI14_w - RSI14_w[9].  Daily twin is 'rsi_14_minus_9'
+        # (current_rsi['rsi_14'] - current_stamp['rsi_14_9days_ago']).  Together with
+        # sma3_rsi3_w this rebuilds cfg_w, so cfg_w - sma3_rsi3_w must equal this column.
+        rsi_14_minus_9_w = []
+        for i in range(len(rsi_w)):
+            if rsi_w[i] is None or rsi_14_9days_ago_w[i] is None:
+                rsi_14_minus_9_w.append(None)
+            else:
+                rsi_14_minus_9_w.append(rsi_w[i] - rsi_14_9days_ago_w[i])
+        df_weekly['rsi_14_minus_9_w'] = pd.Series(rsi_14_minus_9_w, index=df_weekly.index)
+
+        # ta.rsi(close[9], 14) Weekly. Pine shifts the series, so this is the weekly RSI14
+        # read 9 bars back — the per-row form of calculate_rsi_on_shifted_series(closes_w, 14, 9),
+        # which is by definition the same number as rsi_14_9days_ago_w (the daily pair
+        # rsi_14_9days_ago_cfg / rsi_14_9days_ago behaves exactly the same way).
+        df_weekly['rsi_14_w_shifted'] = pd.Series(rsi_14_9days_ago_w, index=df_weekly.index)
         df_weekly['stamp_a_value_w'] = pd.Series(cfg_w_series, index=df_weekly.index)  # A = CFG
         df_weekly['stamp_s9rsi_w'] = pd.Series(sma9_rsi_w, index=df_weekly.index)  # SMA9(RSI14)
         df_weekly['stamp_e45cfg_w'] = pd.Series(cfg_w_ema45, index=df_weekly.index)  # EMA45(CFG)
@@ -191,7 +208,11 @@ class IndicatorsDataService:
         قيد التشكيل، لذلك نستخدم forward fill لتطبيق قيم الأسبوع على جميع أيام الأسبوع
         """
         # الحصول على أعمدة البيانات الأسبوعية فقط
-        weekly_cols = [col for col in df_weekly.columns if col.endswith('_w') or col in ('sma_30w', 'sma_40w')]
+        # 'rsi_14_w_shifted' يجب أن يُذكر صراحة: اسم العمود ينتهي بـ _shifted وليس _w،
+        # فاختبار endswith('_w') وحده كان يسقطه من df_merged → العمود بقي NULL دائماً
+        # رغم أن قيمته تُحسب في prepare_weekly_dataframe (نفس سبب موت sma_30w/sma_40w).
+        weekly_extra = ('sma_30w', 'sma_40w', 'rsi_14_w_shifted')
+        weekly_cols = [col for col in df_weekly.columns if col.endswith('_w') or col in weekly_extra]
         
         # إعادة تعيين مؤشر البيانات الأسبوعية ليطابق التواريخ اليومية
         # forward fill يضمن أن كل يوم يحصل على آخر قيمة أسبوعية معروفة
@@ -634,12 +655,15 @@ class IndicatorsDataService:
             'cfg_w': df_merged.iloc[idx]['cfg_w'] if 'cfg_w' in df_merged.columns and not pd.isna(df_merged.iloc[idx]['cfg_w']) else None,
             'cfg_sma4_w': df_merged.iloc[idx]['cfg_sma4_w'] if 'cfg_sma4_w' in df_merged.columns and not pd.isna(df_merged.iloc[idx]['cfg_sma4_w']) else None,
             'cfg_sma9_w': df_merged.iloc[idx]['cfg_sma9_w'] if 'cfg_sma9_w' in df_merged.columns and not pd.isna(df_merged.iloc[idx]['cfg_sma9_w']) else None,
+            'cfg_sma20_w': df_merged.iloc[idx]['cfg_sma20_w'] if 'cfg_sma20_w' in df_merged.columns and not pd.isna(df_merged.iloc[idx]['cfg_sma20_w']) else None,
             'cfg_ema20_w': df_merged.iloc[idx]['cfg_ema20_w'] if 'cfg_ema20_w' in df_merged.columns and not pd.isna(df_merged.iloc[idx]['cfg_ema20_w']) else None,
             'cfg_ema45_w': df_merged.iloc[idx]['cfg_ema45_w'] if 'cfg_ema45_w' in df_merged.columns and not pd.isna(df_merged.iloc[idx]['cfg_ema45_w']) else None,
             'cfg_wma45_w': df_merged.iloc[idx]['cfg_wma45_w'] if 'cfg_wma45_w' in df_merged.columns and not pd.isna(df_merged.iloc[idx]['cfg_wma45_w']) else None,
             
             # STAMP Weekly
             'rsi_14_9days_ago_w': df_merged.iloc[idx]['rsi_14_9days_ago_w'] if 'rsi_14_9days_ago_w' in df_merged.columns and not pd.isna(df_merged.iloc[idx]['rsi_14_9days_ago_w']) else None,
+            'rsi_14_minus_9_w': df_merged.iloc[idx]['rsi_14_minus_9_w'] if 'rsi_14_minus_9_w' in df_merged.columns and not pd.isna(df_merged.iloc[idx]['rsi_14_minus_9_w']) else None,
+            'rsi_14_w_shifted': df_merged.iloc[idx]['rsi_14_w_shifted'] if 'rsi_14_w_shifted' in df_merged.columns and not pd.isna(df_merged.iloc[idx]['rsi_14_w_shifted']) else None,
             'stamp_a_value_w': df_merged.iloc[idx]['stamp_a_value_w'] if 'stamp_a_value_w' in df_merged.columns and not pd.isna(df_merged.iloc[idx]['stamp_a_value_w']) else None,
             'stamp_s9rsi_w': df_merged.iloc[idx]['stamp_s9rsi_w'] if 'stamp_s9rsi_w' in df_merged.columns and not pd.isna(df_merged.iloc[idx]['stamp_s9rsi_w']) else None,
             'stamp_e45cfg_w': df_merged.iloc[idx]['stamp_e45cfg_w'] if 'stamp_e45cfg_w' in df_merged.columns and not pd.isna(df_merged.iloc[idx]['stamp_e45cfg_w']) else None,

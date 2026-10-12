@@ -1,0 +1,123 @@
+# -*- coding: utf-8 -*-
+"""test_breadth_api.py — drive the 10 breadth endpoints and diff vs api_samples.
+
+Runs the router in a bare FastAPI app (auth is attached in main.py only),
+against the REAL production DB snapshot. Checks:
+  * HTTP 200 on every endpoint
+  * key sets equal to the client sample files (frozen contract)
+  * value spot-checks on 2026-09-29 for non-volume series (CA-adjustment-safe)
+    — series in CA_SERIES legitimately differ from the frozen client sample:
+    the 6040 merger event on 2026-09-30 re-adjusted historical volumes.
+Exit 0 = all pass, 1 = any failure.
+
+Usage: backend\\venv\\Scripts\\python.exe scripts/test_breadth_api.py
+"""
+from __future__ import annotations
+
+import json
+import sys
+from pathlib import Path
+
+BACKEND = Path(__file__).resolve().parents[1]
+REPO = BACKEND.parent
+SAMPLES = REPO / "Rebh_Market_Breadth_Package" / "api_samples"
+sys.path.insert(0, str(BACKEND))
+
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
+
+from app.api.routes import rebh_breadth
+
+app = FastAPI()
+app.include_router(rebh_breadth.router, prefix="/api")
+client = TestClient(app)
+B = "/api/rebh/breadth"
+
+FAILS = []
+
+
+def check(name: str, cond: bool, info: str = ""):
+    tag = "OK " if cond else "FAIL"
+    print(f"[{tag}] {name} {info}")
+    if not cond:
+        FAILS.append(name)
+
+
+def sample(name):
+    return json.loads((SAMPLES / f"{name}.json").read_text(encoding="utf-8"))
+
+
+def main() -> int:
+    # ── today: key set == sample (values legitimately moved +1 day)
+    r = client.get(f"{B}/today")
+    check("today 200", r.status_code == 200, f"rc={r.status_code}")
+    if r.status_code == 200:
+        check("today keys", set(r.json()) == set(sample("today")),
+              f"n={len(r.json())}")
+
+    # ── series: full contract shape + spot values vs sample at 2026-09-29
+    r = client.get(f"{B}/series")
+    check("series 200", r.status_code == 200)
+    body = r.json()
+    g = sample("series")
+    check("series keys(125)", set(body["series"]) == set(g["series"]))
+    d0929 = "2026-09-29"
+    if d0929 in body["dates"]:
+        i = body["dates"].index(d0929)
+        gi = g["dates"].index(d0929)
+        for key in ["score", "pct_above_sma200", "pct_above_sma50",
+                    "n_nhnl", "ad_line", "mcclellan_osc", "advances",
+                    "trin_10", "hlli", "score_smooth"]:
+            mv, gv = body["series"][key][i], g["series"][key][gi]
+            ok = (mv is None and gv is None) or (
+                mv is not None and gv is not None and abs(float(mv) - float(gv)) <= 0.01)
+            check(f"series {key}@09-29", ok, f"api={mv} golden={gv}")
+    # filtered variants
+    r = client.get(f"{B}/series", params={"keys": "score,overlay", "from": "2026-09-01"})
+    check("series filtered", r.status_code == 200 and set(r.json()["series"]) == {"score", "overlay"})
+    r = client.get(f"{B}/series", params={"keys": "nope_key"})
+    check("series bad key 400", r.status_code == 400)
+
+    # ── events: sample keys must all be present (superset allowed)
+    r = client.get(f"{B}/events")
+    check("events 200", r.status_code == 200)
+    missing = set(sample("events")) - set(r.json())
+    check("events keys ⊇ sample", not missing, f"missing={sorted(missing)}")
+
+    # ── signals / sectors / meta / stockbee / stocks shapes
+    for ep, want in [("signals", {"signals_table", "signal_stats"}),
+                     ("sectors", {"sectors", "sector_perf", "sector_pool"}),
+                     ("meta", {"thresholds", "verdicts", "classic_q"}),
+                     ("stocks", {"stocks", "leaders", "nh_vol_list", "names"})]:
+        r = client.get(f"{B}/{ep}")
+        check(f"{ep} 200", r.status_code == 200)
+        if r.status_code == 200:
+            check(f"{ep} keys ⊇ sample", want <= set(r.json()), f"got={sorted(r.json())}")
+
+    r = client.get(f"{B}/stocks", params={"group": "Banks"})
+    check("stocks?group=Banks", r.status_code == 200 and list(r.json()["stocks"]) == ["Banks"])
+
+    r = client.get(f"{B}/stockbee")
+    sb = r.json()
+    check("stockbee 200", r.status_code == 200 and isinstance(sb, dict) and bool(sb))
+    one_date = next(iter(sb))
+    r = client.get(f"{B}/stockbee", params={"date": one_date, "key": "up_x"})
+    check("stockbee filtered", r.status_code == 200 and list(r.json()) == [one_date]
+          and list(next(iter(r.json().values()))) == ["up_x"])
+
+    # ── ohlc full + per-symbol
+    r = client.get(f"{B}/ohlc")
+    check("ohlc 200", r.status_code == 200)
+    check("ohlc keys", set(r.json()) == set(sample("ohlc")), f"got={sorted(r.json())}")
+    first_sym = next(iter(r.json()["ohlc"]))
+    r = client.get(f"{B}/ohlc/{first_sym}")
+    check(f"ohlc/{first_sym}", r.status_code == 200 and set(r.json()) == {"symbol", "dates", "tasi", "data"})
+    r = client.get(f"{B}/ohlc/9999")
+    check("ohlc 404", r.status_code == 404)
+
+    print(f"\n=== {'ALL PASS' if not FAILS else 'FAILURES: ' + str(FAILS)} ===")
+    return 0 if not FAILS else 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

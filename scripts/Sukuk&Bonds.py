@@ -655,5 +655,10 @@ def run_sukuk_sync() -> int:
 
 
 if __name__ == "__main__":
-    result = run_sukuk_sync()
+    # Wrapped here (not inside run_sukuk_sync) so an APScheduler / admin-triggered
+    # run is not recorded twice. job key matches scheduler._safe(job_key=...).
+    from app.services.job_tracking import track_job
+    with track_job("sukuk_importer", "manual") as run:
+        result = run_sukuk_sync()
+        run.rows_written = result if isinstance(result, int) else None
     print(f"\n[SUCCESS] Sukuk & Bonds sync complete: {result} records upserted.")

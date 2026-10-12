@@ -99,6 +99,16 @@ FRED_SERIES_CONFIG: Dict[str, Dict[str, Any]] = {
         "params": {"units": "pc1"},
         "description": "Consumer Price Index: All Items (Percent Change from Year Ago)",
     },
+    # Saudi Arabia CPI growth rate (YoY %) — IMF-sourced, published by FRED.
+    # The 'GPM' suffix already means 'Growth Rate Percent Monthly', so the
+    # value returned by the API is the inflation percentage itself; no
+    # units=pc1 param is needed (and FRED rejects units=pc1 on pre-computed
+    # growth series). Feeds /api/rebh/market-macro -> saudi_macro.inflation_pct
+    # when the SAMA/GaStat 'saudi_inflation_cpi' row is not present.
+    "SAUCPALTT01GPM": {
+        "series_id": "SAUCPALTT01GPM",
+        "description": "Saudi Arabia Consumer Price Index, Growth Rate (YoY %)",
+    },
     "TOTLL": {
         "series_id": "TOTLL",
         "description": "Loans and Leases in Bank Credit, All Commercial Banks",
@@ -234,7 +244,9 @@ def scrape_fred_indicator(indicator_code: str) -> bool:
         # Other daily/weekly series use a 90-day lookback.
         MONTHLY_REVISED_SERIES = {
             "CPIAUCSL_PC1", "M1SL", "M2SL", "UNRATE", "PAYEMS",
-            "TLAACBW027SBOG", "TOTLL", "BOGMBASE"
+            "TLAACBW027SBOG", "TOTLL", "BOGMBASE",
+            # IMF-published Saudi CPI growth is revised as new quarters land.
+            "SAUCPALTT01GPM",
         }
         lookback_days = 365 if indicator_code in MONTHLY_REVISED_SERIES else 90
 
@@ -257,7 +269,15 @@ def scrape_fred_indicator(indicator_code: str) -> bool:
             logger.info(f"ℹ️ {indicator_code}: already up-to-date (0 new records)")
             return True
 
-        # ── Atomic UPSERT using ON CONFLICT (report_date, indicator_code) ──
+        # ── Atomic UPSERT ──
+        # We target the (report_date, indicator_code) unique index by its
+        # columns, not by name. The SQLAlchemy model declares the constraint
+        # as `uq_economic_indicator_date_code`, but the live Render schema
+        # has it under a different identifier (created by an earlier alembic
+        # autogenerate pass), and referencing the name fails with
+        # "constraint ... does not exist". Postgres resolves the correct
+        # index from the column list, so this works regardless of the
+        # constraint's internal name.
         from sqlalchemy.dialects.postgresql import insert as pg_insert
 
         records_to_insert = [
@@ -271,7 +291,7 @@ def scrape_fred_indicator(indicator_code: str) -> bool:
 
         stmt = pg_insert(EconomicIndicator).values(records_to_insert)
         stmt = stmt.on_conflict_do_update(
-            constraint="uq_economic_indicator_date_code",
+            index_elements=["report_date", "indicator_code"],
             set_={"value": stmt.excluded.value}
         )
 
@@ -300,7 +320,20 @@ def scrape_all_fred() -> Dict[str, bool]:
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
-    results = scrape_all_fred()
+    # Optional argv: one or more indicator codes to run in isolation.
+    # Example:  python -m app.scrapers.fred_scraper SAUCPALTT01GPM
+    # No args → run everything (existing behaviour).
+    codes = [c.upper() for c in sys.argv[1:]]
+    if codes:
+        unknown = [c for c in codes if c not in FRED_SERIES_CONFIG]
+        if unknown:
+            print(f"Unknown codes: {unknown}")
+            print(f"Known: {sorted(FRED_SERIES_CONFIG)}")
+            sys.exit(2)
+        results = {c: scrape_fred_indicator(c) for c in codes}
+    else:
+        results = scrape_all_fred()
     print("\nSummary of FRED scraping:")
     for code, ok in results.items():
         print(f"  {'✅' if ok else '❌'} {code}")
+    sys.exit(0 if all(results.values()) else 1)

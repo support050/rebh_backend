@@ -26,8 +26,19 @@ idna==3.11
 Mako==1.3.10
 MarkupSafe==3.0.3
 multidict==6.7.0
-numpy==1.24.3
+numpy==1.26.4
 pandas==1.5.3
+# parquet and engine support for app/services/breadth_job.py (it writes the raw breadth
+# bars to storage/reports/*.parquet before loading them into the breadth_*
+# tables). Also requires PyYAML, scipy, and matplotlib for composite/reports.
+# numpy must stay >=1.26.4: scipy 1.17 imports numpy.exceptions (added in numpy 1.25)
+# and the job dies at composite with numpy 1.24.3. Verified end-to-end 2026-10-07 with
+# numpy 1.26.4 + pandas 1.5.3 (the engine's future_stack call site is version-detected
+# in breadth/indicators/sectors.py, so pandas<2.1 works).
+pyarrow==14.0.2
+PyYAML==6.0.3
+scipy==1.17.1
+matplotlib==3.7.5
 passlib==1.7.4
 propcache==0.4.1
 psycopg2-binary==2.9.9

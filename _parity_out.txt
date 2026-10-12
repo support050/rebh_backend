@@ -1,0 +1,28 @@
+target_date=2026-10-06
+symbols=['1010', '1020', '1030', '1050', '1060', '1080', '1111', '1120']
+
+[A] price-row parity (batched window query vs per-symbol LIMIT 600)
+   1010: old=600 new=600 identical=True
+   1020: old=600 new=600 identical=True
+   1030: old=600 new=600 identical=True
+   1050: old=600 new=600 identical=True
+   1060: old=600 new=600 identical=True
+   1080: old=600 new=600 identical=True
+   1111: old=600 new=600 identical=True
+   1120: old=600 new=600 identical=True
+
+[B] calculate_all_indicators_for_stock parity (fetched vs preloaded)
+   1010: keys_old=128 keys_new=128 value_diffs=0 
+   1020: keys_old=128 keys_new=128 value_diffs=0 
+   1030: keys_old=128 keys_new=128 value_diffs=0 
+   1050: keys_old=128 keys_new=128 value_diffs=0 
+   1060: keys_old=128 keys_new=128 value_diffs=0 
+
+[C] RS-line summary parity (benchmark loaded once, series preloaded)
+   1010: bars=1686/1686 identical=True
+   1020: bars=1686/1686 identical=True
+   1030: bars=1686/1686 identical=True
+   1050: bars=1686/1686 identical=True
+   1060: bars=1686/1686 identical=True
+
+PARITY: ALL CHECKS PASSED

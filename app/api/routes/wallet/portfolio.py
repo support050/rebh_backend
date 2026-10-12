@@ -471,7 +471,7 @@ def get_all_transactions(
 
 @router.get(
     "/events",
-    summary="Get real events from IncomeStatement (Mocked dividends until table exists)",
+    summary="Get portfolio events (dividends are still mocked; report events come from XBRL)",
 )
 def get_portfolio_events(
     db: Session = Depends(get_db),
@@ -479,34 +479,17 @@ def get_portfolio_events(
 ):
     import datetime
     from app.models.wallet import WalletPosition
-    from app.models.financials import IncomeStatement
-    
+
     today = datetime.date.today()
-    
+
     positions = db.query(WalletPosition).filter(WalletPosition.user_id == current_user.id).all()
     symbols = [p.symbol for p in positions]
-    
-    # Get the latest 5 financial reports for the symbols held
-    financials = []
-    if symbols:
-        statements = db.query(IncomeStatement).filter(
-            IncomeStatement.symbol.in_(symbols)
-        ).order_by(IncomeStatement.fiscal_date.desc()).limit(10).all()
-        
-        for st in statements:
-            if not st.fiscal_date: continue
-            days_diff = (st.fiscal_date - today).days
-            status = "upcoming" if days_diff > 0 else "past"
-            financials.append({
-                "id": f"fin_{st.id}",
-                "symbol": st.symbol,
-                "type": "financials",
-                "title": f"نتائج {st.quarter or ''} {st.year or ''}".strip(),
-                "date": st.fiscal_date.isoformat(),
-                "period": st.quarter or str(st.year),
-                "status": status
-            })
-    
+
+    # The income_statements table was dropped on 2026-10-06 (0 rows since creation —
+    # financial statements are served from the XBRL JSON store, see
+    # app/services/xbrl_data_service.py). The contract below is unchanged: an empty
+    # "financials" list is exactly what this endpoint returned before the drop.
+    financials: list = []
     return {
         "dividends": [
             { "id": "mock_1", "symbol": "2222", "type": "dividend", "title": "توزيع أرباح (تجريبي)", "date": (today + datetime.timedelta(days=12)).isoformat(), "amount": 0.31, "status": "upcoming" }

@@ -45,9 +45,10 @@ logger = logging.getLogger(__name__)
 HISTORICAL_URL = "https://www.saudiexchange.sa/wps/portal/saudiexchange/newsandreports/reports-publications/historical-reports/"
 ACTION_NAME = "populateCompanyDetails"
 
-TARGET_DATES = [date(2026, 9, 17), date(2026, 9, 20), date(2026, 9, 21)]
-START_DATE_STR = "17-09-2026"
-END_DATE_STR = "21-09-2026"
+TARGET_DATES = [date(2026, 10, 4)]
+START_DATE_STR = "04-10-2026"
+END_DATE_STR = "04-10-2026"
+
 
 
 def build_driver(headless=True):
@@ -125,9 +126,10 @@ def capture_api_url_and_request(driver, timeout=45):
     return None, None
 
 
-def fetch_target_dates_via_js(driver, api_url, post_body_template, symbol, market="MAIN"):
+
+def fetch_target_dates_via_js(driver, api_url, post_body_template, symbol, start_date_str, end_date_str, market="MAIN"):
     """
-    بيعمل fetch سريع جداً للأيام المحددة فقط (17-09-2026 إلى 21-09-2026).
+    بيعمل fetch سريع للتواريخ المحددة فقط عبر الـ API.
     """
     js_code = """
     var done = arguments[arguments.length - 1];
@@ -142,7 +144,7 @@ def fetch_target_dates_via_js(driver, api_url, post_body_template, symbol, marke
     params.set('selectedMarket', market);
     params.set('selectedEntity', symbol);
     params.set('start', '0');
-    params.set('length', '20');
+    params.set('length', '50');
     params.set('startDate', dateFrom);
     params.set('endDate', dateTo);
 
@@ -162,9 +164,10 @@ def fetch_target_dates_via_js(driver, api_url, post_body_template, symbol, marke
     driver.set_script_timeout(30)
     result = driver.execute_async_script(
         js_code, api_url, post_body_template or "",
-        symbol, START_DATE_STR, END_DATE_STR, market
+        symbol, start_date_str, end_date_str, market
     )
     return result
+
 
 
 def clean_number(text):
@@ -181,10 +184,10 @@ def clean_number(text):
         return None
 
 
-def parse_rows(symbol, raw_data):
+def parse_rows(symbol, raw_data, target_dates):
     """تحويل السجلات القادمة من الـ API لبيانات جاهزة للـ DB مع حصر الأيام المستهدفة فقط."""
     rows = []
-    target_set = set(TARGET_DATES)
+    target_set = set(target_dates)
     
     for r in raw_data:
         try:
@@ -243,73 +246,6 @@ def upsert_prices(db, parsed_rows):
     db.commit()
 
 
-def get_existing_dates_for_symbol(db, symbol: str):
-    """
-    جلب القيم الحالية من قاعدة البيانات قبل التحديث باستخدام الـ Indexing والـ JOIN
-    """
-    query = text("""
-        SELECT 
-            p17.open AS o17, p17.close AS c17,
-            p20.open AS o20, p20.close AS c20,
-            p21.open AS o21, p21.close AS c21
-        FROM (SELECT :symbol AS sym) s
-        LEFT JOIN prices p17 
-            ON p17.symbol = s.sym AND p17.date = '2026-09-17'
-        LEFT JOIN prices p20 
-            ON p20.symbol = s.sym AND p20.date = '2026-09-20'
-        LEFT JOIN prices p21 
-            ON p21.symbol = s.sym AND p21.date = '2026-09-21'
-    """)
-    res = db.execute(query, {"symbol": symbol}).fetchone()
-    if not res:
-        return None
-    return {
-        "17": {"open": res.o17, "close": res.c17},
-        "20": {"open": res.o20, "close": res.c20},
-        "21": {"open": res.o21, "close": res.c21}
-    }
-
-
-def verify_and_log_comparison(db, symbol: str, before: dict):
-    """
-    التحقق السريع باستخدام JOIN والـ Indexing وعرض مقارنة كاملة:
-    القيم قبل التحديث وبعد التحديث لكل يوم من الأيام الثلاثة.
-    """
-    after = get_existing_dates_for_symbol(db, symbol)
-    if not after:
-        logger.warning(f"⚠️ {symbol}: No data found after upsert.")
-        return False
-
-    b17 = f"{before['17']['close']}" if before and before['17']['close'] is not None else "None"
-    b20 = f"{before['20']['close']}" if before and before['20']['close'] is not None else "None"
-    b21 = f"{before['21']['close']}" if before and before['21']['close'] is not None else "None"
-
-    a17 = f"{after['17']['close']}" if after['17']['close'] is not None else "None"
-    a20 = f"{after['20']['close']}" if after['20']['close'] is not None else "None"
-    a21 = f"{after['21']['close']}" if after['21']['close'] is not None else "None"
-
-    logger.info(f"📊 {symbol} [BEFORE]: 17={b17} | 20={b20} | 21={b21}")
-    logger.info(f"📈 {symbol} [AFTER ]: 17={a17} | 20={a20} | 21={a21}")
-
-    c17 = after['17']['close']
-    c20 = after['20']['close']
-    c21 = after['21']['close']
-
-    is_17_20_dup = (c17 is not None and c20 is not None and c17 == c20)
-    is_20_21_dup = (c20 is not None and c21 is not None and c20 == c21)
-
-    if is_17_20_dup:
-        logger.warning(f"❌ {symbol}: IDENTICAL Close between Sep 17 and Sep 20 ({c20})!")
-        return False
-    elif is_20_21_dup:
-        logger.info(f"ℹ️ {symbol}: Note: Sep 20 & 21 matching ({c20})")
-        return True
-    else:
-        logger.info(f"✅ {symbol}: All 3 dates verified distinct!")
-        return True
-
-
-
 def get_target_symbols(db, specific_symbol=None):
     if specific_symbol:
         return [specific_symbol]
@@ -321,14 +257,36 @@ def get_target_symbols(db, specific_symbol=None):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Targeted Dates (17, 20, 21 Sep) Fetcher & Distinct Verifier")
+    parser = argparse.ArgumentParser(description="Targeted Date(s) Historical Fetcher & Direct DB Upsert")
     parser.add_argument("--symbol", default=None, help="رمز السهم (اختياري، إن لم يحدد يسحب لكل الأسهم)")
+    parser.add_argument("--date", default="04-10-2026", help="التاريخ بصيغة DD-MM-YYYY (الافتراضي: 04-10-2026)")
+    parser.add_argument("--from", dest="date_from", default=None, help="تاريخ البداية DD-MM-YYYY (اختياري لنطاق تواريخ)")
+    parser.add_argument("--to", dest="date_to", default=None, help="تاريخ النهاية DD-MM-YYYY (اختياري لنطاق تواريخ)")
     parser.add_argument("--show", action="store_true", help="إظهار المتصفح")
     args = parser.parse_args()
 
+    # Determine start and end date strings
+    if args.date_from and args.date_to:
+        start_str = args.date_from
+        end_str = args.date_to
+    else:
+        start_str = args.date
+        end_str = args.date
+
+    # Build target dates list
+    d_start = datetime.strptime(start_str, "%d-%m-%Y").date()
+    d_end = datetime.strptime(end_str, "%d-%m-%Y").date()
+    
+    target_dates = []
+    curr = d_start
+    import datetime as dt_mod
+    while curr <= d_end:
+        target_dates.append(curr)
+        curr += dt_mod.timedelta(days=1)
+
     db = SessionLocal()
     symbols = get_target_symbols(db, args.symbol)
-    logger.info(f"📋 Processing {len(symbols)} symbols for targeted dates (17, 20, 21 Sep 2026)...")
+    logger.info(f"📋 Processing {len(symbols)} symbols for targeted date(s): {start_str} to {end_str}...")
 
     driver = build_driver(headless=not args.show)
     try:
@@ -341,39 +299,33 @@ def main():
             return
 
         success_count = 0
-        duplicate_flagged = 0
+        no_data_count = 0
 
         for idx, sym in enumerate(symbols, 1):
             try:
-                # 0. Get current values before update using SQL JOIN & Index
-                before_state = get_existing_dates_for_symbol(db, sym)
-
                 # 1. Fetch targeted dates from Tadawul
-                res = fetch_target_dates_via_js(driver, api_url, post_body, sym, market="MAIN")
+                res = fetch_target_dates_via_js(driver, api_url, post_body, sym, start_str, end_str, market="MAIN")
                 data = res.get("data", {}).get("data", []) if res and res.get("success") else []
                 
                 # If no data, try INDICES
                 if not data:
-                    res = fetch_target_dates_via_js(driver, api_url, post_body, f"M:{sym}", market="INDICES")
+                    res = fetch_target_dates_via_js(driver, api_url, post_body, f"M:{sym}", start_str, end_str, market="INDICES")
                     data = res.get("data", {}).get("data", []) if res and res.get("success") else []
 
                 # 2. Parse
-                parsed = parse_rows(sym, data)
+                parsed = parse_rows(sym, data, target_dates)
                 if parsed:
                     # 3. Upsert using Index (symbol, date)
                     upsert_prices(db, parsed)
-                    # 4. Verify & display BEFORE vs AFTER using SQL JOIN
-                    is_distinct = verify_and_log_comparison(db, sym, before_state)
-                    if is_distinct:
-                        success_count += 1
-                    else:
-                        duplicate_flagged += 1
+                    success_count += 1
+                    dates_str = ", ".join([str(p['date']) + f" (Close: {p['close']})" for p in parsed])
+                    logger.info(f"✅ [{idx}/{len(symbols)}] {sym}: Saved -> {dates_str}")
                 else:
-                    logger.warning(f"⚠️ {sym}: No targeted dates returned from Tadawul API.")
+                    no_data_count += 1
+                    logger.warning(f"⚠️ [{idx}/{len(symbols)}] {sym}: No data returned for {start_str}")
 
                 # Small delay to keep session stable
-                time.sleep(0.2)
-
+                time.sleep(0.15)
 
             except Exception as e:
                 logger.error(f"❌ Error processing {sym}: {e}")
@@ -381,8 +333,8 @@ def main():
         logger.info("=" * 60)
         logger.info(f"🎉 Completed Targeted Dates Backfill!")
         logger.info(f"   Total Processed: {len(symbols)}")
-        logger.info(f"   Verified Distinct: {success_count}")
-        logger.info(f"   Flagged/Duplicates: {duplicate_flagged}")
+        logger.info(f"   Successfully Saved: {success_count}")
+        logger.info(f"   No Data: {no_data_count}")
         logger.info("=" * 60)
 
     finally:
@@ -392,3 +344,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

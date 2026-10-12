@@ -1,7 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.api.routes import stocks, cache, auth, contact, rs, rs_v2, admin, scraper, official_filings, prices, technical_screener, screeners, market_breadth, market_reports, economic_indicators, xbrl_companies, xbrl_financials, xbrl_upload
-from app.api.routes import naaim as naaim_router
 from app.api.routes import market_pulse as market_pulse_router
 from app.api.routes import rs_line as rs_line_router
 from app.api.routes import mansfield_rs as mansfield_rs_router
@@ -123,6 +122,11 @@ app.include_router(cache.router, dependencies=admin_dependencies)
 app.include_router(rs.router, prefix="/api", dependencies=protected_dependencies)  # RS V1 endpoints
 app.include_router(rs_v2.router, prefix="/api", dependencies=protected_dependencies)  # RS V2 endpoints
 app.include_router(admin.router, prefix="/api", dependencies=admin_dependencies) # /api/admin/*
+
+# System Map (Runbook) — read-only registry view. Same admin guard, separate
+# router so /api/admin/system-map/* can be dropped without touching /api/admin/*.
+from app.api.routes import system_map as system_map_router
+app.include_router(system_map_router.router, prefix="/api", dependencies=admin_dependencies)  # /api/admin/system-map/*
 app.include_router(scraper.router)  # /api/scraper/*
 app.include_router(official_filings.router, prefix="/api") # /api/ingest/official-reports & /api/reports/{symbol}
 
@@ -134,8 +138,18 @@ app.include_router(screeners.router, prefix="/api")  # Stock Screeners (PUBLIC)
 
 app.include_router(market_breadth.router, prefix="/api")  # /api/market-breadth/*
 app.include_router(market_reports.router, prefix="/api/market-reports", tags=["Market Reports"])
+
+# ── Weekly Market Update (Bug 3 fix) ──
+# This router existed since the weekly-report build but was never included, so
+# every /api/weekly-market-update/* call from frontend/app/weekly-update/page.tsx
+# returned 404. The router carries its own prefix ('/weekly-market-update'), so
+# it is mounted under '/api' to match the frontend paths.
+# protected (not admin): the page is reachable by any logged-in user; middleware
+# already gates /weekly-update behind a session cookie.
+from app.api.routes import weekly_market_update as weekly_market_update_router  # noqa: E402
+app.include_router(weekly_market_update_router.router, prefix="/api", dependencies=protected_dependencies)  # /api/weekly-market-update/*
+
 app.include_router(economic_indicators.router, prefix="/api/economic-indicators", tags=["Economic Indicators"])
-app.include_router(naaim_router.router, prefix="/api/naaim", tags=["NAAIM Exposure Index"])
 app.include_router(xbrl_companies.router, dependencies=protected_dependencies)
 app.include_router(xbrl_financials.router, dependencies=protected_dependencies)
 app.include_router(xbrl_upload.router, dependencies=protected_dependencies)
@@ -153,6 +167,10 @@ app.include_router(aporia_router.router, prefix="/api/aporia", tags=["Aporia Ana
 from app.api.routes import rebh_engine as rebh_engine_router
 app.include_router(rebh_engine_router.router)
 app.include_router(rebh_engine_router.engine_router)
+
+# ── REBH Market Breadth engine module (DATA snapshot API) ──
+from app.api.routes import rebh_breadth as rebh_breadth_router
+app.include_router(rebh_breadth_router.router, prefix="/api", dependencies=protected_dependencies)
 
 
 # ── Wallet / Finance System ──

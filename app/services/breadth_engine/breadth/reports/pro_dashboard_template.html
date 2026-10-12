@@ -1,0 +1,589 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TASI Market Breadth</title>
+<style>
+:root{--bg:#fcfcfb;--surface:#ffffff;--surface2:#f4f4f2;--text:#0b0b0b;--text2:#52514e;--grid:#e6e5e1;--border:#dcdbd6;
+ --blue:#2a78d6;--orange:#eb6834;--aqua:#1baf7a;--yellow:#eda100;--magenta:#e87ba4;--green:#008300;--violet:#4a3aa7;--red:#e34948;
+ --good:#0ca30c;--warn:#fab219;--serious:#ec835a;--critical:#d03b3b;--up:#1baf7a;--down:#e34948;--zone-hi:rgba(227,73,72,.10);--zone-lo:rgba(27,175,122,.12);--episode:rgba(227,73,72,.13)}
+:root[data-theme="dark"]{--bg:#111110;--surface:#1a1a19;--surface2:#232322;--text:#ffffff;--text2:#c3c2b7;--grid:#2c2c2a;--border:#333331;
+ --blue:#3987e5;--orange:#d95926;--aqua:#199e70;--yellow:#c98500;--magenta:#d55181;--green:#008300;--violet:#9085e9;--red:#e66767;--up:#199e70;--down:#e66767;
+ --zone-hi:rgba(230,103,103,.14);--zone-lo:rgba(25,158,112,.16);--episode:rgba(230,103,103,.16)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:13px/1.45 "Segoe UI",Inter,Roboto,Arial,sans-serif}
+header{display:flex;align-items:center;gap:18px;padding:10px 18px;border-bottom:1px solid var(--border);background:var(--surface);position:sticky;top:0;z-index:5}
+header h1{font-size:17px;margin:0;font-weight:700}
+header .sub{color:var(--text2);font-size:12px}
+header .sp{flex:1}
+.btn{background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:4px 10px;cursor:pointer;font-size:12px}
+.btn.active{background:var(--blue);color:#fff;border-color:var(--blue)}
+.layout{display:flex;min-height:calc(100vh - 52px)}
+nav{width:190px;border-right:1px solid var(--border);background:var(--surface);padding:10px 0;flex-shrink:0}
+nav a{display:block;padding:8px 16px;color:var(--text2);text-decoration:none;cursor:pointer;border-left:3px solid transparent}
+nav a.active{color:var(--text);border-left-color:var(--blue);background:var(--surface2);font-weight:600}
+main{flex:1;padding:14px 18px;min-width:0}
+.page{display:none}.page.active{display:block}
+h2{font-size:15px;margin:6px 0 10px}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;margin-bottom:12px}
+.kpi{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:10px 12px}
+.kpi .l{font-size:11px;color:var(--text2);text-transform:uppercase;letter-spacing:.04em}
+.kpi .v{font-size:22px;font-weight:700;margin-top:2px}
+.kpi .d{font-size:12px;color:var(--text2)}
+.badge{display:inline-block;padding:3px 10px;border-radius:14px;color:#fff;font-weight:700;font-size:13px}
+.toolbar{display:flex;gap:6px;align-items:center;margin:6px 0 8px;flex-wrap:wrap}
+.toolbar .lbl{color:var(--text2);font-size:12px;margin-right:4px}
+.stack{background:var(--surface);border:1px solid var(--border);border-radius:8px;overflow:hidden;margin-bottom:14px}
+.panel{position:relative;border-bottom:1px solid var(--border)}
+.panel:last-child{border-bottom:none}
+.panel canvas{display:block;width:100%}
+.panel .ttl{position:absolute;left:10px;top:6px;font-size:12px;color:var(--text2);pointer-events:none;display:flex;gap:12px;flex-wrap:wrap}
+.panel .ttl b{color:var(--text)}
+.panel .ttl .lg i{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:4px;vertical-align:middle}
+.tip{position:fixed;z-index:20;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:6px 9px;font-size:12px;pointer-events:none;box-shadow:0 4px 14px rgba(0,0,0,.25);display:none;min-width:160px}
+.tip b{display:block;margin-bottom:3px}
+.tip .r{display:flex;justify-content:space-between;gap:14px}
+.tip .r span:last-child{font-variant-numeric:tabular-nums}
+table{border-collapse:collapse;width:100%;font-size:12px;background:var(--surface)}
+th,td{border:1px solid var(--border);padding:4px 7px;text-align:right;font-variant-numeric:tabular-nums}
+th{background:var(--surface2);color:var(--text2);font-weight:600;position:sticky;top:0}
+td:first-child,th:first-child{text-align:left}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media(max-width:1000px){.grid2{grid-template-columns:1fr}nav{width:140px}}
+.note{color:var(--text2);font-size:12px;margin:4px 0 12px}
+.q{display:grid;grid-template-columns:260px 1fr 180px;gap:0;border:1px solid var(--border);border-radius:8px;overflow:hidden;background:var(--surface);margin-bottom:12px}
+.q div{padding:7px 10px;border-bottom:1px solid var(--border)}
+.q div:nth-child(3n+1){font-weight:600;background:var(--surface2)}
+.q div:nth-child(3n){font-weight:700}
+.pos{color:var(--up)}.neg{color:var(--down)}
+.heat td{text-align:center;padding:3px 4px}
+.heat td.c{color:#fff}
+.tblwrap{overflow:auto;max-height:520px;border:1px solid var(--border);border-radius:8px}
+footer{color:var(--text2);font-size:11px;padding:12px 0;border-top:1px solid var(--border);margin-top:10px}
+.ovgrid{display:grid;grid-template-columns:300px 1fr;gap:14px;align-items:start}
+@media(max-width:1100px){.ovgrid{grid-template-columns:1fr}}
+.widget{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:12px 14px}
+.widget h3{margin:0 0 10px;font-size:13px;color:var(--text2);text-transform:uppercase;letter-spacing:.04em}
+.wrow{margin-bottom:12px}
+.wrow .h{display:flex;justify-content:space-between;font-weight:600;font-size:13px}
+.wrow .h .p{font-weight:700}
+.wbar{height:8px;border-radius:4px;background:var(--surface2);margin:5px 0 4px;overflow:hidden;display:flex}
+.wbar i{display:block;height:100%}
+.wrow .c{display:flex;justify-content:space-between;color:var(--text2);font-size:12px}
+.stg{display:flex;height:8px;border-radius:4px;overflow:hidden;margin:6px 0}
+.stg i{display:block;height:100%}
+.stgl{display:grid;grid-template-columns:repeat(4,1fr);gap:4px;font-size:11px;color:var(--text2);text-align:center}
+.stgl b{display:block;color:var(--text);font-size:12px}
+.stgl .sw{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:3px;vertical-align:middle}
+#tour-dim{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:30;display:none}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:14px}
+.card .hd{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.card .hd h3{margin:0;font-size:13px;color:var(--text2);text-transform:uppercase;letter-spacing:.04em}
+.card .hd .sp{flex:1}
+.theme{display:grid;grid-template-columns:200px 1fr 70px;gap:6px 10px;align-items:center;font-size:12px}
+.theme .bar{position:relative;height:9px;background:var(--surface2);border-radius:4px}
+.theme .bar i{position:absolute;top:0;height:100%;border-radius:4px}
+.theme .bar:before{content:'';position:absolute;left:50%;top:-2px;height:13px;border-left:1px solid var(--border)}
+.theme .v{text-align:right;font-weight:700;font-variant-numeric:tabular-nums}
+.theme .n{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ranks td{text-align:center}.ranks td:first-child{text-align:left}
+.ranks .r1,.ranks .r2,.ranks .r3{color:var(--up);font-weight:700}.ranks .rl{color:var(--down);font-weight:700}
+.ranks sup{font-size:9px;margin-left:2px}.ranks sup.up{color:var(--up)}.ranks sup.dn{color:var(--down)}
+tr.secrow{cursor:pointer}tr.secrow:hover td,tr.secrow:hover th{filter:brightness(1.15)}
+tr.secrow td:first-child:before{content:'▸ ';color:var(--text2)}tr.secrow.open td:first-child:before{content:'▾ '}
+tr.drill td{padding:0;background:var(--surface2)}
+.drill table{font-size:12px}.drill th{position:static;background:var(--surface)}.drill td{text-align:right;padding:3px 7px}.drill td:first-child,.drill td:nth-child(2){text-align:left}
+.stg-b{display:inline-block;width:18px;text-align:center;border-radius:4px;color:#fff;font-weight:700;font-size:11px}
+.theme .n,.ranks td:first-child{cursor:pointer}.theme .n:hover,.ranks td:first-child:hover{color:var(--blue);text-decoration:underline}
+.tour-hl{position:relative;z-index:31;box-shadow:0 0 0 3px var(--blue),0 0 0 6px rgba(57,135,229,.35);border-radius:8px}
+#tour{position:fixed;z-index:32;width:380px;max-width:calc(100vw - 24px);background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:10px;padding:14px 16px;box-shadow:0 10px 30px rgba(0,0,0,.4);display:none;font-size:13px;line-height:1.55}
+#tour h4{margin:0 0 6px;font-size:14px}
+#tour .step{color:var(--text2);font-size:11px;margin-bottom:6px}
+#tour .btns{display:flex;gap:6px;margin-top:10px;align-items:center}
+#tour .btns .sp{flex:1}
+#tour kbd{background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:0 4px;font-size:11px}
+th.sortable{cursor:pointer;user-select:none}th.sortable:hover{color:var(--text)}th.sortable.asc:after{content:' ▲';font-size:9px}th.sortable.desc:after{content:' ▼';font-size:9px}
+.tblbar{display:flex;gap:6px;align-items:center;margin:4px 0 6px;flex-wrap:wrap}.tblbar input{background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:3px 8px;font-size:12px;width:180px}
+.sym{color:var(--blue);cursor:pointer;font-weight:600}.sym:hover{text-decoration:underline}
+#modal-dim{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:40;display:none}
+#modal{position:fixed;z-index:41;left:50%;top:50%;transform:translate(-50%,-50%);width:min(1100px,calc(100vw - 30px));max-height:calc(100vh - 30px);overflow:auto;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px 14px;box-shadow:0 12px 40px rgba(0,0,0,.5);display:none}
+#modal .hd{display:flex;align-items:center;gap:10px;margin-bottom:6px}#modal .hd h3{margin:0;font-size:15px}#modal .hd .sp{flex:1}
+.sb td.g{background:rgba(27,175,122,.22)}.sb td.r{background:rgba(227,73,72,.22)}.sb td.k{cursor:pointer}.sb td.k:hover{outline:1px solid var(--blue)}
+.tag{display:inline-block;padding:1px 6px;border-radius:4px;font-size:10px;font-weight:700;color:#fff;margin-left:4px}
+.alert{border-left:4px solid var(--serious);background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:8px 12px;margin-bottom:12px;font-size:12px}
+.help{display:inline-block;margin-left:8px;width:18px;height:18px;border-radius:50%;background:var(--surface2);border:1px solid var(--border);color:var(--text2);text-align:center;line-height:16px;font-size:11px;cursor:pointer}
+</style>
+</head>
+<body>
+<header>
+  <h1>TASI Market Breadth</h1>
+  <span class="sub" id="hdr-date"></span>
+  <span class="sp"></span>
+  <span class="sub">Local · offline · not published</span>
+  <button class="btn" id="tour-btn" style="background:var(--blue);color:#fff;border-color:var(--blue)">▶ Guided tour</button>
+  <button class="btn" id="theme">Light theme</button>
+</header>
+<div class="layout">
+  <nav id="nav"></nav>
+  <main id="main"></main>
+</div>
+<div class="tip" id="tip"></div>
+<div id="tour-dim"></div>
+<div id="modal-dim" onclick="closeModal()"></div><div id="modal"></div>
+<div id="tour"></div>
+<script>
+/*__DATA__*/
+/* ===================================================================== helpers */
+const $=(s,el=document)=>el.querySelector(s);
+const css=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const N=DATA.dates.length, S=DATA.series;
+const fmt=(v,d=0)=>v==null?'—':v.toLocaleString(undefined,{minimumFractionDigits:d,maximumFractionDigits:d});
+const dateIdx={}; DATA.dates.forEach((d,i)=>dateIdx[d]=i);
+const REG={Strong:'--good',Healthy:'--good',Neutral:'--text2',Weak:'--serious',Washout:'--violet'};
+const REGICON={Strong:'▲▲',Healthy:'▲',Neutral:'●',Weak:'▼',Washout:'◆'};
+function nice(v){const e=Math.pow(10,Math.floor(Math.log10(Math.abs(v)||1)));const f=v/e;return (f<1.5?1:f<3.5?2:f<7.5?5:10)*e}
+function ticks(lo,hi,n=5){const st=nice((hi-lo)/n);const a=Math.ceil(lo/st)*st,out=[];for(let v=a;v<=hi+1e-9;v+=st)out.push(+v.toFixed(10));return out}
+const rangeState={i0:Math.max(0,N-500),i1:N-1};
+const stacks=[];
+function setRange(days){rangeState.i1=N-1;rangeState.i0=days==null?0:Math.max(0,N-days);stacks.forEach(s=>s.draw());document.querySelectorAll('.rng').forEach(b=>b.classList.toggle('active',b.dataset.d==String(days)))}
+/* ===================================================================== chart engine */
+class Stack{
+  constructor(el,panels,opts={}){this.el=el;this.panels=panels;this.opts=opts;this.hover=null;el.classList.add('stack');
+    panels.forEach(p=>{const d=document.createElement('div');d.className='panel';d.style.height=(p.height||150)+'px';
+      const c=document.createElement('canvas');d.appendChild(c);const t=document.createElement('div');t.className='ttl';
+      t.innerHTML=`<b>${p.title||''}</b>`+p.series.map(s=>`<span class="lg"><i style="background:${css(s.color)}"></i>${s.label||s.key}</span>`).join('');if(!p.mini)d.appendChild(t);el.appendChild(d);p.canvas=c;p.div=d;
+      c.addEventListener('mousemove',e=>this.onMove(e,p));c.addEventListener('mouseleave',()=>{this.hover=null;$('#tip').style.display='none';this.draw()});
+      c.addEventListener('wheel',e=>{e.preventDefault();this.zoom(e.deltaY>0?1.2:1/1.2,this.xIndex(e,p))},{passive:false});
+      c.addEventListener('mousedown',e=>{this.drag={x:e.clientX,i0:rangeState.i0,i1:rangeState.i1}});
+      window.addEventListener('mouseup',()=>this.drag=null);
+      c.addEventListener('mousemove',e=>{if(!this.drag)return;const w=this.plotW(p);const n=rangeState.i1-rangeState.i0;const di=Math.round(-(e.clientX-this.drag.x)/w*n);let a=this.drag.i0+di,b=this.drag.i1+di;if(a<0){b-=a;a=0}if(b>N-1){a-=b-(N-1);b=N-1}rangeState.i0=a;rangeState.i1=b;stacks.forEach(s=>s.draw())});
+    });stacks.push(this);new ResizeObserver(()=>this.draw()).observe(el)}
+  L(p){return p&&p.mini?34:62}R(){return 12}T(p){return p&&p.mini?4:24}B(p){return p.last?(p.mini?14:22):6}
+  plotW(p){return p.canvas.clientWidth-this.L(p)-this.R()}
+  xIndex(e,p){const r=p.canvas.getBoundingClientRect();const x=e.clientX-r.left-this.L(p);const n=rangeState.i1-rangeState.i0;return Math.max(rangeState.i0,Math.min(rangeState.i1,Math.round(rangeState.i0+x/this.plotW(p)*n)))}
+  zoom(f,center){const n=rangeState.i1-rangeState.i0;let nn=Math.max(30,Math.min(N-1,Math.round(n*f)));const frac=(center-rangeState.i0)/n;let a=Math.round(center-frac*nn),b=a+nn;if(a<0){a=0;b=nn}if(b>N-1){b=N-1;a=b-nn}rangeState.i0=a;rangeState.i1=b;stacks.forEach(s=>s.draw())}
+  onMove(e,p){if(this.drag)return;const i=this.xIndex(e,p);this.hover=i;stacks.forEach(s=>{s.hover=i;s.draw()});
+    const tip=$('#tip');let h=`<b>${DATA.dates[i]}${S.regime[i]?' · '+S.regime[i]:''}</b>`;
+    this.panels.forEach(pp=>pp.series.forEach(s=>{const v=S[s.key][i];h+=`<div class="r"><span><i style="display:inline-block;width:8px;height:8px;background:${css(s.color)};border-radius:2px;margin-right:4px"></i>${s.label||s.key}</span><span>${fmt(v,s.dec??(Math.abs(v||0)<10?2:0))}</span></div>`}));
+    tip.innerHTML=h;tip.style.display='block';const tw=tip.offsetWidth;tip.style.left=Math.min(e.clientX+14,window.innerWidth-tw-10)+'px';tip.style.top=(e.clientY+14)+'px'}
+  draw(){const {i0,i1}=rangeState;this.panels.forEach((p,k)=>{p.last=k===this.panels.length-1;this.drawPanel(p,i0,i1)})}
+  drawPanel(p,i0,i1){const c=p.canvas,dpr=window.devicePixelRatio||1,W=c.clientWidth,H=p.div.clientHeight;c.width=W*dpr;c.height=H*dpr;const g=c.getContext('2d');g.setTransform(dpr,0,0,dpr,0,0);
+    const L=this.L(p),R=this.R(),T=this.T(p),B=this.B(p),pw=W-L-R,ph=H-T-B;const n=i1-i0;const X=i=>L+(i-i0)/Math.max(1,n)*pw;
+    const cache={};const arr=s=>{if(!p.rebase)return S[s.key];if(cache[s.key])return cache[s.key];const a=S[s.key];let b=null;for(let i=i0;i<=i1;i++){if(a[i]!=null){b=a[i];break}}const out=new Array(a.length);for(let i=i0;i<=i1;i++)out[i]=(a[i]==null||b==null)?null:100*a[i]/b;return cache[s.key]=out};
+    g.fillStyle=css('--surface');g.fillRect(0,0,W,H);
+    // y range
+    let lo=Infinity,hi=-Infinity;p.series.forEach(s=>{const a=arr(s);for(let i=i0;i<=i1;i++){const v=a[i];if(v==null)continue;if(v<lo)lo=v;if(v>hi)hi=v}
+      if(s.type==='candle'){for(let i=i0;i<=i1;i++){const l=S.tasi_l[i],h=S.tasi_h[i];if(l!=null&&l<lo)lo=l;if(h!=null&&h>hi)hi=h}}});
+    if(p.ylim){lo=p.ylim[0];hi=p.ylim[1]}if(!isFinite(lo)){lo=0;hi=1}if(p.zero&&lo>0)lo=0;if(p.zero&&hi<0)hi=0;
+    if(!p.ylim){const pad=(hi-lo)*0.06||1;lo-=pad;hi+=pad}
+    const Y=v=>T+ph-(v-lo)/(hi-lo)*ph;
+    // zones
+    (p.zones||[]).forEach(z=>{g.fillStyle=css(z.color);const y1=Y(Math.min(z.to,hi)),y2=Y(Math.max(z.from,lo));if(y2>y1)g.fillRect(L,y1,pw,y2-y1)});
+    // episodes (canary)
+    if(p.episodes){g.fillStyle=css('--episode');DATA.events.canary.forEach(ep=>{const a=dateIdx[ep.start],b=dateIdx[ep.end];if(a==null||b==null||b<i0||a>i1)return;g.fillRect(X(Math.max(a,i0)),T,X(Math.min(b,i1))-X(Math.max(a,i0)),ph)})}
+    // grid + y ticks
+    g.strokeStyle=css('--grid');g.lineWidth=1;g.font='10px sans-serif';g.fillStyle=css('--text2');g.textAlign='right';
+    ticks(lo,hi,p.height>200?6:4).forEach(v=>{const y=Y(v);g.beginPath();g.moveTo(L,y);g.lineTo(L+pw,y);g.stroke();g.fillText(fmt(v,Math.abs(hi-lo)<5?2:0),L-6,y+3)});
+    (p.hlines||[]).forEach(h=>{if(h.y<lo||h.y>hi)return;g.strokeStyle=css(h.color||'--text2');g.setLineDash(h.dash||[4,3]);g.beginPath();g.moveTo(L,Y(h.y));g.lineTo(L+pw,Y(h.y));g.stroke();g.setLineDash([]);if(h.label){g.textAlign='left';g.fillStyle=css(h.color||'--text2');g.fillText(h.label,L+4,Y(h.y)-3);g.textAlign='right'}});
+    // x ticks
+    if(p.last){g.textAlign='center';g.fillStyle=css('--text2');const step=n>2500?250:n>1200?125:n>500?63:n>200?21:n>60?10:5;let lastLab='';for(let i=i0;i<=i1;i++){const d=DATA.dates[i];const lab=n>500?d.slice(0,4):d.slice(0,7);if(lab!==lastLab&&(n<=500||d.slice(5,7)==='01')){if(n>500&&lab===lastLab)continue;lastLab=lab;if(i-i0<step/3&&i!==i0)continue;g.strokeStyle=css('--grid');g.beginPath();g.moveTo(X(i),T);g.lineTo(X(i),T+ph);g.stroke();g.fillText(lab,X(i),H-6)}}}
+    // series
+    g.save();g.beginPath();g.rect(L,T,pw,ph);g.clip();
+    const bw=Math.max(1,pw/Math.max(1,n)-1);
+    p.series.forEach(s=>{const a=arr(s);const col=css(s.color);
+      if(s.type==='hist'){for(let i=i0;i<=i1;i++){const v=a[i];if(v==null)continue;g.fillStyle=v>=0?css(s.up||'--up'):css(s.down||'--down');const y0=Y(0),y=Y(v);g.fillRect(X(i)-bw/2,Math.min(y0,y),bw,Math.max(1,Math.abs(y0-y)))}}
+      else if(s.type==='bar'){g.fillStyle=col;const cb=s.colorBy?S[s.colorBy]:null;for(let i=i0;i<=i1;i++){const v=a[i];if(v==null)continue;if(cb)g.fillStyle=css((cb[i]??0)>=0?'--up':'--down');const y0=Y(Math.max(lo,0)),y=Y(v);g.fillRect(X(i)-bw/2,Math.min(y0,y),bw,Math.max(1,Math.abs(y0-y)))}}
+      else if(s.type==='candle'&&n<=320){for(let i=i0;i<=i1;i++){const o=S.tasi_o[i],h=S.tasi_h[i],l=S.tasi_l[i],cl=S.tasi[i];if(cl==null)continue;const up=(o==null?true:cl>=o);g.strokeStyle=g.fillStyle=css(up?'--up':'--down');const x=X(i);if(h!=null&&l!=null){g.beginPath();g.moveTo(x,Y(h));g.lineTo(x,Y(l));g.stroke()}if(o!=null){const y1=Y(Math.max(o,cl)),y2=Y(Math.min(o,cl));g.fillRect(x-bw/2,y1,bw,Math.max(1,y2-y1))}}}
+      else{g.strokeStyle=col;g.lineWidth=s.width||1.5;g.beginPath();let pen=false;for(let i=i0;i<=i1;i++){const v=a[i];if(v==null){pen=false;continue}const x=X(i),y=Y(v);if(!pen){g.moveTo(x,y);pen=true}else g.lineTo(x,y)}g.stroke();
+        if(s.type==='area'){g.lineTo(X(i1),Y(Math.max(lo,0)));g.lineTo(X(i0),Y(Math.max(lo,0)));g.closePath();g.globalAlpha=.15;g.fillStyle=col;g.fill();g.globalAlpha=1}}
+    });
+    // event markers
+    (p.events||[]).forEach(ev=>{const col=css(ev.color);g.fillStyle=col;DATA.events[ev.key].forEach(d=>{const i=dateIdx[d];if(i==null||i<i0||i>i1)return;const x=X(i);const y=ev.pos==='top'?T+4:T+ph-4;g.beginPath();if(ev.dot){g.arc(x,ev.pos==='top'?y+4:y-4,3.5,0,6.3)}else if(ev.pos==='top'){g.moveTo(x,y+8);g.lineTo(x-5,y);g.lineTo(x+5,y)}else{g.moveTo(x,y-8);g.lineTo(x-5,y);g.lineTo(x+5,y)}g.closePath();g.fill()})});
+    // regime strip
+    if(p.regimeStrip){for(let i=i0;i<=i1;i++){const r=S.regime[i];if(!r)continue;g.fillStyle=css(REG[r]);g.globalAlpha=.55;g.fillRect(X(i)-bw/2-0.5,T+ph-5,bw+1,5);g.globalAlpha=1}}
+    g.restore();
+    // crosshair
+    if(this.hover!=null&&this.hover>=i0&&this.hover<=i1){const x=X(this.hover);g.strokeStyle=css('--text2');g.setLineDash([3,3]);g.beginPath();g.moveTo(x,T);g.lineTo(x,T+ph);g.stroke();g.setLineDash([]);
+      p.series.forEach(s=>{const v=arr(s)[this.hover];if(v==null||s.type==='hist'||s.type==='bar')return;g.fillStyle=css(s.color);g.beginPath();g.arc(x,Y(v),3,0,6.3);g.fill();
+        g.fillStyle=css(s.color);g.fillRect(L+pw+1,Y(v)-7,R+40,14);g.fillStyle='#fff';g.textAlign='left';g.font='10px sans-serif';g.fillText(fmt(v,s.dec??(Math.abs(v)<10?2:0)),L+pw+3,Y(v)+4)})}
+    // frame
+    g.strokeStyle=css('--border');g.strokeRect(L+.5,T+.5,pw-1,ph-1)}
+}
+
+/* ===================================================================== market breadth widget (TradingView-style) */
+function widgetHTML(i){
+  const row=(title,up,dn,dec=0)=>{const tot=(up||0)+(dn||0);const pct=tot?100*up/tot:null;const good=pct==null?false:pct>=50;const col=good?'var(--blue)':'var(--magenta)';
+    return `<div class="wrow"><div class="h"><span>${title}</span><span class="p" style="color:${col}">${pct==null?'—':pct.toFixed(0)+'%'}</span></div>
+    <div class="wbar"><i style="width:${pct==null?0:pct}%;background:${col}"></i></div><div class="c"><span>${fmt(up)} ${title.split(' vs ')[0].replace(/^(New |Up )?/,'').replace('from Open','Up').replace('on Volume','Up')}</span><span>${fmt(dn)} ${title.split(' vs ')[1].replace(/^(New |Down )?/,'').replace('from Open','Down').replace('on Volume','Down')}</span></div></div>`};
+  const st=[1,2,3,4].map(k=>S['stage'+k][i]||0);const n=st.reduce((a,b)=>a+b,0)||1;const cols=['var(--text2)','var(--blue)','var(--yellow)','var(--magenta)'];
+  return `<div class="widget"><h3>Market Breadth · ${DATA.dates[i]}</h3>
+   ${row('New Highs vs New Lows',S.new_highs[i],S.new_lows[i])}
+   ${row('Advance vs Decline',S.advances[i],S.declines[i])}
+   ${row('Up from Open vs Down from Open',S.up_from_open[i],S.down_from_open[i])}
+   ${row('Up on Volume vs Down on Volume',S.up_on_volume[i],S.down_on_volume[i])}
+   ${row('Up 4% vs Down 4%',S.up_x[i],S.down_x[i])}
+   <div class="wrow"><div class="h"><span>Stage Analysis</span><span class="p" style="color:var(--text2)">${n} stocks</span></div>
+   <div class="stg">${st.map((v,k)=>`<i style="width:${100*v/n}%;background:${cols[k]}"></i>`).join('')}</div>
+   <div class="stgl">${st.map((v,k)=>`<div><span class="sw" style="background:${cols[k]}"></span>Stage ${k+1}<b>${v} · ${(100*v/n).toFixed(0)}%</b></div>`).join('')}</div>
+   <div id="stage-mini" style="margin-top:8px"></div></div></div>`}
+
+
+/* ===================================================================== sector drill-down */
+const STCOL={1:'var(--text2)',2:'var(--blue)',3:'var(--yellow)',4:'var(--magenta)'};
+function stockRows(list){const pc=v=>v==null?'<td>—</td>':`<td class="${v>=0?'pos':'neg'}">${v>=0?'+':''}${v.toFixed(1)}%</td>`;
+ return `<div class="drill"><table><tr><th>Symbol</th><th>Company</th><th>Close</th><th>1D</th><th>1M</th><th>3M</th><th>vs 50DMA</th><th>vs 200DMA</th><th>from 52w high</th><th>from 52w low</th><th>Stage</th><th>Rel. vol</th></tr>
+ ${list.map(r=>`<tr${r.traded?'':' style="opacity:.5"'}><td>${r.sym}</td><td>${r.name}${r.traded?'':' (no trade)'}</td><td>${fmt(r.close,2)}</td>${pc(r.d1)}${pc(r.m1)}${pc(r.m3)}${pc(r.vs50)}${pc(r.vs200)}${pc(r.hi52)}${pc(r.lo52)}<td>${r.stage?`<span class="stg-b" style="background:${STCOL[r.stage]}">${r.stage}</span>`:'—'}</td><td>${fmt(r.rvol,2)}</td></tr>`).join('')}</table></div>`}
+function sectorStocks(name){if(name==='Other'){return Object.entries(DATA.sector_pool).filter(([k,v])=>v==='Other').flatMap(([k])=>DATA.stocks[k]||[])}return DATA.stocks[name]||[]}
+window.toggleSector=function(tr){const name=tr.dataset.sector;const open=tr.classList.toggle('open');const next=tr.nextElementSibling;if(next&&next.classList.contains('drill'))next.remove();if(!open)return;
+ const list=sectorStocks(name);const d=document.createElement('tr');d.className='drill';const id='tbl-sec-'+Math.random().toString(36).slice(2,8);d.innerHTML=`<td colspan="${tr.children.length}"><div style="padding:6px 8px">${tblBar('#'+id,'sector_'+name.replace(/[^a-z0-9]+/gi,'_'))}${stockTable(list,id,{cols:['sym','name','close','d1','m1','m3','rs','vs50','vs200','hi52','lo52','stage','rvol','bo','flags']})}</div></td>`;tr.after(d);makeSortable($('#'+id))};
+window.openSector=function(name){show('sectors');const key=DATA.sector_pool[name]||name;const tr=document.querySelector(`tr.secrow[data-sector="${CSS.escape(key)}"]`);if(!tr)return;if(!tr.classList.contains('open'))toggleSector(tr);tr.scrollIntoView({block:'center',behavior:'smooth'})};
+
+/* ===================================================================== tables: sort · filter · CSV export */
+function makeSortable(tbl){const hdr=tbl.tHead?tbl.tHead.rows[0]:tbl.rows[0];if(!hdr)return;[...hdr.cells].forEach((th,ci)=>{th.classList.add('sortable');th.onclick=()=>{const body=tbl.tBodies[0]||tbl;const rows=[...body.rows].filter(r=>r!==hdr&&!r.classList.contains('drill')&&!r.querySelector('th'));const asc=!th.classList.contains('asc');[...hdr.cells].forEach(c=>c.classList.remove('asc','desc'));th.classList.add(asc?'asc':'desc');
+  const val=r=>{const t=(r.cells[ci]||{}).textContent.trim().replace(/[%,+]/g,'').replace('−','-');const n=parseFloat(t);return isNaN(n)?t.toLowerCase():n};
+  rows.sort((a,b)=>{const x=val(a),y=val(b);if(typeof x==='number'&&typeof y==='number')return asc?x-y:y-x;if(x==='—'||x==='')return 1;if(y==='—'||y==='')return -1;return asc?String(x).localeCompare(String(y)):String(y).localeCompare(String(x))});
+  rows.forEach(r=>{const d=r.nextElementSibling&&r.nextElementSibling.classList.contains('drill')?r.nextElementSibling:null;body.appendChild(r);if(d)body.appendChild(d)})}})}
+function tableCSV(tbl,name){const rows=[...tbl.rows].filter(r=>!r.classList.contains('drill')).map(r=>[...r.cells].map(c=>'"'+c.textContent.trim().replace(/"/g,'""')+'"').join(','));const blob=new Blob(['\ufeff'+rows.join('\n')],{type:'text/csv;charset=utf-8'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=(name||'table')+'_'+t.date+'.csv';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),2000)}
+function tblBar(sel,name,filter=true){return `<div class="tblbar">${filter?`<input placeholder="filter…" oninput="filterTable('${sel}',this.value)">`:''}<button class="btn" onclick="tableCSV(document.querySelector('${sel}'),'${name}')">⇩ CSV</button><span class="note" style="margin:0">click a column header to sort</span></div>`}
+window.filterTable=function(sel,q){const tbl=document.querySelector(sel);q=q.toLowerCase();[...tbl.rows].forEach((r,i)=>{if(i===0||r.querySelector('th'))return;r.style.display=r.textContent.toLowerCase().includes(q)?'':'none'})};
+/* ===================================================================== stock chart modal */
+window.closeModal=function(){$('#modal').style.display='none';$('#modal-dim').style.display='none'};
+window.openStock=function(sym){const d=DATA.ohlc[sym];if(!d)return;const name=DATA.names[sym]||'';const row=Object.values(DATA.stocks).flat().find(r=>r.sym===sym)||{};
+  const pc=v=>v==null?'—':`<span class="${v>=0?'pos':'neg'}">${v>=0?'+':''}${v.toFixed(1)}%</span>`;
+  $('#modal').innerHTML=`<div class="hd"><h3>${sym} · ${name}</h3><span class="note" style="margin:0">${row.group||''} · close ${fmt(row.close,2)} · 1D ${pc(row.d1)} · 1M ${pc(row.m1)} · 3M ${pc(row.m3)} · RS ${row.rs??'—'} · Stage ${row.stage??'—'} · ${row.tt?'<span class="tag" style="background:var(--good)">Trend Template</span>':''}${row.nhv?'<span class="tag" style="background:var(--blue)">52w high on volume</span>':''}</span><span class="sp"></span><button class="btn" onclick="closeModal()">✕ close</button></div><div id="stk-stack"></div><p class="note">Adjusted OHLC, last 260 trading days; MA50 red, MA150 orange, MA200 grey; volume coloured by direction; RS line = stock / TASI rebased to 100 (Weinstein: rising RS line confirms a Stage-2 breakout).</p>`;
+  $('#modal').style.display='block';$('#modal-dim').style.display='block';
+  // local series for the modal (own index space)
+  const n=d.c.length;const L={dates:DATA.ohlc_dates,c:d.c,o:d.o,h:d.h,l:d.l,v:d.v,m50:d.m50,m150:d.m150,m200:d.m200};let b=null;L.rs=d.c.map((v,i)=>{const t=DATA.tasi_win[i];if(v==null||t==null)return null;if(b==null)b=v/t;return 100*(v/t)/b});L.chg=d.c.map((v,i)=>i&&v!=null&&d.c[i-1]!=null?v-d.c[i-1]:0);
+  drawLocal($('#stk-stack'),L)};
+function drawLocal(el,L){el.innerHTML='';el.classList.add('stack');const n=L.c.length;const panels=[{h:300,series:[['c','--text','candle'],['m50','--red','line'],['m150','--orange','line'],['m200','--text2','line']],title:'Price · MA50 · MA150 · MA200'},{h:90,series:[['v','--blue','bar']],title:'Volume'},{h:110,series:[['rs','--violet','line']],title:'Relative strength vs TASI (rebased 100)'}];
+  panels.forEach((p,k)=>{const dv=document.createElement('div');dv.className='panel';dv.style.height=p.h+'px';const c=document.createElement('canvas');dv.appendChild(c);const tt=document.createElement('div');tt.className='ttl';tt.innerHTML=`<b>${p.title}</b>`;dv.appendChild(tt);el.appendChild(dv);
+    const dpr=window.devicePixelRatio||1,W=el.clientWidth||900,H=p.h;c.width=W*dpr;c.height=H*dpr;c.style.width=W+'px';const g=c.getContext('2d');g.setTransform(dpr,0,0,dpr,0,0);const Lm=62,R=12,T=22,B=k===panels.length-1?20:6,pw=W-Lm-R,ph=H-T-B;const X=i=>Lm+i/Math.max(1,n-1)*pw;
+    let lo=Infinity,hi=-Infinity;p.series.forEach(([key])=>{const a=key==='c'?L.l:L[key];const a2=key==='c'?L.h:L[key];for(let i=0;i<n;i++){if(a[i]!=null&&a[i]<lo)lo=a[i];if(a2[i]!=null&&a2[i]>hi)hi=a2[i]}});if(!isFinite(lo)){lo=0;hi=1}if(p.series[0][2]==='bar')lo=0;const pad=(hi-lo)*.06||1;if(p.series[0][2]!=='bar')lo-=pad;hi+=pad;const Y=v=>T+ph-(v-lo)/(hi-lo)*ph;
+    g.fillStyle=css('--surface');g.fillRect(0,0,W,H);g.strokeStyle=css('--grid');g.fillStyle=css('--text2');g.font='10px sans-serif';g.textAlign='right';ticks(lo,hi,4).forEach(v=>{const y=Y(v);g.beginPath();g.moveTo(Lm,y);g.lineTo(Lm+pw,y);g.stroke();g.fillText(p.series[0][2]==='bar'?(v>=1e6?(v/1e6).toFixed(1)+'M':v>=1e3?(v/1e3).toFixed(0)+'K':fmt(v)):fmt(v,Math.abs(hi-lo)<5?2:0),Lm-6,y+3)});
+    if(k===panels.length-1){g.textAlign='center';let last='';for(let i=0;i<n;i++){const lab=L.dates[i].slice(0,7);if(lab!==last){last=lab;g.fillText(lab,X(i),H-6)}}}
+    const bw=Math.max(1,pw/n-1);p.series.forEach(([key,col,type])=>{if(type==='candle'){for(let i=0;i<n;i++){const o=L.o[i],h=L.h[i],l=L.l[i],cl=L.c[i];if(cl==null)continue;const up=o==null?true:cl>=o;g.strokeStyle=g.fillStyle=css(up?'--up':'--down');const x=X(i);if(h!=null&&l!=null){g.beginPath();g.moveTo(x,Y(h));g.lineTo(x,Y(l));g.stroke()}if(o!=null){const y1=Y(Math.max(o,cl)),y2=Y(Math.min(o,cl));g.fillRect(x-bw/2,y1,bw,Math.max(1,y2-y1))}}}
+      else if(type==='bar'){for(let i=0;i<n;i++){const v=L[key][i];if(v==null)continue;g.fillStyle=css(L.chg[i]>=0?'--up':'--down');g.fillRect(X(i)-bw/2,Y(v),bw,Math.max(1,Y(0)-Y(v)))}}
+      else{g.strokeStyle=css(col);g.lineWidth=1.3;g.beginPath();let pen=false;for(let i=0;i<n;i++){const v=L[key][i];if(v==null){pen=false;continue}if(!pen){g.moveTo(X(i),Y(v));pen=true}else g.lineTo(X(i),Y(v))}g.stroke()}});
+    g.strokeStyle=css('--border');g.strokeRect(Lm+.5,T+.5,pw-1,ph-1)})}
+/* ===================================================================== pages */
+const PAGES=[
+ ['overview','Overview'],['widget','Market Breadth widget'],['leaders','Leaders & Trend Template'],['nhnl','New Highs / New Lows'],['mcclellan','McClellan'],['ma','% Above MAs'],['ad','Advance / Decline'],
+ ['stockbee','Stockbee Monitor'],['cycle','Market Cycle (DV)'],['classic','Classic chart'],['library','Classic breadth library'],['bpi','Bullish Percent (P&F)'],['sectors','Sectors'],['conc','Concentration'],['signals','Signals & Regimes'],['thr','Thresholds & Method']];
+const nav=$('#nav'),main=$('#main');
+PAGES.forEach(([id,name])=>{const a=document.createElement('a');a.textContent=name;a.dataset.p=id;a.onclick=()=>show(id);nav.appendChild(a);const d=document.createElement('div');d.className='page';d.id='p-'+id;main.appendChild(d)});
+function show(id){document.querySelectorAll('nav a').forEach(a=>a.classList.toggle('active',a.dataset.p===id));document.querySelectorAll('.page').forEach(p=>p.classList.toggle('active',p.id==='p-'+id));stacks.forEach(s=>s.draw());try{localStorage.setItem('tb-page',id)}catch(e){}}
+function toolbar(){return `<div class="toolbar"><span class="lbl">Range</span>${[[126,'6M'],[252,'1Y'],[504,'2Y'],[1260,'5Y'],[2520,'10Y'],[null,'All']].map(([d,l])=>`<button class="btn rng" data-d="${d}" onclick="setRange(${d})">${l}</button>`).join('')}<span class="lbl" style="margin-left:10px">drag to pan · wheel to zoom · hover for values</span></div>`}
+const IDX=(extra={})=>Object.assign({title:'TASI (candles when zoomed in; line otherwise)',height:260,series:[{key:'tasi',type:'candle',color:'--text',label:'TASI'},{key:'tasi',type:'line',color:'--blue',label:'TASI close',width:1.2}],regimeStrip:true},extra);
+const t=DATA.today;
+/* ---------- overview */
+function stockTable(list,sel,opts={}){const pc=v=>v==null?'<td>—</td>':`<td class="${v>=0?'pos':'neg'}">${v>=0?'+':''}${v.toFixed(1)}%</td>`;const cols=opts.cols||['sym','name','group','close','d1','m1','m3','rs','vs50','vs200','hi52','lo52','stage','rvol','bo','flags'];
+ const H={sym:'Symbol',name:'Company',group:'Group',close:'Close',d1:'1D',m1:'1M',m3:'3M',rs:'RS',vs50:'vs 50DMA',vs200:'vs 200DMA',hi52:'from 52w high',lo52:'from 52w low',stage:'Stage',rvol:'Rel. vol',bo:'Breakout vol',flags:'Flags'};
+ const cell=(r,c)=>{switch(c){case 'sym':return `<td><span class="sym" onclick="openStock(${r.sym})" title="open chart">${r.sym}</span></td>`;case 'name':return `<td style="text-align:left">${r.name}${r.traded?'':' (no trade)'}</td>`;case 'group':return `<td style="text-align:left">${r.group}</td>`;case 'close':return `<td>${fmt(r.close,2)}</td>`;
+  case 'rs':return `<td style="font-weight:700;color:${r.rs>=80?'var(--up)':r.rs<=30?'var(--down)':'inherit'}">${r.rs??'—'}</td>`;case 'stage':return `<td>${r.stage?`<span class="stg-b" style="background:${STCOL[r.stage]}">${r.stage}</span>`:'—'}</td>`;case 'rvol':return `<td>${fmt(r.rvol,2)}</td>`;case 'bo':return `<td>${r.bo==null?'—':fmt(r.bo,1)+'×'}</td>`;
+  case 'flags':return `<td style="text-align:left">${r.tt?'<span class="tag" style="background:var(--good)">TT</span>':''}${r.nhv?'<span class="tag" style="background:var(--blue)">NH·vol</span>':r.nh?'<span class="tag" style="background:var(--text2)">NH</span>':''}</td>`;default:return pc(r[c])}};
+ return `<div class="drill"><table id="${sel}"><thead><tr>${cols.map(c=>`<th>${H[c]}</th>`).join('')}</tr></thead><tbody>${list.map(r=>`<tr${r.traded?'':' style="opacity:.5"'}>${cols.map(c=>cell(r,c)).join('')}</tr>`).join('')}</tbody></table></div>`}
+{const p=$('#p-overview');const regc=css(REG[t.regime]);
+ const chg=v=>`<span class="${v>=0?'pos':'neg'}">${v>=0?'+':''}${v}</span>`;
+ const i=N-1;const pct200=S.pct_above_sma200[i],pct50=S.pct_above_sma50[i],st2=S.pct_stage2[i],nh=S.new_highs[i],nl=S.new_lows[i],mc=S.mcclellan_osc[i],sum5=S.nhnl_sum5[i],thr=S.nhnl_thr[i],sp60=S.spread_60[i],trin=S.trin_10[i],r10=S.ratio_10[i],zb=S.zweig_value[i],nheal=S.n_healthy[i],nsec=S.n_sectors[i],adl20=S.ad_line[i]-S.ad_line[i-20];
+ const li=(()=>{let k=i;while(k>0&&S.tasi[k]==null)k--;return k})();const tt=S.pct_minervini[i],ntt=S.n_minervini[i],nhv=S.new_highs_vol[i],idx20=100*(S.tasi[li]/S.tasi[li-20]-1),nhnl10=S.nhnl_sum10[i];
+ // Q3 — confirmation: compare the index's 20-day direction with breadth's 20-day direction (A/D line, NH−NL 10d, EW−TASI spread)
+ const bUp=(adl20>0)+(nhnl10>0)+(sp60>0),bDn=(adl20<0)+(nhnl10<0)+(sp60<0);const brDir=bUp>=2?'up':bDn>=2?'down':'mixed';const ixDir=idx20>1?'up':idx20<-1?'down':'flat';
+ const conf=sp60<-5?'Mega-caps masking weakness':(ixDir==='up'&&brDir==='down')?'Bearish divergence':(ixDir==='down'&&brDir==='up')?'Bullish divergence':(ixDir==='up'&&brDir==='up')?'Confirmed (up)':(ixDir==='down'&&brDir==='down')?'Confirmed (down)':'Mixed';
+ const nearCanary=sum5!=null&&thr!=null&&sum5>thr&&sum5<=0.6*thr;const inCanary=sum5!=null&&thr!=null&&sum5<=thr;
+ const hlli=S.hlli[i],split=hlli!=null&&hlli>1,omen=t.hindenburg_recent>0;
+ const q=[['1. Participation broad or narrow?',`%>200DMA ${fmt(pct200)}% · %>50DMA ${fmt(pct50)}% · Stage 2 ${fmt(st2)}% · Trend Template ${fmt(tt,1)}% · healthy sectors ${fmt(nheal)}/${fmt(nsec)}`,pct200>60?'Broad':pct200<40?'Narrow':'Mixed'],
+  ['2. Improving or deteriorating?',`A/D line 20d ${fmt(adl20)} · McClellan ${fmt(mc)} · Score ${t.score} (${chg(t.score_chg)} vs yesterday)`,(adl20>0&&mc>0)?'Improving':(adl20<0&&mc<0)?'Deteriorating':'Mixed'],
+  ['3. Breadth confirming the index?',`TASI 20d ${chg(+idx20.toFixed(1))}%${li!==i?' (to '+DATA.dates[li]+')':''} vs breadth 20d: A/D line ${fmt(adl20)} · NH−NL 10d ${fmt(nhnl10)} · EW−TASI 60d ${fmt(sp60,1)} pts · NH ${nh} / NL ${nl}`,conf],
+  ['4. Oversold / overbought? Thrust?',`Overlay ${t.overlay} · TRIN-10 ${fmt(trin,2)} · 4% ratio 10d ${fmt(r10,2)} · Zweig EMA ${fmt(zb,3)} · NH−NL 5d sum ${fmt(sum5)} (canary line ${fmt(thr)} = −75% of ${fmt(S.n_nhnl[i])}) · HLLI ${fmt(hlli,2)} · Hindenburg 36d: ${t.hindenburg_recent} · BPI ${fmt(t.bpi)} (${t.bpi_status})`,t.overlay>=75?'Oversold':(S.pct_up_x[i]>20||mc>100)?'Exhaustion':split?'Split market (HLLI>1)':inCanary?'Canary warning':nearCanary?'Near canary':'No extreme'],
+  ['5. Regime & Score',`Breadth Score ${t.score}/100 · EMA5 ${t.smooth} · driver: ${t.driver} · since ${t.regime_since}`,`${REGICON[t.regime]} ${t.regime}`]];
+ const lead=DATA.leaders.slice(0,12);
+ p.innerHTML=`<div class="kpis">
+  <div class="kpi"><div class="l">Breadth Score</div><div class="v">${t.score} <small style="font-size:12px;color:var(--text2)">/100</small></div><div class="d">${chg(t.score_chg)} vs yesterday · EMA5 ${t.smooth}</div></div>
+  <div class="kpi"><div class="l">Regime</div><div class="v"><span class="badge" style="background:${regc}">${REGICON[t.regime]} ${t.regime}</span></div><div class="d">since ${t.regime_since}</div></div>
+  <div class="kpi"${t.index_stale?' style="border-color:var(--serious)"':''}><div class="l">TASI</div><div class="v">${t.tasi==null?'—':fmt(t.tasi)}</div><div class="d">${t.index_stale?`<b style="color:var(--serious)">index file stale</b> · last close ${t.tasi_last_date}`:`${chg(t.tasi_chg)}% · ${t.date}`}</div></div>
+  <div class="kpi"><div class="l">Families (A / B / E)</div><div class="v">${t.fam.A} / ${t.fam.B} / ${t.fam.E}</div><div class="d">participation / advance-decline / sectors · F, G context only</div></div>
+  <div class="kpi"><div class="l">Oversold overlay</div><div class="v">${t.overlay}</div><div class="d">≥75 with score ≤45 = Washout</div></div>
+  <div class="kpi" style="${inCanary?'border-color:var(--critical)':nearCanary?'border-color:var(--serious)':''}"><div class="l">NH / NL (52w)</div><div class="v">${nh} / ${nl}</div><div class="d">5d sum ${fmt(sum5)} · canary ≤ ${fmt(thr)}${inCanary?' · <b style="color:var(--critical)">CANARY</b>':nearCanary?' · <b style="color:var(--serious)">near canary</b>':''}</div></div>
+  <div class="kpi" style="cursor:pointer" onclick="show('leaders')" title="open Leaders page"><div class="l">Trend Template (Minervini)</div><div class="v">${fmt(tt,1)}% <small style="font-size:12px;color:var(--text2)">${DATA.leaders.length} of ${fmt(ntt)}</small></div><div class="d">new 52w highs on volume today: ${fmt(nhv)} · click for leaders</div></div></div>
+  ${split||omen?`<div class="alert" style="border-left-color:var(--critical)"><b>${split?'Split market — Fosback High-Low Logic Index '+fmt(hlli,2)+' > 1':''}${split&&omen?' · ':''}${omen?'Hindenburg Omen in the last 36 days ('+t.hindenburg_recent+')':''}</b> — the strongest negative state on TASI (HLLI > 1: −3.2% / 60d, 33% hit). Many new highs AND new lows at once = no leadership.</div>`:''}
+  ${inCanary?`<div class="alert" style="border-left-color:var(--critical)"><b>Canary episode active</b> — NH−NL 5-day sum ${fmt(sum5)} is below the TASI threshold ${fmt(thr)}. Historically: avg max drawdown inside an episode −11%, 12/15 episodes fell ≥3%. Risk-management flag, not an exit.</div>`:nearCanary?`<div class="alert"><b>Near canary</b> — NH−NL 5-day sum ${fmt(sum5)} is past 60% of the threshold (${fmt(thr)}). One more heavy new-lows day would trigger an episode.</div>`:''}
+  <div class="q">${q.map(([a,b,c])=>`<div>${a}</div><div>${b}</div><div>${c}</div>`).join('')}</div>
+  <div class="ovgrid"><div class="card" id="ov-leaders"><div class="hd"><h3>Leaders — Trend Template pass, by RS</h3><span class="sp"></span><button class="btn" onclick="show('leaders')">all ${DATA.leaders.length} →</button></div>
+   ${lead.length?`<table><tr><th>Sym</th><th style="text-align:left">Name</th><th>RS</th><th>52w hi</th><th>Rvol</th></tr>${lead.map(r=>`<tr><td><span class="sym" onclick="openStock(${r.sym})">${r.sym}</span></td><td style="text-align:left;white-space:nowrap;max-width:130px;overflow:hidden;text-overflow:ellipsis">${r.name}</td><td>${r.rs??'—'}</td><td class="${r.hi52>=0?'pos':'neg'}">${r.hi52==null?'—':r.hi52.toFixed(1)+'%'}</td><td>${fmt(r.rvol,2)}</td></tr>`).join('')}</table>`:'<p class="note">No stock passes the full template today.</p>'}
+   <p class="note" style="margin:8px 0 0">Minervini: breadth is a permission gauge — when few names pass the template, the market is not rewarding trend-following. Click a symbol for its chart.</p>
+   <div style="margin-top:10px"><button class="btn" onclick="show('widget')">Market Breadth widget →</button></div></div><div>${toolbar()}<div id="ov-stack"></div></div></div>
+  <p class="note">Regime strip under the index: green = Healthy/Strong, grey = Neutral, orange = Weak, violet = Washout. Shaded red bands = NH−NL canary episodes (Hisham Naser rule calibrated to TASI). Markers: ▲ Zweig thrust, ▲ %>50DMA thrust, ▼ 95% down day. Families F (concentration) and G (divergences) are shown for context only — they add no predictive value on TASI and are not scored.</p>`;
+ new Stack($('#ov-stack'),[IDX({episodes:true,events:[{key:'zweig',color:'--aqua'},{key:'pct50',color:'--blue'},{key:'lowry_down',color:'--red',pos:'top'}]}),
+  {title:'Breadth Score (0–100) & regime bands',height:150,series:[{key:'score',color:'--orange',label:'Score'},{key:'score_smooth',color:'--blue',label:'EMA5'}],ylim:[0,100],zones:[{from:0,to:40,color:'--zone-hi'},{from:60,to:100,color:'--zone-lo'}],hlines:[{y:40},{y:60},{y:75}]},
+  {title:'NH−NL 52-week (daily net) — Hisham\'s canary',height:130,series:[{key:'net_nh_nl',type:'hist',color:'--blue',label:'Net NH−NL'}],zero:true,episodes:true},
+  {title:'McClellan Oscillator (ratio-adjusted)',height:130,series:[{key:'mcclellan_osc',type:'hist',color:'--blue',label:'McClellan'}],zero:true,hlines:[{y:85,color:'--red',label:'+85 (95th pct)'},{y:-85,color:'--aqua',label:'−85 (5th pct)'}]}]);}
+/* ---------- Market Breadth widget page */
+{const p=$('#p-widget');
+ const pctS=(a,b)=>{const out=new Array(N);for(let i=0;i<N;i++){const u=S[a][i],d=S[b][i];out[i]=(u==null||d==null||u+d===0)?null:100*u/(u+d)}return out};
+ S.w_nh=pctS('new_highs','new_lows');S.w_ad=pctS('advances','declines');S.w_open=pctS('up_from_open','down_from_open');S.w_vol=pctS('up_on_volume','down_on_volume');S.w_4=pctS('up_x','down_x');
+ const sm10=a=>{const out=new Array(N);for(let i=0;i<N;i++){let s_=0,c=0;for(let j=Math.max(0,i-9);j<=i;j++){if(a[j]!=null){s_+=a[j];c++}}out[i]=c?s_/c:null}return out};
+ ['w_nh','w_ad','w_open','w_vol','w_4'].forEach(k=>S[k+'_10']=sm10(S[k]));
+ window.stageMode='daily';
+ p.innerHTML=`<h2>Market Breadth widget — the at-a-glance panel</h2><p class="note">Same six gauges as the TradingView / Deepvue market-breadth widget, computed on the TASI universe: New Highs vs New Lows (52w), Advance vs Decline, Up vs Down from the open, Up vs Down on above-average volume (volume > prior 20-day average), Up 4% vs Down 4% (with volume above the prior day), and the Weinstein stage split. Blue = bulls ≥ 50%, magenta = bears. <b>Hover any chart and the widget re-renders for that day.</b></p>
+ <div class="ovgrid"><div id="w-widget">${widgetHTML(N-1)}</div><div>${toolbar()}<div class="toolbar"><span class="lbl">Stages</span><button class="btn stm active" data-m="daily" onclick="setStageMode('daily')">Daily (150d MA)</button><button class="btn stm" data-m="weekly" onclick="setStageMode('weekly')">Weekly (30-week MA — Weinstein original)</button></div><div id="w-stack"></div></div></div>`;
+ window.setStageMode=function(m){window.stageMode=m;document.querySelectorAll('.stm').forEach(b=>b.classList.toggle('active',b.dataset.m===m));const sfx=m==='weekly'?'_w':'';wStack.panels[6].series=[1,2,3,4].map(k=>({key:'pct_stage'+k+sfx,color:['--text2','--blue','--yellow','--magenta'][k-1],label:'Stage '+k+(m==='weekly'?' (wk)':''),width:k===2||k===4?1.5:1}));wStack.panels[6].div.querySelector('.ttl').innerHTML=`<b>${m==='weekly'?'Weinstein stages — WEEKLY bars, 30-week MA, slope 4 weeks (his original setting)':'Weinstein stages — daily proxy (150-day MA, slope 20 days)'}</b>`+wStack.panels[6].series.map(s=>`<span class="lg"><i style="background:${css(s.color)}"></i>${s.label}</span>`).join('');wStack.draw()};
+ const wStack=new Stack($('#w-stack'),[IDX({regimeStrip:true}),
+  {title:'New highs share — NH/(NH+NL) %',height:100,series:[{key:'w_nh',color:'--grid',label:'% NH daily',width:1},{key:'w_nh_10',color:'--blue',label:'% NH 10d avg',width:1.8}],ylim:[0,100],hlines:[{y:50}]},
+  {title:'Advances share — A/(A+D) %',height:100,series:[{key:'w_ad',color:'--grid',label:'% advancing daily',width:1},{key:'w_ad_10',color:'--blue',label:'% advancing 10d avg',width:1.8}],ylim:[0,100],hlines:[{y:50}]},
+  {title:'Up from open share %',height:90,series:[{key:'w_open',color:'--grid',label:'% up from open daily',width:1},{key:'w_open_10',color:'--violet',label:'% up from open 10d avg',width:1.8}],ylim:[0,100],hlines:[{y:50}]},
+  {title:'Up on volume share %',height:90,series:[{key:'w_vol',color:'--grid',label:'% up on volume daily',width:1},{key:'w_vol_10',color:'--aqua',label:'% up on volume 10d avg',width:1.8}],ylim:[0,100],hlines:[{y:50}]},
+  {title:'Up-4% share of 4% movers %',height:90,series:[{key:'w_4',color:'--grid',label:'% up 4% daily',width:1},{key:'w_4_10',color:'--orange',label:'% up 4% 10d avg',width:1.8}],ylim:[0,100],hlines:[{y:50}]},
+  {title:'Weinstein stages — daily proxy (150-day MA, slope 20 days)',height:160,series:[{key:'pct_stage1',color:'--text2',label:'Stage 1',width:1},{key:'pct_stage2',color:'--blue',label:'Stage 2'},{key:'pct_stage3',color:'--yellow',label:'Stage 3',width:1},{key:'pct_stage4',color:'--magenta',label:'Stage 4'}],ylim:[0,100]}]);
+ new Stack($('#stage-mini'),[{title:'% in each stage',height:150,series:[{key:'pct_stage1',color:'--text2',label:'S1',width:1},{key:'pct_stage2',color:'--blue',label:'S2'},{key:'pct_stage3',color:'--yellow',label:'S3',width:1},{key:'pct_stage4',color:'--magenta',label:'S4'}],ylim:[0,100]}]);
+ const wEl=$('#w-widget');let lastW=N-1;setInterval(()=>{const i=wStack.hover??N-1;if(i!==lastW){lastW=i;const mini=$('#stage-mini');wEl.innerHTML=widgetHTML(i);$('#stage-mini').replaceWith(mini)}},120);}
+/* ---------- Leaders & Trend Template */
+{const p=$('#p-leaders');const i=N-1;
+ p.innerHTML=`<h2>Leaders & Trend Template (Minervini)</h2><p class="note">A stock passes the trend template when: price > MA150 > MA200, MA200 rising ≥ 20 days, MA50 > MA150, price > MA50, price ≥ 1.25× 52-week low, price ≥ 0.75× 52-week high, and RS percentile ≥ 70 (6-month return within the universe). <b>RS</b> = IBD-style rating 1–99 (2×3M + 6M + 9M + 12M return, ranked across the universe). <b>Breakout vol</b> = volume on the last cross above the 150-day MA ÷ 50-day average (Weinstein: a Stage-2 breakout needs volume expansion). Click a symbol for its chart.</p>
+ <div class="kpis"><div class="kpi"><div class="l">Pass the template</div><div class="v">${DATA.leaders.length}</div><div class="d">${fmt(S.pct_minervini[i],1)}% of ${fmt(S.n_minervini[i])} eligible</div></div><div class="kpi"><div class="l">New 52w highs on volume</div><div class="v">${fmt(S.new_highs_vol[i])}</div><div class="d">of ${fmt(S.new_highs[i])} new highs today</div></div><div class="kpi"><div class="l">Stage 2 (daily / weekly)</div><div class="v">${fmt(S.pct_stage2[i])}% / ${fmt(S.pct_stage2_w[i])}%</div><div class="d">150d MA proxy / 30-week MA</div></div></div>
+ ${toolbar()}<div id="ld-stack"></div>
+ <h2>Stocks passing the trend template today — by RS</h2>${tblBar('#tbl-leaders','leaders')}<div class="tblwrap" style="max-height:600px">${stockTable(DATA.leaders,'tbl-leaders')}</div>
+ <h2 style="margin-top:14px">New 52-week highs on volume expansion today</h2>${DATA.nh_vol_list.length?tblBar('#tbl-nhv','new_highs_volume')+`<div class="tblwrap">${stockTable(DATA.nh_vol_list,'tbl-nhv')}</div>`:'<p class="note">None today.</p>'}
+ <h2 style="margin-top:14px">All active stocks — screener</h2>${tblBar('#tbl-all','universe')}<div class="tblwrap" style="max-height:600px">${stockTable(Object.values(DATA.stocks).flat().sort((a,b)=>(b.rs||0)-(a.rs||0)),'tbl-all')}</div>`;
+ new Stack($('#ld-stack'),[IDX({regimeStrip:true}),
+  {title:'% passing the Minervini trend template',height:130,series:[{key:'pct_minervini',color:'--yellow',label:'% template'}],zero:true},
+  {title:'New 52-week highs on volume (bars) vs all new highs (line)',height:110,series:[{key:'new_highs_vol',type:'bar',color:'--up',label:'NH on volume'},{key:'new_highs',color:'--text2',label:'NH',width:1}],zero:true}]);
+ ['#tbl-leaders','#tbl-nhv','#tbl-all'].forEach(sel=>{const tb=document.querySelector(sel);if(tb)makeSortable(tb)});}
+/* ---------- NH-NL */
+{const p=$('#p-nhnl');const ep=DATA.events.canary;
+ p.innerHTML=`<h2>New 52-week Highs / Lows — the canary in the coal mine</h2><p class="note">Rule (Hisham Naser, US): NH−NL below zero for 5 consecutive days with the 5-day sum ≤ −180/−200 → raise caution; episode ends after 5 consecutive positive days. TASI calibration: 5-day sum ≤ −75% of the eligible universe (dashed line). NH/NL are strict: close above/below the prior 252-day range, adjusted prices, ≥1 year of history.</p>
+ ${toolbar()}<div id="nh-stack"></div>
+ <h2>Canary episodes on TASI (2007–2026)</h2><div class="tblwrap"><table><tr><th>#</th><th>Start</th><th>Close</th><th>End</th><th>Close</th><th>% Change</th><th>Days</th><th>Max reading</th><th>Max 5d sum</th><th>Lowest low</th><th>% Max DD</th></tr>
+ ${ep.map((e,k)=>`<tr${e.open?' style="font-weight:700"':''}><td>${k+1}</td><td>${e.start}</td><td>${fmt(e.c0)}</td><td>${e.end}${e.open?' <span class="tag" style="background:var(--critical)">ACTIVE</span>':''}</td><td>${fmt(e.c1)}</td><td class="${(e.pct||0)>=0?'pos':'neg'}">${e.pct==null?'—':e.pct.toFixed(1)}</td><td>${e.days}</td><td>${e.max_read}</td><td>${e.sum5}</td><td>${fmt(e.low)}</td><td class="neg">${e.dd==null?'—':e.dd.toFixed(1)}</td></tr>`).join('')}
+ ${(()=>{const c=ep.filter(e=>e.pct!=null);return `<tr><th>Avg (closed)</th><th colspan="4"></th><th>${(c.reduce((a,e)=>a+e.pct,0)/c.length).toFixed(1)}</th><th>${Math.round(c.reduce((a,e)=>a+e.days,0)/c.length)}</th><th>${Math.round(c.reduce((a,e)=>a+e.max_read,0)/c.length)}</th><th></th><th></th><th>${(c.reduce((a,e)=>a+e.dd,0)/c.length).toFixed(1)}</th></tr>`})()}</table></div>
+ <p class="note">Reading: on TASI the episode usually ends <b>above</b> its start (extreme NH−NL readings arrive late — the sell-off is mostly done), but the average max drawdown inside an episode is ≈ −11% and 12/15 episodes fell ≥3%. Use it as a risk-management flag, not an exit signal.</p>`;
+ new Stack($('#nh-stack'),[IDX({episodes:true}),
+  {title:'New highs (green) / new lows (red)',height:130,series:[{key:'new_highs',type:'bar',color:'--up',label:'New highs'},{key:'new_lows',type:'bar',color:'--down',label:'New lows'}],zero:true},
+  {title:'Net NH−NL (daily)',height:130,series:[{key:'net_nh_nl',type:'hist',color:'--blue',label:'Net'}],zero:true,episodes:true,hlines:[{y:-23,color:'--aqua',label:'−23 (5th pct)'},{y:16,color:'--red',label:'+16 (95th pct)'}]},
+  {title:'NH−NL 5-day sum vs canary threshold (−75% of universe)',height:150,series:[{key:'nhnl_sum5',type:'hist',color:'--blue',label:'5-day sum'},{key:'nhnl_thr',color:'--red',label:'canary line',width:1}],zero:true,episodes:true},
+  {title:'High-Low Index (10d MA of NH/(NH+NL))',height:120,series:[{key:'hl_index',color:'--orange',label:'HL index'}],ylim:[0,1],zones:[{from:0.3,to:0.7,color:'--zone-hi'}],hlines:[{y:0.3},{y:0.7}]}])}
+/* ---------- McClellan */
+{const p=$('#p-mcclellan');const thS=DATA.thresholds.find(r=>r.indicator.startsWith('McClellan Summation'));const thO=DATA.thresholds.find(r=>r.indicator.startsWith('McClellan Oscillator'));
+ p.innerHTML=`<h2>McClellan Oscillator & Summation (ratio-adjusted)</h2><p class="note">RANA = 1000·(A−D)/(A+D); Oscillator = EMA19 − EMA39; Summation = cumulative oscillator. TASI extremes (2007–2026 percentiles): Oscillator ${fmt(thO.p5)} / ${fmt(thO.p95)} (5/95) · ${fmt(thO.p2)} / ${fmt(thO.p98)} (2/98); Summation ${fmt(thS.p5)} / ${fmt(thS.p95)} (5/95) — US levels do not transfer to a 250-stock market, so every band here is a TASI percentile. Above +100 on TASI has been an exhaustion zone (−1.4% / 60d OOS); below −100 an oversold bounce (+4.4% / 60d).<br><b>Divergence markers (McClellan method)</b>: ▼ orange = TASI at a 60-day high while the Summation Index fails to make its own high (bearish, "complex top"); ▲ aqua = TASI at a 60-day low while the Summation holds above its low (bullish). Auto-detected, one per 20 days; on TASI these are context (walk-forward showed no stand-alone edge), not sell signals.</p>${toolbar()}<div id="mc-stack"></div>`;
+ new Stack($('#mc-stack'),[IDX({events:[{key:'mc_bear',color:'--orange',pos:'top'},{key:'mc_bull',color:'--aqua'}]}),
+  {title:'McClellan Oscillator',height:170,series:[{key:'mcclellan_osc',type:'hist',color:'--blue',label:'Oscillator'}],zero:true,zones:[{from:thO.p95,to:400,color:'--zone-hi'},{from:-400,to:thO.p5,color:'--zone-lo'}],hlines:[{y:thO.p98,color:'--red',label:`${fmt(thO.p98)} (98th)`},{y:thO.p2,color:'--aqua',label:`${fmt(thO.p2)} (2nd)`}]},
+  {title:'McClellan Summation Index — bands at TASI percentiles',height:150,series:[{key:'mcclellan_sum',type:'area',color:'--violet',label:'Summation'}],zero:true,zones:[{from:thS.p95,to:1e9,color:'--zone-hi'},{from:-1e9,to:thS.p5,color:'--zone-lo'}],hlines:[{y:thS.p95,color:'--red',label:`${fmt(thS.p95)} (95th)`},{y:thS.p5,color:'--aqua',label:`${fmt(thS.p5)} (5th)`},{y:thS.p98,color:'--red',label:`${fmt(thS.p98)} (98th)`},{y:thS.p2,color:'--aqua',label:`${fmt(thS.p2)} (2nd)`}],events:[{key:'mc_bear',color:'--orange',pos:'top'},{key:'mc_bull',color:'--aqua'}]},
+  {title:'RANA — 1000·(A−D)/(A+D)',height:110,series:[{key:'rana',type:'hist',color:'--blue',label:'RANA'}],zero:true}])}
+/* ---------- % above MAs */
+{const p=$('#p-ma');p.innerHTML=`<h2>% of stocks above moving averages · Weinstein stages · Minervini</h2><p class="note">Weinstein stages are shown twice: the daily proxy (150-day MA, faster) and his original weekly setting (30-week MA on weekly closes, slope over 4 weeks) — the weekly version changes state less often and is the one to trust for stage transitions. Hisham: 80% = optimism peak (overbought), 20% = pessimism peak (oversold); %>200DMA is the most reliable but lags. TASI finding (walk-forward): the 60–80 band on %>200DMA is the topping zone (−2.9% / 60d), while >80 is the best state (+5.5%, 82% hit) and <20 a washout bounce (+2.8%).</p>${toolbar()}<div id="ma-stack"></div>`;
+ new Stack($('#ma-stack'),[IDX(),
+  {title:'% above 200 DMA',height:140,series:[{key:'pct_above_sma200',color:'--blue',label:'%>200DMA'}],ylim:[0,100],zones:[{from:60,to:80,color:'--zone-hi'},{from:80,to:100,color:'--zone-lo'},{from:0,to:20,color:'--zone-lo'}],hlines:[{y:20},{y:80}]},
+  {title:'% above 150 DMA and 100 DMA',height:110,series:[{key:'pct_above_sma150',color:'--aqua',label:'%>150DMA'},{key:'pct_above_sma100',color:'--text2',label:'%>100DMA',width:1}],ylim:[0,100],hlines:[{y:20},{y:80}]},
+  {title:'% above 50 DMA (thrust rule 20→55 within 15 days)',height:130,series:[{key:'pct_above_sma50',color:'--orange',label:'%>50DMA'}],ylim:[0,100],hlines:[{y:20,color:'--aqua'},{y:55,color:'--red'},{y:80}],events:[{key:'pct50',color:'--blue'}]},
+  {title:'% above 20 DMA and 10 EMA',height:110,series:[{key:'pct_above_sma20',color:'--violet',label:'%>20DMA'},{key:'pct_above_ema10',color:'--magenta',label:'%>10EMA'}],ylim:[0,100],hlines:[{y:20},{y:80}]},
+  {title:'Weinstein stages — daily proxy (150d MA): % in Stage 1 / 2 / 3 / 4',height:140,series:[{key:'pct_stage1',color:'--text2',label:'Stage 1',width:1},{key:'pct_stage2',color:'--blue',label:'Stage 2'},{key:'pct_stage3',color:'--yellow',label:'Stage 3',width:1},{key:'pct_stage4',color:'--magenta',label:'Stage 4'}],ylim:[0,100]},
+  {title:'Weinstein stages — WEEKLY bars, 30-week MA, 4-week slope (his original setting)',height:140,series:[{key:'pct_stage1_w',color:'--text2',label:'Stage 1 wk',width:1},{key:'pct_stage2_w',color:'--blue',label:'Stage 2 wk'},{key:'pct_stage3_w',color:'--yellow',label:'Stage 3 wk',width:1},{key:'pct_stage4_w',color:'--magenta',label:'Stage 4 wk'}],ylim:[0,100]},
+  {title:'Stocks in Stage 2 (count) vs Minervini trend template (%)',height:110,series:[{key:'stage2',type:'bar',color:'--blue',label:'# Stage 2'},{key:'pct_minervini',color:'--yellow',label:'% Minervini'}],zero:true}])}
+/* ---------- A/D */
+{const p=$('#p-ad');p.innerHTML=`<h2>Advance / Decline & volume</h2><p class="note">A/D line = cumulative (advances − declines) over the universe; suspended days excluded. TRIN = (A/D)/(UpVol/DownVol); TRIN-10 > 1.2 is the strongest short-term oversold state on TASI (+2.0% / 20d, 71% hit).<br><b>Lowry days</b>: a 95% day requires BOTH conditions — ≥95% of points (up-points ÷ total) and ≥95% of volume — shown separately in the bottom panel so you can see which one fired. Markers on the index: ▼ red = 95% down day (both conditions), ▲ aqua = 95% up day, ◆ yellow = <b>Lowry sequence</b> (95% down day followed by a ≥90% up day within 10 sessions — his major-bottom rule). Tested on TASI: the sequence has NO edge (n=43, +0.4% / 60d) and 95% up days add nothing; only the 95% down day carries +1.9% / 60d (64% hit). Kept on the chart so the rule can be judged, not scored.</p>${toolbar()}<div id="ad-stack"></div>`;
+ new Stack($('#ad-stack'),[IDX({events:[{key:'lowry_down',color:'--red',pos:'top'},{key:'lowry_up',color:'--aqua'},{key:'lowry_seq',color:'--yellow',dot:true}]}),
+  {title:'A/D line (cumulative)',height:150,series:[{key:'ad_line',type:'area',color:'--blue',label:'A/D line'}]},
+  {title:'Advances − declines (daily)',height:110,series:[{key:'ad_net',type:'hist',color:'--blue',label:'A−D'}],zero:true},
+  {title:'Up from open (green) vs down from open (red) · Up on volume vs down on volume (lines)',height:130,series:[{key:'up_from_open',type:'bar',color:'--up',label:'Up from open'},{key:'down_from_open',type:'bar',color:'--down',label:'Down from open'},{key:'up_on_volume',color:'--aqua',label:'Up on volume',width:1.2},{key:'down_on_volume',color:'--orange',label:'Down on volume',width:1.2}],zero:true},
+  {title:'Up/Down volume ratio (log-like view, capped)',height:110,series:[{key:'ud_volume_ratio',color:'--orange',label:'UV/DV'}],ylim:[0,5],hlines:[{y:1}]},
+  {title:'TRIN (daily) & TRIN-10',height:130,series:[{key:'trin',color:'--text2',label:'TRIN',width:1},{key:'trin_10',color:'--red',label:'TRIN-10',width:1.8}],ylim:[0,3],zones:[{from:1.2,to:3,color:'--zone-lo'},{from:0,to:0.8,color:'--zone-hi'}],hlines:[{y:1}]},
+  {title:'Lowry conditions — up-volume share (violet) and up-points share (orange): ≤0.05 = 95% down day',height:120,series:[{key:'up_volume_pct',color:'--violet',label:'UpVol %'},{key:'up_points_pct',color:'--orange',label:'UpPoints %',width:1}],ylim:[0,1],hlines:[{y:0.95,color:'--aqua'},{y:0.05,color:'--red'}]},
+  {title:'Which condition fired (1 = yes): points (orange) · volume (violet)',height:70,series:[{key:'lowry_down_points',type:'bar',color:'--orange',label:'points ≤5%'},{key:'lowry_down_volume',type:'bar',color:'--violet',label:'volume ≤5%'}],ylim:[0,1.2]}])}
+/* ---------- Stockbee */
+{const p=$('#p-stockbee');const rows=[];for(let i=N-1;i>=N-15;i--)rows.push(i);
+ const cols=[['up_x','↑4%'],['down_x','↓4%'],['ratio_5','5d ratio'],['ratio_10','10d ratio'],['up_25_q','↑25% qtr'],['down_25_q','↓25% qtr'],['up_25_m','↑25% mo'],['down_25_m','↓25% mo'],['up_50_m','↑50% mo'],['down_50_m','↓50% mo'],['up_13_34','↑13%/34d'],['down_13_34','↓13%/34d'],['n_mom','n']];
+ // Stockbee colour rules (his Market Monitor conventions, thresholds scaled to a ~250-stock universe)
+ const RULES={up_x:(i)=>S.up_x[i]>=25?'g':null, down_x:(i)=>S.down_x[i]>=25?'r':null,
+  ratio_5:(i)=>S.ratio_5[i]>=2?'g':S.ratio_5[i]<=0.5?'r':null, ratio_10:(i)=>S.ratio_10[i]>=2?'g':S.ratio_10[i]<=0.5?'r':null,
+  up_25_q:(i)=>S.up_25_q[i]>S.down_25_q[i]?'g':null, down_25_q:(i)=>S.down_25_q[i]>S.up_25_q[i]?'r':null,
+  up_25_m:(i)=>S.up_25_m[i]>S.down_25_m[i]?'g':null, down_25_m:(i)=>S.down_25_m[i]>S.up_25_m[i]?'r':null,
+  up_50_m:(i)=>S.up_50_m[i]>0?'g':null, down_50_m:(i)=>S.down_50_m[i]>0?'r':null,
+  up_13_34:(i)=>S.up_13_34[i]>S.down_13_34[i]?'g':null, down_13_34:(i)=>S.down_13_34[i]>S.up_13_34[i]?'r':null};
+ const LIST=new Set(['up_x','down_x','up_25_q','down_25_q','up_25_m','down_25_m','up_50_m','down_50_m','up_13_34','down_13_34']);
+ window.sbNames=function(date,key,label){const L=(DATA.sb_lists[date]||{})[key]||[];const all=Object.values(DATA.stocks).flat();const rows=L.map(sym=>all.find(r=>r.sym===sym)||{sym,name:DATA.names[sym]||'',traded:true});
+  $('#sb-names').innerHTML=`<div class="card"><div class="hd"><h3>${label} · ${date} · ${L.length} stocks</h3><span class="sp"></span><button class="btn" onclick="$('#sb-names').innerHTML=''">✕</button></div>${rows.length?tblBar('#tbl-sb','stockbee_'+key+'_'+date,false)+`<div class="tblwrap" style="max-height:420px">${stockTable(rows,'tbl-sb',{cols:['sym','name','group','close','d1','m1','m3','rs','vs50','hi52','stage','rvol','flags']})}</div>`:'<p class="note">none</p>'}</div>`;const tb=$('#tbl-sb');if(tb)makeSortable(tb);$('#sb-names').scrollIntoView({block:'nearest',behavior:'smooth'})};
+ p.innerHTML=`<h2>Stockbee Market Monitor (adapted to TASI)</h2><p class="note">≥4% moves counted only with volume above the prior day (4% ≈ 1.8σ of a typical TASI stock; 3%/5% tested in Phase 3). <b>Cell colours follow Stockbee's reading</b>: green = bullish (↑4% ≥ 25 names ≈ 10% of the universe, 5/10-day ratio ≥ 2, more 25%-in-a-quarter/month gainers than losers), red = bearish / panic (↓4% ≥ 25, ratio ≤ 0.5, more losers). <b>Click any count to list the stocks behind it.</b> On TASI these counts behave as <b>contrarian extremes</b>: >20% of stocks down ≥4% in a day → +5.1% / 60d (77% hit); 10d ratio < 0.5 → +2.0% / 60d; >20% up ≥4% → exhaustion. Today's read: ${S.ratio_10[N-1]>=2?'<b class="pos">risk-on — 4% breakouts dominating</b>':S.ratio_10[N-1]<=0.5?'<b class="neg">breakdowns dominating (contrarian bounce zone on TASI)</b>':'<b>neutral — no momentum edge either way</b>'}.</p>
+ <div class="tblwrap" style="max-height:380px"><table class="sb"><tr><th>Date</th>${cols.map(c=>`<th>${c[1]}</th>`).join('')}</tr>${rows.map(i=>`<tr><td>${DATA.dates[i]}</td>${cols.map(c=>{const cl=RULES[c[0]]?RULES[c[0]](i):null;const k=LIST.has(c[0]);return `<td class="${cl||''}${k?' k':''}"${k?` onclick="sbNames('${DATA.dates[i]}','${c[0]}','${c[1]}')" title="list stocks"`:''}>${fmt(S[c[0]][i],c[0].startsWith('ratio')?2:0)}</td>`}).join('')}</tr>`).join('')}</table></div><div id="sb-names"></div>
+ ${toolbar()}<div id="sb-stack"></div>`;
+ new Stack($('#sb-stack'),[IDX(),
+  {title:'Stocks up ≥4% (green) / down ≥4% (red) with volume',height:130,series:[{key:'up_x',type:'bar',color:'--up',label:'↑4%'},{key:'down_x',type:'bar',color:'--down',label:'↓4%'}],zero:true},
+  {title:'5-day and 10-day up/down ratio (capped at 8) — ≥2 bullish · ≤0.5 panic',height:120,series:[{key:'ratio_5',color:'--orange',label:'5d'},{key:'ratio_10',color:'--blue',label:'10d'}],ylim:[0,8],zones:[{from:0,to:0.5,color:'--zone-lo'},{from:2,to:8,color:'--zone-hi'}],hlines:[{y:1},{y:2}]},
+  {title:'% of stocks down ≥4% today (panic days >20)',height:100,series:[{key:'pct_down_x',type:'bar',color:'--down',label:'% down 4%'}],zero:true,hlines:[{y:20,color:'--aqua',label:'20%'}]},
+  {title:'Net ≥25% in a quarter (up − down) and ±13% in 34 days',height:120,series:[{key:'up_25_q',color:'--up',label:'↑25% qtr'},{key:'down_25_q',color:'--down',label:'↓25% qtr'},{key:'up_13_34',color:'--aqua',label:'↑13%/34d',width:1},{key:'down_13_34',color:'--orange',label:'↓13%/34d',width:1}],zero:true}])}
+
+/* ---------- Market Cycle (Deepvue-style) */
+{const p=$('#p-cycle');const i=N-1;const cv=S.dv_cycle[i];const cv50=S.dv_cycle50[i];
+ window.setCycleMA=function(m){document.querySelectorAll('.cym').forEach(b=>b.classList.toggle('active',b.dataset.m===String(m)));const st=cyStack;st.panels[0].series[2]={key:m===50?'tasi_sma50':'tasi_sma21',color:'--orange',label:m===50?'SMA 50':'SMA 21',width:1};st.panels[0].events=[{key:m===50?'dv_stress50':'dv_stress',color:'--yellow',dot:true,pos:'top'}];st.panels[1].series=[{key:m===50?'dv_cycle50':'dv_cycle',type:'hist',color:'--blue',label:'cycle count'}];st.panels[1].events=st.panels[0].events;st.panels[1].div.querySelector('.ttl').innerHTML=`<b>DV-style Market Cycle count (days above / below the ${m}-day SMA)</b><span class="lg"><i style="background:${css('--blue')}"></i>cycle count</span>`;st.draw()};
+ const board=[['net_nh_nl','Net new highs − new lows (52w)'],['ad_net','Advances − declines'],['up_x','Up 4% (with volume)'],['down_x','Down 4% (with volume)'],['pct_above_sma20','% above 20 DMA'],['pct_above_sma50','% above 50 DMA'],['pct_above_sma200','% above 200 DMA'],['up_25_q','Up 25%+ in a quarter'],['down_25_q','Down 25%+ in a quarter'],['stage2','Stocks in Stage 2'],['stage4','Stocks in Stage 4'],['n_healthy','Healthy sectors']];
+ p.innerHTML=`<h2>Market Cycle — Deepvue-style trend count on TASI</h2><p class="note">Counts the consecutive days TASI closes <b>above</b> its 21-day SMA (green, +1 per day) or <b>below</b> it (red, −1 per day); the count restarts when the index crosses the average. Orange dots = <b>stress tests</b>: a dip below the average lasting ≤ 3 days inside the first 60 days of an uptrend that the trend survived. Today: <b style="color:${cv>=0?'var(--up)':'var(--down)'}">${cv>=0?'+':''}${fmt(cv)}</b> days on the 21-day · <b style="color:${cv50>=0?'var(--up)':'var(--down)'}">${cv50>=0?'+':''}${fmt(cv50)}</b> on the 50-day. (Deepvue's exact formula is proprietary; this is the documented mechanic — count up above a chosen MA, negative count below — reproduced on TASI on two averages: 21-day for the swing cycle, 50-day for the intermediate cycle.)</p>
+ ${toolbar()}<div class="toolbar"><span class="lbl">Average</span><button class="btn cym active" data-m="21" onclick="setCycleMA(21)">21-day</button><button class="btn cym" data-m="50" onclick="setCycleMA(50)">50-day</button></div><div id="cy-stack"></div>
+ <h2>Breadth board — last 250 days</h2><p class="note">Each card is a mini histogram of one breadth series with today's value; hover for the daily readings. Green above zero / red below for net series.</p>
+ <div class="kpis" id="cy-board">${board.map(([k,l])=>`<div class="kpi"><div class="l">${l}</div><div class="v">${fmt(S[k][i])}</div><div id="mini-${k}"></div></div>`).join('')}</div>`;
+ const cyStack=new Stack($('#cy-stack'),[IDX({series:[{key:'tasi',type:'candle',color:'--text',label:'TASI'},{key:'tasi',type:'line',color:'--blue',label:'TASI',width:1.2},{key:'tasi_sma21',color:'--orange',label:'SMA 21',width:1}],events:[{key:'dv_stress',color:'--yellow',dot:true,pos:'top'}]}),
+  {title:'DV-style Market Cycle count (days above / below the 21-day SMA)',height:140,series:[{key:'dv_cycle',type:'hist',color:'--blue',label:'cycle count'}],zero:true,events:[{key:'dv_stress',color:'--yellow',dot:true,pos:'top'}]},
+  {title:'Breadth Score & regime (for context)',height:110,series:[{key:'score_smooth',color:'--orange',label:'Score EMA5'}],ylim:[0,100],hlines:[{y:40},{y:60},{y:75}]}]);
+ board.forEach(([k,l])=>{const net=['net_nh_nl','ad_net'].includes(k);new Stack($('#mini-'+k),[{title:'',mini:true,height:64,series:[{key:k,type:net?'hist':'bar',color:k.startsWith('down')||k==='stage4'?'--down':'--blue',label:l}],zero:true}])});}
+/* ---------- Classic StockCharts-style chart */
+{const p=$('#p-classic');p.innerHTML=`<h2>Classic chart — index with 21 EMA / 50 MA / 200 MA, volume, NH−NL, McClellan</h2><p class="note">The StockCharts layout Hisham uses for the US total market, reproduced for TASI: OHLC bars (zoom in), EMA(21) blue, MA(50) red, MA(200) black/grey; volume coloured by the day's direction; net new highs − new lows; McClellan Oscillator in the <b>traditional</b> form (EMA19 − EMA39 of A−D) and the ratio-adjusted form.</p>${toolbar()}<div id="cl-stack"></div>`;
+ new Stack($('#cl-stack'),[{title:'TASI · EMA(21) · MA(50) · MA(200)',height:300,series:[{key:'tasi',type:'candle',color:'--text',label:'TASI'},{key:'tasi',type:'line',color:'--text2',label:'close',width:1},{key:'tasi_ema21',color:'--blue',label:'EMA 21',width:1.2},{key:'tasi_sma50',color:'--red',label:'MA 50',width:1.2},{key:'tasi_sma200',color:'--text',label:'MA 200',width:1.4}],regimeStrip:true},
+  {title:'Volume (green = up day, red = down day)',height:110,series:[{key:'tasi_vol',type:'bar',color:'--blue',label:'volume',colorBy:'tasi_chg',dec:0}],zero:true},
+  {title:'New Highs − New Lows (EOD)',height:120,series:[{key:'net_nh_nl',type:'hist',color:'--blue',label:'NH−NL'}],zero:true},
+  {title:'McClellan Oscillator (Traditional: EMA19 − EMA39 of A−D)',height:120,series:[{key:'mcclellan_trad',color:'--blue',label:'traditional'}],zero:true},
+  {title:'McClellan Oscillator (Ratio-adjusted)',height:120,series:[{key:'mcclellan_osc',color:'--violet',label:'ratio-adjusted'}],zero:true,hlines:[{y:85,color:'--red'},{y:-85,color:'--aqua'}]}])}
+/* ---------- Classic breadth library */
+{const p=$('#p-library');const i=N-1;const V=DATA.verdicts;const Q=DATA.classic_q;
+ const TAG={warning:'var(--critical)',context:'var(--text2)','no edge':'var(--warn)'};
+ const rows=[['hlli','High-Low Logic Index (50d)',S.hlli[i],2],['abi','Absolute Breadth Index (10d, %)',S.abi[i],1],['hindenburg','Hindenburg Omen (last 36d)',t.hindenburg_recent,0],['titanic','Titanic Syndrome (today)',S.titanic[i],0],['sto_b','Swenlin STO-Breadth',S.sto_b[i],0],['itbm','ITBM vs signal',S.itbm[i]-S.itbm_signal[i],1],['mvo','McClellan Volume Oscillator',S.mvo[i],0],['cvi','CVI − MA50 (M shares)',S.cvi[i]-S.cvi_ma50[i],0],['zweig_91','Zweig 9:1 up-volume day (today)',S.zweig_91[i],0],['nh_pct_10','New highs % of issues (10d)',S.nh_pct_10[i],2],['haurlan_st','Haurlan short-term (EMA3 of A−D)',S.haurlan_st[i],0],['ad_pct_21','A/D % (21d)',S.ad_pct_21[i],1],['bpi','Bullish Percent Index',S.bpi[i],1]];
+ const q=k=>Q[k]?`${fmt(Q[k]['0.05'],1)} / ${fmt(Q[k]['0.5'],1)} / ${fmt(Q[k]['0.95'],1)}`:'—';
+ p.innerHTML=`<h2>Classic breadth library — every indicator the literature uses, tested on TASI</h2><p class="note">Fosback, Miekka, Ohama, Swenlin/DecisionPoint, McClellan (volume), Zweig (9:1 days), Delwiche/Stack (new-high list), Haurlan, Appel and Dorsey. Nothing here is decoration: each row carries its <b>TASI verdict</b> from the 2007–2026 tests — <span class="tag" style="background:var(--critical)">warning</span> = a negative state worth an alert, <span class="tag" style="background:var(--text2)">context</span> = mild/confirming, <span class="tag" style="background:var(--warn)">no edge</span> = kept only so the rule can be audited. Percentile columns are TASI's own (5th / median / 95th, 2007+).</p>
+ <div class="tblwrap"><table id="tbl-lib"><thead><tr><th>Indicator</th><th>Author</th><th>Today</th><th>p5 / median / p95</th><th>TASI test result</th><th>Verdict</th></tr></thead><tbody>${rows.map(([k,l,v,d])=>`<tr><td>${l}</td><td>${V[k].author}</td><td><b>${fmt(v,d)}</b></td><td>${q(k)}</td><td style="text-align:left">${V[k].result}</td><td><span class="tag" style="background:${TAG[V[k].tag]}">${V[k].tag}</span></td></tr>`).join('')}</tbody></table></div>
+ ${toolbar()}<div id="lib-stack"></div>
+ <p class="note">Markers on the index: ▼ red = Hindenburg Omen (first of a cluster), ◆ red = confirmed omen (second within 36 days), ▼ grey = Titanic Syndrome, ● aqua = Zweig double 9:1 day. Not implemented on purpose: Lowry Buying Power / Selling Pressure (proprietary construction — the 95% day and TRIN cover the same ground), Bolton-Tremblay / Hughes / Schultz A/T (redundant re-scalings of A−D).</p>`;
+ makeSortable($('#tbl-lib'));
+ new Stack($('#lib-stack'),[IDX({events:[{key:'hindenburg',color:'--red',pos:'top'},{key:'hindenburg_confirmed',color:'--red',dot:true,pos:'top'},{key:'titanic',color:'--text2',pos:'top'},{key:'zweig_double_91',color:'--aqua',dot:true}]}),
+  {title:'Fosback High-Low Logic Index — 50-day mean of min(NH,NL)/issues, % · >1 = split market (warning)',height:130,series:[{key:'hlli',color:'--red',label:'HLLI',dec:2}],zero:true,zones:[{from:1,to:5,color:'--zone-hi'}],hlines:[{y:1,color:'--red',label:'1.0 split'},{y:Q.hlli['0.95'],color:'--text2',label:'95th pct'}]},
+  {title:'Fosback Absolute Breadth Index — 10-day mean of |A−D| / issues, %',height:100,series:[{key:'abi',color:'--orange',label:'ABI'}],zero:true,hlines:[{y:20},{y:30}]},
+  {title:'Swenlin STO-Breadth (EMA4 of 5-day ΣA−D) — 5/95 percentile bands',height:110,series:[{key:'sto_b',type:'hist',color:'--blue',label:'STO-B'}],zero:true,hlines:[{y:Q.sto_b['0.95'],color:'--red'},{y:Q.sto_b['0.05'],color:'--aqua'}]},
+  {title:'DecisionPoint ITBM (EMA20 of A/D %) and its 10-day signal',height:110,series:[{key:'itbm',color:'--violet',label:'ITBM'},{key:'itbm_signal',color:'--text2',label:'signal',width:1}],zero:true},
+  {title:'McClellan Volume Oscillator (EMA19−EMA39 of 1000·(UV−DV)/(UV+DV))',height:110,series:[{key:'mvo',type:'hist',color:'--blue',label:'MVO'}],zero:true,hlines:[{y:Q.mvo['0.95'],color:'--red'},{y:Q.mvo['0.05'],color:'--aqua'}]},
+  {title:'Cumulative Volume Index (millions of shares) vs its 50-day MA',height:100,series:[{key:'cvi',color:'--aqua',label:'CVI'},{key:'cvi_ma50',color:'--text2',label:'MA50',width:1}]},
+  {title:'New highs as % of issues (10-day mean) — leadership breadth',height:100,series:[{key:'nh_pct_10',color:'--up',label:'NH %',dec:2}],zero:true,hlines:[{y:1},{y:3},{y:6}]},
+  {title:'A/D % (21-day mean of 100·(A−D)/(A+D))',height:100,series:[{key:'ad_pct_21',color:'--orange',label:'A/D% 21d'}],zero:true,hlines:[{y:10},{y:-10}]},
+  {title:'Haurlan short-term index (EMA3 of A−D)',height:90,series:[{key:'haurlan_st',type:'hist',color:'--blue',label:'Haurlan ST'}],zero:true}])}
+/* ---------- Bullish Percent (P&F) */
+{const p=$('#p-bpi');const i=N-1;const st=t.bpi_status;const SC={'Bull Confirmed':'var(--good)','Bull Alert':'var(--aqua)','Bull Correction':'var(--warn)','Bear Alert':'var(--serious)','Bear Confirmed':'var(--critical)','Bear Correction':'var(--text2)'};
+ p.innerHTML=`<h2>Bullish Percent Index — Point & Figure (Dorsey / Chartcraft)</h2><p class="note">Every stock keeps a P&F chart (2% boxes on a log scale, 3-box reversal). A stock is on a <b>buy signal</b> from a double-top breakout until a double-bottom breakdown. BPI = % of eligible stocks on a buy signal. Dorsey's reading: above 70 = overbought field position, below 30 = oversold; the <b>status</b> comes from a P&F chart of the BPI itself (2-point boxes): Bull Confirmed / Bull Alert (reversal up from ≤30) / Bull Correction / Bear Alert (reversal down from ≥70) / Bear Confirmed / Bear Correction. TASI test: the level buckets carry no edge, the status does — <b>Bull Alert +1.5% / 20d (60%)</b>, Bear Alert −0.8% / 20d.</p>
+ <div class="kpis"><div class="kpi"><div class="l">BPI today</div><div class="v">${fmt(t.bpi,1)}%</div><div class="d">${fmt(S.pnf_buy[i])} on buy / ${fmt(S.pnf_sell[i])} on sell</div></div><div class="kpi"><div class="l">Status</div><div class="v"><span class="badge" style="background:${SC[st]||'var(--text2)'}">${st}</span></div><div class="d">P&F of the BPI, 2-pt boxes</div></div><div class="kpi"><div class="l">Field position</div><div class="v">${t.bpi>=70?'Overbought':t.bpi<=30?'Oversold':'Middle'}</div><div class="d">70 / 30 (Dorsey)</div></div></div>
+ ${toolbar()}<div id="bpi-stack"></div>`;
+ S.bpi_state_num=S.bpi_status.map(v=>v==null?null:({'Bull Confirmed':3,'Bull Alert':2,'Bull Correction':1,'Bear Correction':-1,'Bear Alert':-2,'Bear Confirmed':-3}[v]||0));
+ new Stack($('#bpi-stack'),[IDX({regimeStrip:true}),
+  {title:'Bullish Percent Index — % of stocks on a P&F buy signal',height:170,series:[{key:'bpi',type:'area',color:'--blue',label:'BPI'}],ylim:[0,100],zones:[{from:70,to:100,color:'--zone-hi'},{from:0,to:30,color:'--zone-lo'}],hlines:[{y:30},{y:50},{y:70}]},
+  {title:'Stocks on buy (green) vs sell (red) signals',height:110,series:[{key:'pnf_buy',color:'--up',label:'buy'},{key:'pnf_sell',color:'--down',label:'sell'}],zero:true},
+  {title:'BPI status (3 Bull Confirmed · 2 Bull Alert · 1 Bull Correction · −1 Bear Correction · −2 Bear Alert · −3 Bear Confirmed)',height:100,series:[{key:'bpi_state_num',type:'hist',color:'--blue',label:'status'}],ylim:[-3.5,3.5]}])}
+/* ---------- Sectors */
+{const p=$('#p-sectors');const sc=DATA.sectors;const SP=DATA.sector_perf;
+ window.themePeriod='Today';
+ window.renderTheme=function(per){window.themePeriod=per;const rows=SP.rows.slice().sort((a,b)=>b[per]-a[per]);const mx=Math.max(...rows.map(r=>Math.abs(r[per])))||1;
+  $('#theme-body').innerHTML=rows.map(r=>{const v=r[per];const w=50*Math.abs(v)/mx;const st=v>=0?`left:50%;width:${w}%;background:var(--blue)`:`right:50%;width:${w}%;background:var(--magenta)`;
+   return `<div class="n" title="${r.name} — click for stocks" onclick="openSector('${r.name.replace(/'/g,"\\'")}')">${r.name}</div><div class="bar"><i style="${st}"></i></div><div class="v ${v>=0?'pos':'neg'}">${v>=0?'+':''}${v.toFixed(2)}%</div>`}).join('');
+  document.querySelectorAll('.tp').forEach(b=>b.classList.toggle('active',b.dataset.p===per));$('#theme-mkt').textContent=`Equal-weight market ${per}: ${SP.market[per]>=0?'+':''}${SP.market[per]}%`};
+ window.renderRanks=function(sortBy){const cols=['1M','3M','6M','12M'];const rows=SP.rows.slice().sort((a,b)=>a.rank[sortBy]-b.rank[sortBy]);const n=rows.length;
+  $('#ranks-body').innerHTML=rows.map(r=>`<tr><td onclick="openSector('${r.name.replace(/'/g,"\\'")}')" title="click for stocks">${r.name}</td>${cols.map(c=>{const rk=r.rank[c],ch=r.rank_chg[c];const cls=rk<=3?'r'+rk:(rk>n-3?'rl':'');return `<td class="${cls}" title="${r[c]>=0?'+':''}${r[c]}%">${rk}${ch?`<sup class="${ch>0?'up':'dn'}">${ch>0?'+':''}${ch}</sup>`:''}</td>`}).join('')}<td>${r.stocks}</td></tr>`).join('');
+  document.querySelectorAll('.rs').forEach(b=>b.classList.toggle('active',b.dataset.s===sortBy))};const col=v=>{if(v==null)return 'var(--surface2)';const t=(v-50)/50;const a=Math.min(1,Math.abs(t));return t<0?`rgba(227,73,72,${0.15+0.7*a})`:`rgba(27,175,122,${0.15+0.7*a})`};
+ p.innerHTML=`<div class="grid2">
+ <div class="card" id="theme-card"><div class="hd"><h3>Theme Tracker — industry groups, equal-weight return</h3><span class="sp"></span>${SP.periods.map(x=>`<button class="btn tp" data-p="${x}" onclick="renderTheme('${x}')">${x}</button>`).join('')}</div><div class="theme" id="theme-body"></div><p class="note" id="theme-mkt" style="margin:8px 0 0"></p></div>
+ <div class="card" id="ranks-card"><div class="hd"><h3>Industry Ranks</h3><span class="sp"></span><span class="note" style="margin:0 6px 0 0">sort by</span>${['1M','3M','6M','12M'].map(x=>`<button class="btn rs" data-s="${x}" onclick="renderRanks('${x}')">${x}</button>`).join('')}</div>
+  <div class="tblwrap" style="max-height:420px"><table class="ranks"><thead><tr><th>Name</th><th>1M</th><th>3M</th><th>6M</th><th>12M</th><th>Stocks</th></tr></thead><tbody id="ranks-body"></tbody></table></div><p class="note" style="margin:6px 0 0">Rank of each group's equal-weight return over the period (1 = best). Superscript = rank change versus one month ago. Green = top 3, red = bottom 3. Hover a cell for the return.</p></div></div>
+ <h2>Sector breadth — health score by industry group (last 30 days)</h2><p class="note"><b>Click any sector row (or a name in the Theme Tracker / Industry Ranks) to list its stocks</b> with close, 1D/1M/3M, RS rating, distance to 50/200 DMA and 52-week high/low, Weinstein stage, relative volume, breakout volume and flags (TT = passes the Minervini template, NH·vol = new 52-week high on volume). Every list sorts by column, filters, exports to CSV, and a click on the symbol opens the stock chart. Score = mean of %>50DMA, %>200DMA, normalised NH−NL and 10-day A/(A+D) inside the group. Healthy ≥ 60, weak ≤ 40; groups with <5 eligible names pooled into Other. Walk-forward: 50–70% of sectors healthy → +3.8% / 60d (82% hit); median score >75 → exhaustion.</p>
+ <div class="tblwrap"><table class="heat"><tr><th>Sector</th>${sc.dates.map(d=>`<th>${d}</th>`).join('')}<th>%>50</th><th>%>200</th><th>NH−NL%</th><th>A/D10</th><th>Mom10</th><th>n</th></tr>
+ ${sc.rows.map(r=>`<tr class="secrow" data-sector="${r.sector}" onclick="toggleSector(this)"><td style="text-align:left;white-space:nowrap">${r.sector}</td>${r.scores.map(v=>`<td style="background:${col(v)}">${v==null?'':v}</td>`).join('')}<td>${fmt(r.pct50)}</td><td>${fmt(r.pct200)}</td><td>${fmt(r.nhnl)}</td><td>${fmt(r.ad10)}</td><td>${fmt(r.mom10)}</td><td>${r.n??''}</td></tr>`).join('')}</table></div>
+ ${toolbar()}<div id="sec-stack"></div>`;
+ renderTheme('Today');renderRanks('1M');
+ new Stack($('#sec-stack'),[IDX(),
+  {title:'% of sectors healthy (score ≥ 60) vs weak (≤ 40)',height:150,series:[{key:'pct_healthy',type:'area',color:'--up',label:'% healthy'},{key:'n_weak',color:'--down',label:'# weak',width:1}],zero:true,zones:[{from:50,to:70,color:'--zone-lo'}]},
+  {title:'Median sector score',height:120,series:[{key:'median_score',color:'--orange',label:'median'}],ylim:[0,100],zones:[{from:60,to:75,color:'--zone-lo'},{from:75,to:100,color:'--zone-hi'}],hlines:[{y:40},{y:60}]}])}
+/* ---------- Concentration */
+{const p=$('#p-conc');p.innerHTML=`<h2>Concentration — Equal-Weight TASI vs cap-weighted TASI</h2><p class="note">EW-TASI = daily mean return of the universe, chained from 2002. Spread = EW return − TASI return over 20/60 days (pct points). OOS: 60d spread < −5 (mega-caps masking weakness) → −0.6% / 60d, hit 43% — the only negative state in the engine; > +5 → +2.7%. Top-5 contribution uses a 15%-capped cap-weighted proxy (0.99 correlation with TASI) from Jan-2026.</p>${toolbar()}<div id="cc-stack"></div>`;
+ new Stack($('#cc-stack'),[{title:'TASI (blue) vs Equal-Weight TASI (orange) — rebased at window start',height:240,series:[{key:'tasi',color:'--blue',label:'TASI'},{key:'ew',color:'--orange',label:'EW-TASI'}],rebase:true,regimeStrip:true},
+  {title:'EW − TASI 60-day spread (pct points)',height:140,series:[{key:'spread_60',type:'hist',color:'--blue',label:'60d spread'}],zero:true,hlines:[{y:5,color:'--aqua',label:'+5'},{y:-5,color:'--red',label:'−5'}]},
+  {title:'EW − TASI 20-day spread',height:110,series:[{key:'spread_20',type:'hist',color:'--blue',label:'20d spread'}],zero:true},
+  {title:'EW/TASI ratio vs its 50-day MA',height:120,series:[{key:'ratio',color:'--violet',label:'ratio'},{key:'ratio_ma',color:'--text2',label:'MA50',width:1}]},
+  {title:'Share of the day\'s move explained by the top 5 names (2026+)',height:100,series:[{key:'top5_share',type:'bar',color:'--yellow',label:'top-5 share'}],ylim:[0,1]}])}
+/* ---------- Signals */
+{const p=$('#p-signals');const rc=DATA.events.regime_changes.slice().reverse().slice(0,40);const sg=DATA.signals_table;const ss=DATA.signal_stats;
+ const cell=v=>v==null?'<td>—</td>':`<td class="${v>=0?'pos':'neg'}">${v>=0?'+':''}${v.toFixed(1)}</td>`;
+ const stCol=st=>st==='scored'?'var(--good)':st.startsWith('indicative')?'var(--warn)':'var(--text2)';
+ p.innerHTML=`<h2>Signals & regimes</h2>
+ <h2 style="font-size:13px">Every rule, judged by its own record on TASI (2007–2026, independent signals after cooldown)</h2>
+ <div class="tblwrap"><table id="tbl-sigstats"><thead><tr><th>Rule</th><th>n</th><th>20d mean</th><th>hit</th><th>60d mean</th><th>hit</th><th>120d mean</th><th>hit</th><th>Valid horizon</th><th>Status</th></tr></thead><tbody>${ss.map(r=>`<tr><td>${r.signal}</td><td>${r.n}${r.n<10?' <span class="tag" style="background:var(--warn)">n&lt;10</span>':r.n<30?' <span class="tag" style="background:var(--text2)">n&lt;30</span>':''}</td>${cell(r.mean20)}<td>${fmt(r.hit20)}%</td>${cell(r.mean60)}<td>${fmt(r.hit60)}%</td>${cell(r.mean120)}<td>${fmt(r.hit120)}%</td><td>${r.horizon}</td><td><span class="tag" style="background:${stCol(r.status)}">${r.status}</span></td></tr>`).join('')}</tbody></table></div>
+ <p class="note"><b>Read this honestly.</b> Fewer than 30 independent events is not a statistical proof — treat those rows as indicative. The expert-review tests: making Zweig "rare" (≥0.66, 9 signals) <b>destroys</b> its edge on TASI — the classic 0.615 calibration (≈1.4 signals a year) is the version that works, valid on a 20-day horizon; Deemer at ≥2.6 fires 4 times with +6.6% / 60d — too few to trust; the Lowry sequence (95% down → 90% up) has no edge here. Zweig also required a monetary-conditions filter (easy Fed) — SAIBOR/repo data is outside this engine and must be read separately.</p>
+ <div class="grid2">
+ <div><h2 style="font-size:13px">Signal log with TASI forward returns</h2>${tblBar('#tbl-signals','signals')}<div class="tblwrap"><table id="tbl-signals"><thead><tr><th>Signal</th><th>Date</th><th>TASI</th><th>5d</th><th>20d</th><th>60d</th><th>120d</th><th>Horizon</th></tr></thead><tbody>${sg.map(r=>`<tr${r.status==='scored'?'':' style="opacity:.6"'}><td>${r.signal}</td><td>${r.date}</td><td>${fmt(r.tasi)}</td>${cell(r.f5)}${cell(r.f20)}${cell(r.f60)}${cell(r.f120)}<td>${r.horizon}</td></tr>`).join('')}</tbody></table></div>
+ <p class="note">Validated OOS (2018–2026): Zweig +1.8%/20d, %>50DMA thrust +2.2%/60d, Lowry 95% down +3.2%/60d (75%), Whaley 20-day horizon only. Greyed rows = tested variants and dropped rules, shown for audit.</p></div>
+ <div><h2 style="font-size:13px">Regime changes (latest 40)</h2><div class="tblwrap"><table><tr><th>Date</th><th>New regime</th></tr>${rc.map(r=>`<tr><td>${r.date}</td><td><span class="badge" style="background:${css(REG[r.regime])};font-size:11px">${REGICON[r.regime]} ${r.regime}</span></td></tr>`).join('')}</table></div>
+ <p class="note">Walk-forward 2014–2026: Washout +2.4%/20d & +4.1%/60d (72%); Healthy/Strong (score ≥60) consistently positive; Weak −0.2%/60d vs +0.8% base — a small edge: the regime tells you when <b>not</b> to press, more than when to sell. Hysteresis 8 pts, min 5 days, on a 5-day EMA of the score.</p></div></div>
+ ${toolbar()}<div id="sg-stack"></div>`;
+ makeSortable($('#tbl-sigstats'));makeSortable($('#tbl-signals'));
+ new Stack($('#sg-stack'),[IDX({events:[{key:'zweig',color:'--aqua'},{key:'whaley',color:'--yellow'},{key:'pct50',color:'--blue'},{key:'lowry_down',color:'--red',pos:'top'},{key:'bear_div',color:'--orange',pos:'top'},{key:'zweig_rare',color:'--violet',dot:true,pos:'top'},{key:'deemer_rare',color:'--magenta',dot:true,pos:'top'}],episodes:true}),
+  {title:'Zweig breadth thrust EMA10 of A/(A+D): <0.40 → >0.615 within 10 days (aqua ▲) · rare variant >0.66 (violet ●, no edge)',height:130,series:[{key:'zweig_value',color:'--aqua',label:'ZBT EMA',dec:3}],ylim:[0.2,0.8],hlines:[{y:0.4,color:'--red'},{y:0.615,color:'--aqua'},{y:0.66,color:'--violet',label:'0.66 rare'}]},
+  {title:'Whaley 5-day A/D ratio (≥3 = thrust) · Deemer 10-day (1.97 dropped · 2.6 rare, magenta ●)',height:110,series:[{key:'whaley_value',color:'--yellow',label:'5d A/D'},{key:'deemer_value',color:'--text2',label:'10d A/D',width:1}],ylim:[0,5],hlines:[{y:3,color:'--yellow'},{y:2.6,color:'--magenta'},{y:1}]},
+  {title:'Breadth Score & oversold overlay',height:140,series:[{key:'score_smooth',color:'--orange',label:'Score EMA5'},{key:'overlay',color:'--violet',label:'Overlay'}],ylim:[0,100],hlines:[{y:45,color:'--serious'},{y:75,color:'--violet'}]}])}
+/* ---------- Thresholds */
+{const p=$('#p-thr');p.innerHTML=`<h2>TASI extreme readings (percentiles 2007–2026) vs US reference values</h2>
+ <div class="tblwrap"><table><tr><th>Indicator</th><th>Excessive pessimism (2%)</th><th>(5%)</th><th>Excessive optimism (95%)</th><th>(98%)</th><th>US reference / note</th></tr>
+ ${DATA.thresholds.map(r=>`<tr><td>${r.indicator}</td><td>${fmt(r.p2,1)}</td><td>${fmt(r.p5,1)}</td><td>${fmt(r.p95,1)}</td><td>${fmt(r.p98,1)}</td><td style="text-align:left">${r.us}</td></tr>`).join('')}</table></div>
+ <h2>Method (one screen)</h2>
+ <div class="note" style="font-size:13px;line-height:1.7">
+ <b>Universe</b>: TASI main-market common stocks (${t.n_universe} today), no REITs/NOMU/ETFs; delisted names kept for their history; adjusted prices; suspension days excluded (never "unchanged"); a stock enters a metric only after its full lookback. Official TASI from 2007, own Equal-Weight TASI from 2002.<br>
+ <b>Score</b> = ⅓ participation (%>200DMA, %>50DMA, High-Low Index) + ⅓ advance/decline (McClellan, A/D line 20d change) + ⅓ sectors (% healthy, median score), each metric percentile-ranked against its own trailing 5 years (no look-ahead). Weights were fitted in-sample and then <b>rejected</b> by walk-forward — equal weights won; concentration and divergence families were dropped from the score (they reversed the quintile spread) and kept as context.<br>
+ <b>Regimes</b>: 40/60/75 on a 5-day EMA of the score, hysteresis 8, min 5 days. Washout = score ≤45 and oversold overlay ≥75 (TRIN-10, 4% ratio, panic days, 95% down day, recent thrust).<br>
+ <b>Hisham Naser references</b>: NH−NL canary (5 negative days + 5d sum threshold), McClellan extremes, %>MA 20/80 bands, "wait for 5 consecutive positive days", "NH−NL under zero 55–60 days → bear market". All re-calibrated on TASI and reported with their forward returns.<br>
+ <b>Validation</b>: in-sample 2008–2017, out-of-sample 2018–2026, yearly walk-forward 2014–2026; 28 unit tests; Excel workbooks reproduce every value by formula.<br>
+ <b>Expert-review additions (Sep-2026)</b>: Minervini trend template + RS rating (1–99) + leaders list and new highs on volume; Weinstein stages on weekly bars with breakout-volume and RS line per stock; Stockbee colour rules and name lists; Lowry points/volume split and sequence test; McClellan Summation percentiles and automatic divergence marks; Deepvue cycle on 21 and 50 days; rare Zweig/Deemer variants tested and reported; sortable/filterable/CSV tables and in-page stock charts; "near canary" alert; confirmation rule rewritten as index direction vs breadth direction. <b>Outside the data</b>: liquidity / rates (Zweig's monetary filter) — not in these files; read SAIBOR and the repo rate separately.</div>
+ <footer>TASI Breadth Engine · local file · generated ${t.date}</footer>`}
+
+/* ===================================================================== guided tour */
+const TOUR=[
+ {page:'overview',sel:'.kpis',title:'Welcome — how to read this dashboard',text:'This is a market-breadth engine for TASI: it measures the health <b>under</b> the index, not the index itself. Start here: the <b>Breadth Score</b> (0–100) and the <b>Regime</b> (Washout · Weak · Neutral · Healthy · Strong) summarise everything. Use <kbd>→</kbd> / <kbd>←</kbd> to move through the tour, <kbd>Esc</kbd> to leave.'},
+ {page:'overview',sel:'.kpis .kpi:nth-child(1)',title:'Breadth Score',text:'⅓ participation (%>200DMA, %>50DMA, High-Low Index) + ⅓ advance/decline (McClellan, A/D line change) + ⅓ sectors (% healthy, median sector score). Every metric is ranked against its own last 5 years, so 80 means “top 20% of the last five years”. Weights were tested out-of-sample and equal weights won — nothing is fitted.'},
+ {page:'overview',sel:'.kpis .kpi:nth-child(2)',title:'Regime',text:'Bands 40/60/75 on a 5-day EMA of the score, with hysteresis (8 points, min 5 days) so it does not flip daily. Validated 2014–2026 walk-forward: <b>Washout</b> +2.4%/20d, <b>Healthy/Strong</b> consistently positive, <b>Weak</b> ≈ −0.2%/60d (the only regime below the market average).'},
+ {page:'overview',sel:'.kpis .kpi:nth-child(5)',title:'Oversold overlay',text:'Kept outside the score on purpose. It averages TRIN-10, the 4% up/down ratio, panic-day share, a recent 95% down day and a recent thrust. Overlay ≥ 75 while the score ≤ 45 = <b>Washout</b> — historically the best entry context on TASI.'},
+ {page:'overview',sel:'.kpis .kpi:nth-child(7)',title:'Trend Template & leaders (Minervini)',text:'How many stocks pass Minervini\'s 8-point trend template, plus today\'s new 52-week highs on volume. A low number means the market is not rewarding trend-following, whatever the index does. The card on the left lists the leaders by RS rating; click a symbol for its chart or open the Leaders page for the full, sortable screener.'},
+ {page:'overview',sel:'.kpis .kpi:nth-child(6)',title:'NH / NL and the canary alert',text:'The card turns orange when the 5-day NH−NL sum passes 60% of the TASI canary threshold (“near canary”) and red when an episode is active. The threshold is shown in absolute terms (−75% of the eligible universe) so you can see how far away it is.'},
+ {page:'overview',sel:'.q',title:'The five questions',text:'Each row answers one question the engine was built for: participation, direction, confirmation, extremes/thrust, and the final verdict. The right column is the one-word answer; the middle column shows the numbers behind it.'},
+ {page:'overview',sel:'#ov-leaders',title:'Leaders card',text:'Top names passing the trend template, ranked by RS (1–99, IBD-style: 2×3M + 6M + 9M + 12M return ranked across the universe), with distance from the 52-week high and relative volume. This is the bridge from “how healthy is the market” to “which stocks are leading it”.'},
+ {page:'widget',sel:'#w-widget',title:'Market Breadth widget — its own page',text:'The classic at-a-glance panel: New Highs vs New Lows (52-week), Advance vs Decline, Up vs Down from the open, Up vs Down on above-average volume (volume > prior 20-day average), Up 4% vs Down 4% (with volume above the prior day), and the Weinstein stage split with its history. Blue = bulls ≥ 50%, magenta = bears. Hover any chart on the right and the widget re-renders for that day.'},
+ {page:'widget',sel:'#w-stack',title:'History of every gauge',text:'Each gauge as a daily share (grey) with its 10-day average (coloured) — the 50% line is the bull/bear divide. The bottom panel switches between Weinstein\'s daily proxy and his original weekly 30-week-MA stages.'},
+ {page:'leaders',sel:'#p-leaders .kpis',title:'Leaders & Trend Template',text:'Template pass count, new 52-week highs on volume, and Stage-2 share on daily vs weekly bars. Below: the leaders table, the new-highs-on-volume list and a screener of every active stock — every table sorts by column, filters, exports to CSV, and a click on the symbol opens the stock chart with MA50/150/200, volume and the RS line vs TASI.'},
+ {page:'overview',sel:'#ov-stack .panel:nth-child(1)',title:'Index panel — how to read the marks',text:'Coloured strip under the price = regime history (green Healthy/Strong, grey Neutral, orange Weak, violet Washout). Red shading = NH−NL <b>canary episodes</b>. Triangles: ▲ Zweig thrust (aqua), ▲ %>50DMA thrust (blue), ▼ 95% down day (red). Zoom in and the line becomes candles.'},
+ {page:'overview',sel:'.toolbar',title:'Navigation on every chart',text:'Range buttons set the window. <b>Drag</b> to pan, <b>mouse-wheel</b> to zoom around the cursor, <b>hover</b> for a crosshair with the value of every panel on that day. All panels of a page stay synchronised.'},
+ {page:'nhnl',sel:'#p-nhnl .note',title:'New Highs / New Lows — Hisham Naser’s canary',text:'His rule: NH−NL below zero for 5 consecutive days and a 5-day sum ≤ −180/−200 → raise caution; the episode ends only after 5 consecutive positive days. On TASI the threshold is −75% of the eligible universe (same rarity: 15 episodes in 20 years).'},
+ {page:'nhnl',sel:'#nh-stack .panel:nth-child(4)',title:'5-day sum vs the canary line',text:'When the red histogram pierces the dashed canary line after 5 negative days, an episode starts (shaded). On TASI the average max drawdown inside an episode is ≈ −11% and 12/15 episodes fell ≥ 3% — but the episode usually <b>ends above</b> its start, because extreme readings arrive late here. Treat it as a risk flag, not an exit.'},
+ {page:'nhnl',sel:'#p-nhnl .tblwrap',title:'Episode table',text:'Same columns as Hisham’s US table: start/end closes, % change, trading days, max reading, lowest low and max drawdown. Compare: US average −11.3% end-to-end; TASI +2.3% end-to-end but −11% max drawdown.'},
+ {page:'mcclellan',sel:'#mc-stack .panel:nth-child(2)',title:'McClellan Oscillator',text:'Ratio-adjusted: 1000·(A−D)/(A+D), EMA19 − EMA39. TASI extremes are wider than the US (±85 at the 5/95th percentiles, ±105 at 2/98). Below −100 has been an oversold bounce (+4.4%/60d); above +100 an exhaustion zone (−1.4%/60d). The zero line matters: positive vs negative separates +1.8% from +1.1% over 60 days.'},
+ {page:'mcclellan',sel:'#mc-stack .panel:nth-child(3)',title:'Summation Index with TASI percentile bands and divergence marks',text:'Cumulative oscillator — a slow trend of breadth, with bands at the TASI 2/5/95/98th percentiles (US levels do not transfer). ▼ orange = TASI at a 60-day high while the Summation fails to confirm (McClellan\'s “complex top”); ▲ aqua = the bullish mirror. Context on TASI, not a sell signal.'},
+ {page:'ma',sel:'#ma-stack .panel:nth-child(2)',title:'% above 200 DMA — the most reliable participation gauge',text:'Hisham’s bands: 80 = optimism peak, 20 = pessimism peak. TASI adds a twist found in the walk-forward: the <b>60–80 band is the topping zone</b> (−2.9%/60d, 39% hit) while <b>>80 is the best state</b> (+5.5%, 82% hit, 3% false signals) and <20 is a washout bounce. Broad-but-not-broad-enough after a long rally is the danger, not extreme breadth.'},
+ {page:'ma',sel:'#ma-stack .panel:nth-child(4)',title:'% above 50 DMA and the thrust rule',text:'A move from below 20% to above 55% within 15 days is a breadth thrust (blue ▲). Calibrated on TASI: +2.9%/20d (73% hit) and +7.2%/120d.'},
+ {page:'ad',sel:'#ad-stack .panel:nth-child(5)',title:'TRIN — the Arms index',text:'(Advances/Declines) ÷ (Up-volume/Down-volume). TRIN-10 above 1.2 (green zone) is the strongest short-term oversold state on TASI: +2.0% over 20 days, 71% hit. Below 0.8 is mildly complacent.'},
+ {page:'ad',sel:'#ad-stack .panel:nth-child(6)',title:'Lowry 90% days — points AND volume',text:'Lowry\'s day needs both conditions: ≥95% of points and ≥95% of volume on one side. Both shares are plotted, and the panel below shows which one fired. Only <b>95% down days</b> carry an edge on TASI (+1.9%/60d, 64% hit); 95% up days and the down-then-up sequence (◆ yellow) were tested and add nothing — they stay on the chart for audit.'},
+ {page:'stockbee',sel:'#p-stockbee .tblwrap',title:'Stockbee Market Monitor — coloured and clickable',text:'Counts of stocks up/down ≥ 4% with volume above the prior day, 5/10-day ratios, and the longer-horizon movers. Cells are coloured by Stockbee\'s reading (green bullish, red bearish/panic), and <b>clicking any count lists the stocks behind it</b>. On TASI read the extremes as contrarian: more than 20% of stocks down 4% in a day → +5.1%/60d; a 10-day ratio below 0.5 → +2.0%/60d; more than 20% up 4% → exhaustion.'},
+ {page:'cycle',sel:'#cy-stack',title:'Market Cycle (Deepvue-style) — 21-day and 50-day',text:'Green bars count the days TASI has closed above its 21-day SMA (switch to the 50-day for the intermediate cycle), red bars the days below. A long green run = established uptrend; the first red bars after a long run = the cycle turning. Orange dots mark stress tests — short dips the trend survived. Use it with the Breadth Score: a fresh green count with a rising score is the healthiest combination.'},
+ {page:'cycle',sel:'#cy-board',title:'Breadth board',text:'Twelve mini-histograms of the core breadth series over the last 250 days, each with today\'s value — the quick-glance board.'},
+ {page:'classic',sel:'#cl-stack',title:'Classic StockCharts layout',text:'The layout Hisham uses for the US total market: price with EMA21 / MA50 / MA200, volume coloured by direction, NH−NL, and the McClellan Oscillator in both the traditional and ratio-adjusted forms — now on TASI.'},
+ {page:'library',sel:'#tbl-lib',title:'Classic breadth library — the rest of the literature, tested',text:'Fosback\'s High-Low Logic Index and Absolute Breadth Index, the Hindenburg Omen, Titanic Syndrome, Swenlin\'s STO and ITBM, the McClellan Volume Oscillator, CVI, Zweig\'s 9:1 days, new-high % and A/D %. Each row shows today\'s value, TASI percentiles and the verdict from the 2007–2026 test. The one that matters most: <b>HLLI above 1 (split market) is the strongest negative state on TASI</b> — it now feeds the Overview alert.'},
+ {page:'bpi',sel:'#bpi-stack',title:'Bullish Percent Index (Point & Figure)',text:'Dorsey\'s classic: the share of stocks on a P&F buy signal (2% boxes, 3-box reversal), with the six BPI statuses derived from a P&F chart of the index itself. On TASI the level (30/70) carries no edge but the status does — Bull Alert has been the best entry state, Bear Alert the worst.'},
+ {page:'sectors',sel:'#theme-card',title:'Theme Tracker',text:'Equal-weight return of every industry group over Today / 1W / 1M / 3M / 6M / 12M / YTD, sorted best to worst, bars diverging from zero (blue up, magenta down). The footer shows the equal-weight market return for the same period so you can see who leads and who lags.'},
+ {page:'sectors',sel:'#ranks-card',title:'Industry Ranks',text:'Each group ranked by its return over 1M / 3M / 6M / 12M (1 = best). The small superscript is the rank change versus one month ago — a group climbing across horizons is emerging leadership; a top-3 12M group sliding in 1M/3M is rotation out. Sort by any horizon.'},
+ {page:'sectors',sel:'#p-sectors .tblwrap:last-of-type',title:'Sector heatmap — click to drill down',text:'Each industry group gets a health score (mean of %>50DMA, %>200DMA, normalised NH−NL and 10-day A/(A+D)). Green ≥ 60 healthy, red ≤ 40 weak. When 50–70% of sectors are healthy the market averaged +3.8% over 60 days (82% hit); a median above 75 has been exhaustion.'},
+ {page:'conc',sel:'#cc-stack .panel:nth-child(2)',title:'Concentration — does the index hide weakness?',text:'Equal-Weight TASI vs the cap-weighted TASI. When the broad market lags the index by more than 5 points over 60 days (below the red line), the following 60 days averaged −0.6% with a 43% hit rate — the only negative state in the whole engine. This is the “Aramco and the banks mask the weakness” signal.'},
+ {page:'signals',sel:'#tbl-sigstats',title:'Every rule judged by its own record',text:'One row per rule: independent signal count, mean forward return and hit rate at 20/60/120 days, the horizon on which it is valid, and its status (scored · indicative · tested-no-edge · dropped). Rows with fewer than 30 events are flagged — they are not proof. The rare Zweig / Deemer variants and the Lowry sequence asked for in the expert review are here with their results.'},
+ {page:'signals',sel:'#p-signals .grid2',title:'Signal log & regimes',text:'Left: every signal in history with TASI’s forward returns (grey rows = tested variants kept for audit); sort, filter and export. Right: the regime log. Below, the Zweig EMA (0.40 → 0.615 within 10 days, 0.66 rare line) and the score/overlay pair that define Washout.'},
+ {page:'thr',sel:'#p-thr .tblwrap',title:'Thresholds — TASI vs the US reference values',text:'Percentile-based extremes computed on TASI 2007–2026, next to the US numbers Hisham uses (StockCharts, Refinitiv, his own data). Use these, not the US levels, when you read TASI.'},
+ {page:'thr',sel:'#p-thr .note',title:'Method in one screen — and you are done',text:'Universe, adjustments, scoring, regimes and validation are summarised here. Daily routine: drop the two CSV exports into <code>storage/raw</code>, run <code>python -m breadth.daily</code>, open this file. Press <kbd>Esc</kbd> to close, or restart the tour any time from the header.'}
+];
+let tourI=-1,tourEl=null;
+function tourStop(){tourI=-1;if(tourEl)tourEl.classList.remove('tour-hl');tourEl=null;$('#tour').style.display='none';$('#tour-dim').style.display='none'}
+function tourGo(i){if(i<0||i>=TOUR.length)return tourStop();const st=TOUR[i];if(tourEl)tourEl.classList.remove('tour-hl');show(st.page);tourI=i;
+  const el=$(st.sel);tourEl=el;if(el){el.classList.add('tour-hl');el.scrollIntoView({block:'center',behavior:'smooth'})}
+  const box=$('#tour');box.innerHTML=`<div class="step">Step ${i+1} of ${TOUR.length} · ${PAGES.find(p=>p[0]===st.page)[1]}</div><h4>${st.title}</h4><div>${st.text}</div>
+   <div class="btns"><button class="btn" onclick="tourGo(${i-1})" ${i===0?'disabled':''}>← Back</button><button class="btn" style="background:var(--blue);color:#fff;border-color:var(--blue)" onclick="tourGo(${i+1})">${i===TOUR.length-1?'Finish':'Next →'}</button><span class="sp"></span><button class="btn" onclick="tourStop()">Skip</button></div>`;
+  box.style.display='block';$('#tour-dim').style.display='block';
+  setTimeout(()=>{if(!el){box.style.left='50%';box.style.top='20%';box.style.transform='translateX(-50%)';return}box.style.transform='';const r=el.getBoundingClientRect();const bw=box.offsetWidth,bh=box.offsetHeight;
+    let left=r.right+14,top=r.top;if(left+bw>window.innerWidth-10){left=Math.max(10,r.left);top=r.bottom+12}if(top+bh>window.innerHeight-10)top=Math.max(10,window.innerHeight-bh-10);if(top<10)top=10;box.style.left=left+'px';box.style.top=top+'px'},350)}
+$('#tour-btn').onclick=()=>tourGo(0);
+document.addEventListener('keydown',e=>{if(tourI<0)return;if(e.key==='Escape')tourStop();if(e.key==='ArrowRight')tourGo(tourI+1);if(e.key==='ArrowLeft')tourGo(tourI-1)});
+$('#tour-dim').onclick=tourStop;
+/* per-page help buttons: jump into the tour at that page */
+PAGES.forEach(([id])=>{const h=$('#p-'+id+' h2');if(!h)return;const b=document.createElement('span');b.className='help';b.textContent='?';b.title='Explain this page';b.onclick=()=>{const k=TOUR.findIndex(s=>s.page===id);if(k>=0)tourGo(k)};h.appendChild(b)});
+/* first visit: offer the tour */
+try{if(!localStorage.getItem('tb-toured')){localStorage.setItem('tb-toured','1');setTimeout(()=>tourGo(0),600)}}catch(e){}
+
+/* ===================================================================== init */
+$('#hdr-date').textContent='as of '+t.date;
+$('#theme').onclick=()=>{const r=document.documentElement;const d=r.dataset.theme==='dark';r.dataset.theme=d?'light':'dark';$('#theme').textContent=d?'Dark theme':'Light theme';try{localStorage.setItem('tb-theme',r.dataset.theme)}catch(e){}stacks.forEach(s=>s.draw())};
+try{const th=localStorage.getItem('tb-theme');if(th){document.documentElement.dataset.theme=th;$('#theme').textContent=th==='dark'?'Light theme':'Dark theme'}}catch(e){}
+let start='overview';try{start=localStorage.getItem('tb-page')||'overview'}catch(e){}
+show(start);setRange(504);
+</script>
+</body>
+</html>

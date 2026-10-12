@@ -101,6 +101,8 @@ def calculate_rs_line(
     ma2_period:   int = 50,
     lookback:     int = 50,
     scale_factor: int = 3000,
+    stock_close:  Optional[pd.Series] = None,
+    bench_close:  Optional[pd.Series] = None,
 ) -> pd.DataFrame:
     """
     يحسب RS Line كاملة من بيانات الـ DB:
@@ -112,12 +114,20 @@ def calculate_rs_line(
     
     scale_factor:
       - 3000  → TraderLion RS Line — القيم ~7.61 (تطابق TradingView)
+
+    stock_close / bench_close:
+      Optional pre-loaded series. When supplied, the corresponding DB fetch is
+      skipped (used by the batch pipeline to load the benchmark once instead of
+      once per symbol). The series must already be date-ascending within
+      [start_date, end_date]; everything downstream is byte-identical.
     """
     end = end_date or datetime.today().strftime("%Y-%m-%d")
 
-    # سحب البيانات من الـ DB
-    stock_close = _fetch_stock_close(db, symbol, start_date, end)
-    bench_close = _fetch_tasi_close(db, start_date, end)
+    # سحب البيانات من الـ DB (أو استخدام الجاهز منها)
+    if stock_close is None:
+        stock_close = _fetch_stock_close(db, symbol, start_date, end)
+    if bench_close is None:
+        bench_close = _fetch_tasi_close(db, start_date, end)
 
     # دمج البيانات مع الحفاظ على خط زمني السهم، وملء فراغات المؤشر (زي TradingView)
     df = pd.DataFrame({"stock": stock_close, "bench": bench_close})
@@ -155,8 +165,14 @@ def calculate_rs_line(
     return df
 
 
-def df_to_response(df: pd.DataFrame, symbol: str, benchmark: str) -> dict:
-    """تحويل DataFrame إلى dict مطابق لـ RSLineResponse schema"""
+def df_to_response(df: pd.DataFrame, symbol: str, benchmark: str,
+                   include_series: bool = True) -> dict:
+    """تحويل DataFrame إلى dict مطابق لـ RSLineResponse schema
+
+    include_series=False → يحسب الـ summary فقط بدون بناء قائمة كل الشموع
+    (تُستخدم في حساب الدفعة اليومية، لأن الـ data list لا تُقرأ أصلاً هناك
+    وتكلّف iterrows() على ~1400 صف لكل سهم).
+    """
     last  = df.iloc[-1]
     bulls = df[df["cross_bull"]]
     bears = df[df["cross_bear"]]
@@ -179,6 +195,15 @@ def df_to_response(df: pd.DataFrame, symbol: str, benchmark: str) -> dict:
         "last_bull_cross": str(bulls.index[-1].date()) if not bulls.empty else None,
         "last_bear_cross": str(bears.index[-1].date()) if not bears.empty else None,
     }
+
+    if not include_series:
+        return {
+            "symbol":     symbol,
+            "benchmark":  benchmark,
+            "summary":    summary,
+            "data":       [],
+            "total_bars": len(df),
+        }
 
     data = []
     for dt, row in df.iterrows():

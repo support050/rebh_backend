@@ -9,6 +9,7 @@ from datetime import datetime
 from app.core.database import get_db
 from app.core.security import verify_internal_key
 from app.services.storage import storage_service
+from app.services.filing_date_service import extract_published_date
 from app.models.official_filings import CompanyOfficialFiling, FilingCategory, FilingPeriod, FileType, FilingLanguage
 from app.models.scraped_reports import Company
 from app.schemas.official_filings import IngestOfficialFilingsRequest
@@ -198,10 +199,12 @@ async def ingest_official_reports(
                 print(f"❌ Mapping Error for {item}: {e}")
                 continue
             
-            # Parse date if possible (scraper returns text like '2025-01-01' or similar)
-            # You might need a date parser helper here
-            date_obj = None 
-            # (Skipping robust date parsing for brevity, let's assume NULL or implement simple)
+            # Publication date: the scraper's own date field first, then the date
+            # embedded in the real Tadawul URL. Rows whose source is a local file
+            # (http://internal/<year>_<Section>_<Period>) stay NULL on purpose —
+            # a fiscal year is not a publication date and guessing one would put a
+            # wrong date on a filings screen. See app/services/filing_date_service.py
+            date_obj = extract_published_date([item.published_date, item.url])
             
             products_to_process.append({
                 "url": item.url,
@@ -233,8 +236,14 @@ def get_company_reports(symbol: str, db: Session = Depends(get_db)):
     """
     Get official filings grouped by category for frontend.
     """
+    # Newest publication first; undated (local-file) rows keep their old grouping by
+    # fiscal year/period so the list stays deterministic instead of DB-order random.
     reports = db.query(CompanyOfficialFiling).filter(
         CompanyOfficialFiling.company_symbol == symbol
+    ).order_by(
+        CompanyOfficialFiling.published_date.desc().nullslast(),
+        CompanyOfficialFiling.year.desc(),
+        CompanyOfficialFiling.period,
     ).all()
     
     # Structure for frontend: { "Financial Statements": [items...], ... }

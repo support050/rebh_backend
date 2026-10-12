@@ -28,7 +28,11 @@ class RSCalculatorUltraFast:
         self.db_url = db_url
         self.engine = None
         self._reconnect()
-        self._create_checkpoint_table()
+        # 2026-10-06: _create_checkpoint_table() removed from __init__. The daily
+        # pipeline instantiates this class, so creating the scratch table here meant
+        # calculation_checkpoint came back on every run right after we dropped it
+        # (revision 2026_10_06_drop_legacy). It is now created lazily, only by the
+        # multi-day historical backfill that actually resumes from it.
         self.cache = {}
     
     def _reconnect(self):
@@ -198,7 +202,8 @@ class RSCalculatorUltraFast:
                 logger.warning(f"⚠️  Cannot save checkpoint: Date {last_date} has no RS ratings yet")
                 return
             
-            # Save checkpoint with retry
+            # Save checkpoint with retry (table is created on demand — backfill only)
+            self._create_checkpoint_table()
             self._execute_with_retry("DELETE FROM calculation_checkpoint")
             self._execute_with_retry("""
                 INSERT INTO calculation_checkpoint (last_date) 

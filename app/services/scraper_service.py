@@ -30,10 +30,22 @@ def _record(name: str, success: bool, detail: str = ""):
 
 
 def _run(name: str, fn, *args, **kwargs) -> bool:
+    """Run one scraper, recording it in the in-memory map AND in job_runs.
+
+    Triggered_by is 'manual' because everything going through this service is
+    an explicit request (POST /api/admin/system/run-scraper); the APScheduler
+    path records its own rows in app/core/scheduler.py._safe().
+    """
+    from app.services.job_tracking import track_job, with_result_handling
     logger.info(f"▶ Running scraper: {name}")
     try:
-        result = fn(*args, **kwargs)
-        ok = result if isinstance(result, bool) else bool(result)
+        with track_job(f"scraper:{name}", "manual") as run:
+            result = fn(*args, **kwargs)
+            with_result_handling(run, result)
+            ok = result if isinstance(result, bool) else bool(result)
+            if not ok and run.status is None:
+                run.status = "failed"
+                run.error_message = "scraper returned a falsy result"
         _record(name, ok)
         logger.info(f"  {'✅' if ok else '⚠️'} {name}: {'ok' if ok else 'returned falsy'}")
         return ok
@@ -75,10 +87,27 @@ def run_treasury_gov(mode: str = "incremental") -> bool:
 
 
 def run_tasi_components(symbols: Optional[list[str]] = None) -> bool:
-    from app.scrapers.tasi_components_scraper import scrape_tasi_components
-    result = scrape_tasi_components(symbols=symbols)
-    ok = result.get("failed", 0) == 0
-    _record("tasi_components", ok, str(result))
+    """Refresh tasi_components (TASI weights / EPS / prices).
+
+    2026-10-11 fix: this used to import `app.scrapers.tasi_components_scraper`,
+    a module that does not exist — every call raised ModuleNotFoundError inside
+    the BackgroundTask, so POST /api/admin/system/run-scraper {"scraper":"tasi"}
+    reported "started" and then silently did nothing. The real scraper is
+    app/scrapers/daily_financial_indicators_scraper.py, whose entry point
+    run_scraper_and_save_to_db() scrapes the whole SaudiExchange page and upserts
+    every row — it takes no per-symbol argument, so `symbols` is only logged.
+    """
+    from app.scrapers.daily_financial_indicators_scraper import run_scraper_and_save_to_db
+    from app.services.job_tracking import track_job
+    if symbols:
+        logger.info(f"  ℹ️ tasi_components scrape is whole-market; ignoring {len(symbols)} symbol filter")
+    # Not routed through _run(), so the job_runs row is opened here.
+    with track_job("scraper:tasi_components", "manual") as run:
+        ok = bool(run_scraper_and_save_to_db())
+        if not ok and run.status is None:
+            run.status = "failed"
+            run.error_message = "run_scraper_and_save_to_db() returned a falsy result"
+    _record("tasi_components", ok)
     return ok
 
 

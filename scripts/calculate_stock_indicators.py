@@ -41,7 +41,51 @@ def resolve_target_date(db: Session, target_date: date = None):
     return 0, target_date
 
 
-def calculate_all_indicators_for_stock(db: Session, symbol: str, target_date: date = None) -> Dict[str, Any]:
+LOOKBACK_DAYS = 600        # آخر 600 يوم لكل سهم — يكفي لكل المؤشرات (SMA200 + أمان)
+SYMBOL_CHUNK_SIZE = 40     # عدد الرموز لكل استعلام دفعة
+UPSERT_CHUNK_SIZE = 100    # عدد الصفوف لكل عبارة INSERTmulti-VALUES
+
+
+def _preload_price_rows(db: Session, symbols, target_date: date = None,
+                        lookback_days: int = LOOKBACK_DAYS) -> Dict[str, List[Dict[str, Any]]]:
+    """
+    تحميل آخر `lookback_days` يوم لكل الرموز في استعلام واحد لكل دفعة،
+    بدل استعلام LIMIT 600 لكل سهم (272 استعلام → ~7 استعلامات).
+
+    ROW_NUMBER() OVER (PARTITION BY symbol ORDER BY date DESC) <= 600
+    يعطي نفس صفوف LIMIT 600 لكل رمز بالضبط، والناتج مرتّب ASC لكل رمز —
+    وهو نفس ما ينتجه الكود القديم بعد انعكاس القائمة.
+    """
+    out: Dict[str, List[Dict[str, Any]]] = {}
+    for i in range(0, len(symbols), SYMBOL_CHUNK_SIZE):
+        chunk = symbols[i:i + SYMBOL_CHUNK_SIZE]
+        placeholders = ", ".join(f":sym_{j}" for j in range(len(chunk)))
+        params = {f"sym_{j}": s for j, s in enumerate(chunk)}
+        if target_date:
+            params["target_date"] = target_date
+            date_filter = "date <= :target_date AND"
+        else:
+            date_filter = ""
+        rows = db.execute(text(f"""
+            SELECT symbol, date, open, high, low, close
+            FROM (
+                SELECT symbol, date, open, high, low, close,
+                       ROW_NUMBER() OVER (PARTITION BY symbol ORDER BY date DESC) AS rn
+                FROM prices
+                WHERE {date_filter} symbol IN ({placeholders})
+            ) t
+            WHERE rn <= :lookback
+            ORDER BY symbol, date ASC
+        """), {**params, "lookback": lookback_days}).fetchall()
+        for sym, date_, open_, high_, low_, close_ in rows:
+            out.setdefault(sym, []).append({
+                "date": date_, "open": open_, "high": high_, "low": low_, "close": close_
+            })
+    return out
+
+
+def calculate_all_indicators_for_stock(db: Session, symbol: str, target_date: date = None,
+                                       rows_dicts: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
     """
     حساب جميع المؤشرات باستخدام الخدمة الموحدة
     
@@ -49,37 +93,39 @@ def calculate_all_indicators_for_stock(db: Session, symbol: str, target_date: da
         db: جلسة قاعدة البيانات
         symbol: رمز السهم
         target_date: التاريخ المستهدف (اختياري)
+        rows_dicts: آخر 600 شمعة جاهزة (اختياري) — لو اتبعت، الاستعلام بيتلغي
     
     Returns:
         قاموس بجميع المؤشرات المحسوبة
     """
     
-    # جلب البيانات من قاعدة البيانات
+    # جلب البيانات من قاعدة البيانات (أو استخدام الدفعة المحمّلة مسبقاً)
     # نأخذ آخر 600 يوم فقط — يكفي لحساب كل المؤشرات (SMA200 + مساحة أمان)
-    if target_date:
-        query_limit = text("""
-            SELECT date, open, high, low, close
-            FROM prices
-            WHERE symbol = :symbol AND date <= :target_date
-            ORDER BY date DESC
-            LIMIT 600
-        """)
-        result = db.execute(query_limit, {"symbol": symbol, "target_date": target_date})
-    else:
-        query_limit = text("""
-            SELECT date, open, high, low, close
-            FROM prices
-            WHERE symbol = :symbol
-            ORDER BY date DESC
-            LIMIT 600
-        """)
-        result = db.execute(query_limit, {"symbol": symbol})
-
-    rows = result.fetchall()
-    # تحويل البيانات إلى قواميس لتجنب أخطاء Pandas مع كائنات Row في SQLAlchemy 2.0
-    rows_dicts = [dict(r._mapping) for r in rows]
-    # البيانات جاية DESC من الـ LIMIT — نعكسها ASC للحسابات
-    rows_dicts = list(reversed(rows_dicts))
+    if rows_dicts is None:
+        if target_date:
+            query_limit = text("""
+                SELECT date, open, high, low, close
+                FROM prices
+                WHERE symbol = :symbol AND date <= :target_date
+                ORDER BY date DESC
+                LIMIT 600
+            """)
+            result = db.execute(query_limit, {"symbol": symbol, "target_date": target_date})
+        else:
+            query_limit = text("""
+                SELECT date, open, high, low, close
+                FROM prices
+                WHERE symbol = :symbol
+                ORDER BY date DESC
+                LIMIT 600
+            """)
+            result = db.execute(query_limit, {"symbol": symbol})
+    
+        rows = result.fetchall()
+        # تحويل البيانات إلى قواميس لتجنب أخطاء Pandas مع كائنات Row في SQLAlchemy 2.0
+        rows_dicts = [dict(r._mapping) for r in rows]
+        # البيانات جاية DESC من الـ LIMIT — نعكسها ASC للحسابات
+        rows_dicts = list(reversed(rows_dicts))
     
     if not rows_dicts or len(rows_dicts) < 100:
         print(f"⚠️  {symbol}: Not enough data ({len(rows_dicts)} rows)")
@@ -126,6 +172,75 @@ def calculate_all_indicators_for_stock(db: Session, symbol: str, target_date: da
     )
     
     return result
+
+
+def _rollback(session):
+    try:
+        session.rollback()
+    except Exception:
+        pass
+
+
+def _upsert_batch(save_db, batch):
+    """
+    multi-VALUES upsert لدفعة صفوف لكلها نفس مجموعة الأعمدة.
+    نفس دلالة الصف الواحد: set_ فيه بس الأعمدة اللي الصف حاملاًها فعلاً.
+    """
+    cols = [k for k in batch[0] if k not in ('symbol', 'date', 'created_at')]
+    stmt = insert(StockIndicator).values(batch)
+    excluded = stmt.excluded
+    stmt = stmt.on_conflict_do_update(
+        index_elements=['symbol', 'date'],
+        set_={k: getattr(excluded, k) for k in cols}
+    )
+    save_db.execute(stmt)
+    save_db.commit()
+
+
+def _bulk_upsert_indicators(save_db, rows) -> int:
+    """
+    حفظ الصفوف على دفعات (بدل 272 عبارة INSERT منفصلة).
+
+    الصفوف بتتجمّع حسب مجموعة أعمدتها، فكل عبارة multi-VALUES تحمل نفس
+    الأعمدة بالظبط — وده يحفظ سلوك ON CONFLICT القديم حرفياً (الأعمدة
+    الغائبة ما بتتحدّثش). أي فشل في الدفعة بيرمّيها صف-بصف بنفس منطق
+    إعادة الاتصال القديم، فما فيش صف بيضيع بسبب صف تاني.
+    """
+    from collections import defaultdict
+
+    groups = defaultdict(list)
+    for row in rows:
+        sig = tuple(sorted(k for k in row if k not in ('symbol', 'date', 'created_at')))
+        groups[sig].append(row)
+
+    written = 0
+    for sig, group in groups.items():
+        for i in range(0, len(group), UPSERT_CHUNK_SIZE):
+            batch = group[i:i + UPSERT_CHUNK_SIZE]
+            for attempt in range(2):
+                try:
+                    _upsert_batch(save_db, batch)
+                    written += len(batch)
+                    break
+                except Exception as batch_err:
+                    _rollback(save_db)
+                    if attempt == 0:
+                        # Re-establish connection, then retry this batch
+                        save_db.close()
+                        from app.core.database import SessionLocal
+                        save_db = SessionLocal()
+                    else:
+                        # الفشل التاني: رجوع للكتابة صف بصف عشان نتجنّش فقدان الدفعة
+                        print(f"⚠️  Batch upsert failed ({type(batch_err).__name__}) — "
+                              f"falling back to row-by-row for {len(batch)} rows")
+                        for row in batch:
+                            try:
+                                _upsert_batch(save_db, [row])
+                                written += 1
+                            except Exception as row_err:
+                                _rollback(save_db)
+                                print(f"⚠️  Row save failed {row.get('symbol')}: {row_err}")
+    return written
 
 
 def calculate_and_store_indicators(db: Session, target_date: date = None, target_symbol: str = None, tech_map: dict = None):
@@ -207,6 +322,17 @@ def calculate_and_store_indicators(db: Session, target_date: date = None, target
     print(f"📈 Found {total_stocks} stocks to process")
     print("-" * 60)
     
+    # ── Batched load (N+1 elimination) ─────────────────────────────
+    # بدل استعلام LIMIT 600 لكل سهم: استعلام Window Function واحد لكل دفعة رموز.
+    # المسار الفردي (target_symbol) بيستمر على الاستعلام العادي.
+    preload: Dict[str, List[Dict[str, Any]]] = {}
+    if not target_symbol and total_stocks:
+        t_load = datetime.now()
+        preload = _preload_price_rows(db, list(symbols_data.keys()), target_date)
+        n_batches = -(-total_stocks // SYMBOL_CHUNK_SIZE)
+        print(f"🗂️  Preloaded last {LOOKBACK_DAYS} bars for {len(preload)} symbols "
+              f"in {n_batches} batch queries ({(datetime.now() - t_load).total_seconds():.1f}s)")
+    
     processed = 0
     errors = 0
     successful = 0
@@ -218,7 +344,11 @@ def calculate_and_store_indicators(db: Session, target_date: date = None, target
         try:
             print(f"📊 Processing {symbol} ({company_name})...")
             
-            data = calculate_all_indicators_for_stock(db, symbol, target_date)
+            data = calculate_all_indicators_for_stock(
+                db, symbol, target_date,
+                # لو الرمز مش في الدفعة (حالة نادرة) يرجع للمسار الفردي تلقائياً
+                rows_dicts=preload.get(symbol) if preload else None
+            )
             
             if not data:
                 print(f"⚠️  {symbol}: No data available or insufficient data")
@@ -281,35 +411,12 @@ def calculate_and_store_indicators(db: Session, target_date: date = None, target
         from app.core.database import SessionLocal
         save_db = SessionLocal()
         try:
-            for i, indicator_data in enumerate(all_indicators_data):
-                for attempt in range(2):
-                    try:
-                        stmt = insert(StockIndicator).values(indicator_data)
-                        stmt = stmt.on_conflict_do_update(
-                            index_elements=['symbol', 'date'],
-                            set_={k: v for k, v in indicator_data.items() if k not in ['symbol', 'date', 'created_at']}
-                        )
-                        save_db.execute(stmt)
-                        
-                        # Commit every 25 records to keep transactions short
-                        if (i + 1) % 25 == 0:
-                            save_db.commit()
-                        break
-                    except Exception as save_item_err:
-                        save_db.rollback()
-                        if attempt == 0:
-                            # Re-establish connection and retry once
-                            save_db.close()
-                            save_db = SessionLocal()
-                        else:
-                            raise save_item_err
-            
-            save_db.commit()
-            successful = len(all_indicators_data)
-            print("✅ All stock indicators saved successfully.")
+            successful = _bulk_upsert_indicators(save_db, all_indicators_data)
+            print(f"✅ Stock indicators saved: {successful}/{len(all_indicators_data)} rows "
+                  f"via chunked multi-row upserts.")
         except Exception as e:
             print(f"❌ Error during bulk save: {e}")
-            save_db.rollback()
+            _rollback(save_db)
             errors += len(all_indicators_data)
             error_details.append(f"Bulk Save Error: {str(e)}")
         finally:

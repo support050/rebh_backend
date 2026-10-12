@@ -1,0 +1,8 @@
+[1] run continued=True failures=1 critical_stages=['test stage'] ok=False
+[2] str failure stored='0/272 rows written' critical_count=2
+[3] failures preserved across stamp: before=2 after=2 date=2026-10-06
+[4] all-NULL market_cap -> anomaly=True missing=50/50 rows_vs_prev=0.1838 count_anomaly=True high<low=50
+[5] healthy batch -> anomaly=False count_anomaly=False high<low=0 prev_day_rows=272
+[6] plain SET has COALESCE=False
+[6] guarded SET contains: market_cap = coalesce(nullif(excluded.market_cap
+[7] PIPELINE_STRICT_FINALIZE=True MARKET_CAP_GUARD_RATIO=0.2 SCRAPER_MIN_ROWS_RATIO=0.8

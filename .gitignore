@@ -33,3 +33,10 @@ _map_dump.json
 app/static/rs_data.json
 
 architecture.json
+
+# breadth engine vendored outputs (regeneratable, large)
+app/services/breadth_engine/storage/clean/
+app/services/breadth_engine/storage/features/
+app/services/breadth_engine/storage/master/
+app/services/breadth_engine/storage/reports/
+app/services/breadth_engine/storage/raw/*.csv

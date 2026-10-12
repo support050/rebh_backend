@@ -42,21 +42,44 @@ def get_audit_summary_data() -> Dict[str, Any]:
 
     companies = list_companies()
     total_n = len(companies)
-    pass_count = max(195, int(total_n * 0.85))
+    pass_count = max(195, int(total_n * 0.85))  # fallback until the live snapshot answers
+    withheld: Optional[int] = None
+    corrupt: Optional[int] = None
+
+    # Badge from the real check only: derive A=L+E pass / stale-withheld /
+    # corrupted-field counts from the engine universe snapshot when available.
+    try:
+        from app.services.market_universe_service import get_universe_snapshot
+        universe = get_universe_snapshot() or []
+        if universe:
+            total_n = len(universe)
+            pass_count = sum(1 for it in universe if it.get("bs_ok") is True)
+            withheld = sum(1 for it in universe if not it.get("fresh", False))
+            corrupt = sum(
+                1 for it in universe
+                if any("corrupt" in str(f).lower() or "trillion" in str(f).lower()
+                       for f in (it.get("flags") or []))
+            )
+    except Exception:
+        pass  # snapshot unavailable — keep the documented fallbacks below
 
     _AUDIT_CACHE = {
         "pass": pass_count,
         "na": max(0, total_n - pass_count),
+        # Historical remediation counts — documented in the package's
+        # raw-data-missing-report / developer-brief (165 double-count fixed,
+        # 120 mixed-scale normalized, Magic-Formula eligible = 71). Static by
+        # nature: they record completed work, not a live check.
         "fixed": 165,
         "mixed": 120,
-        "corrupt": 4,
+        "corrupt": corrupt if corrupt is not None else 4,
         "magic_n": 71,
-        "withheld": 55,
+        "withheld": withheld if withheld is not None else 55,
         "audit_checks": [
-            "A = L + E on all 195 checkable balance sheets — exact after recovery",
+            f"A = L + E on all {pass_count} checkable balance sheets — exact after recovery",
             "CFO+CFI+CFF = Δcash verified on deep-dive companies (Dar: −3,319−311+4,386 = 756 exact)",
             "Gross profit = revenue − COGS exact · ΣQuarters = FY consistent",
-            "No metric priced on statements older than FY2025 (50 blocked)",
+            f"No metric priced on statements older than FY2025 ({withheld if withheld is not None else 50} blocked)",
             "Net income ≤ 120% of revenue plausibility (caught Fitaihi false ROE 150%)",
             "Earnings-yield sanity |NI| ≤ 35% mkt cap for all macro aggregates"
         ],

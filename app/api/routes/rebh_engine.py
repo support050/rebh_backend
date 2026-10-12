@@ -4,7 +4,7 @@ Provides comprehensive company valuation, factor grades, Khurafshi methodology m
 and trust checks compliant with the REBH data contracts.
 """
 from fastapi import APIRouter, HTTPException, Depends, Query
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional, List, Tuple
 from app.services.rebh_engine_service import (
     calculate_valuation_models,
     get_trust_badge_status,
@@ -16,6 +16,9 @@ from app.services import course_labs_service
 from app.services.xbrl_data_service import get_company, list_companies
 from app.api.deps import get_current_user, get_current_user_optional
 from app.core.database import get_db
+from app.core.cache_helpers import cache_read_through, make_rebh_engine_key
+from app.core.cache_config import CACHE_TTL_REBH_ENGINE
+from starlette.concurrency import run_in_threadpool
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from app.models.rebh_user_data import AnalystNote, TradeJournal, UserWatchlist, CouncilCompanyChecklist
@@ -24,6 +27,10 @@ from app.models.user import User
 from app.services import rebh_classification_service
 from app.services import rebh_sector_stats_service
 import json
+import logging
+import re
+
+logger = logging.getLogger(__name__)
 
 from app.services.rebh_unified_engine import calculate_full_company_payload
 from app.schemas.rebh_contract import RebhUniversalContract
@@ -33,7 +40,7 @@ engine_router = APIRouter(prefix="/api/engine", tags=["REBH Engine Core"])
 
 
 @engine_router.get("/{symbol}", response_model=RebhUniversalContract)
-def get_engine_company(
+async def get_engine_company(
     symbol: str,
     price: Optional[float] = Query(None, description="Optional override price"),
     market_cap: Optional[float] = Query(None, description="Optional override market cap in M SAR")
@@ -41,12 +48,19 @@ def get_engine_company(
     """
     Primary Production Company Endpoint: GET /api/engine/{symbol}.
     Returns the complete RebhUniversalContract payload directly.
+    Read-through Redis cache (1h TTL); the heavy XBRL+engine computation
+    runs in the thread pool so the event loop never blocks.
     """
     try:
-        return calculate_full_company_payload(
-            symbol=symbol,
-            price_override=price,
-            market_cap_override=market_cap
+        return await cache_read_through(
+            make_rebh_engine_key(symbol, price, market_cap),
+            CACHE_TTL_REBH_ENGINE,
+            lambda: run_in_threadpool(
+                calculate_full_company_payload,
+                symbol=symbol,
+                price_override=price,
+                market_cap_override=market_cap,
+            ),
         )
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -54,61 +68,75 @@ def get_engine_company(
         raise HTTPException(status_code=500, detail=f"Engine calculation error: {str(e)}")
 
 
+def _compat_payload(symbol: str, price: Optional[float], market_cap: Optional[float]) -> Dict[str, Any]:
+    """
+    Build the compatibility-alias payload (sync — executed in the thread pool).
+    Runs the full engine then appends the short keys used by legacy frontend
+    components (mirrors the universal-data.json shape).
+    """
+    contract = calculate_full_company_payload(
+        symbol=symbol,
+        price_override=price,
+        market_cap_override=market_cap
+    )
+    data = contract.model_dump()
+
+    # Seamless backward compatibility keys for legacy frontend components
+    data["sym"] = contract.symbol
+    data["n"] = contract.name
+    data["en"] = contract.en or contract.name
+    data["sec"] = contract.sector
+    data["sec_en"] = contract.sec_en or contract.sector
+    data["px"] = contract.price
+    data["mc"] = contract.market_cap
+    data["pe"] = round(contract.market_cap / (contract.TTM.net_profit / 1_000_000), 1) if (contract.market_cap and contract.TTM.net_profit and contract.TTM.net_profit > 0) else None
+    data["pb"] = round(contract.market_cap / ((contract.balance_identity.equity or 1.0) / 1_000_000), 2) if (contract.market_cap and contract.balance_identity.equity and contract.balance_identity.equity > 0) else None
+    data["roe"] = contract.safety.get("items", [{}])[0].get("val", "").replace("%", "") if contract.safety.get("items") else None
+    try:
+        data["roe"] = float(data["roe"]) if data["roe"] else None
+    except Exception:
+        data["roe"] = None
+    data["current"] = contract.safety.get("items", [{}, {}, {}])[2].get("val", "").replace("x", "") if len(contract.safety.get("items", [])) >= 3 else None
+    try:
+        data["current"] = float(data["current"]) if data["current"] else None
+    except Exception:
+        data["current"] = None
+    data["f_score"] = contract.piotroski
+    data["fv"] = {
+        "bear": contract.nine_box.earnings.v1 if contract.nine_box else None,
+        "base": contract.zones.silver_max if contract.zones else None,
+        "bull": contract.nine_box.earnings.v3 if contract.nine_box else None,
+        "vs": contract.margin_of_safety or 0.0
+    }
+    data["wl"] = [
+        ["g", "Financial statements verified by accounting identities (A = L + E)"] if contract.balance_identity.is_valid else ["r", "Balance sheet accounting identity check failed"],
+        ["g", "Company passed financial safety criteria"] if not contract.quarantine_reason else ["w", contract.quarantine_reason]
+    ]
+    data["khurafshi"] = {
+        "safety_score": contract.safety.get("raw_score", 0),
+        "safety_details": contract.safety.get("items", []),
+        "implied_growth_pct": contract.reverse_dcf.get("implied_growth_pct"),
+        "margin_of_safety_pct": contract.margin_of_safety
+    }
+    return data
+
+
 @router.get("/company/{symbol}")
-def get_rebh_company(
+async def get_rebh_company(
     symbol: str,
     price: Optional[float] = Query(None, description="Optional override price"),
     market_cap: Optional[float] = Query(None, description="Optional override market cap in M SAR")
 ) -> Dict[str, Any]:
     """
     Universal Company Engine Endpoint (Compatibility Alias).
+    Read-through cached (1h TTL) in the same key space as GET /api/engine/{symbol}.
     """
     try:
-        contract = calculate_full_company_payload(
-            symbol=symbol,
-            price_override=price,
-            market_cap_override=market_cap
+        return await cache_read_through(
+            make_rebh_engine_key("compat:" + symbol, price, market_cap),
+            CACHE_TTL_REBH_ENGINE,
+            lambda: run_in_threadpool(_compat_payload, symbol, price, market_cap),
         )
-        data = contract.model_dump()
-
-        # Seamless backward compatibility keys for legacy frontend components
-        data["sym"] = contract.symbol
-        data["n"] = contract.name
-        data["en"] = contract.en or contract.name
-        data["sec"] = contract.sector
-        data["sec_en"] = contract.sec_en or contract.sector
-        data["px"] = contract.price
-        data["mc"] = contract.market_cap
-        data["pe"] = round(contract.market_cap / (contract.TTM.net_profit / 1_000_000), 1) if (contract.market_cap and contract.TTM.net_profit and contract.TTM.net_profit > 0) else None
-        data["pb"] = round(contract.market_cap / ((contract.balance_identity.equity or 1.0) / 1_000_000), 2) if (contract.market_cap and contract.balance_identity.equity and contract.balance_identity.equity > 0) else None
-        data["roe"] = contract.safety.get("items", [{}])[0].get("val", "").replace("%", "") if contract.safety.get("items") else None
-        try:
-            data["roe"] = float(data["roe"]) if data["roe"] else None
-        except Exception:
-            data["roe"] = None
-        data["current"] = contract.safety.get("items", [{}, {}, {}])[2].get("val", "").replace("x", "") if len(contract.safety.get("items", [])) >= 3 else None
-        try:
-            data["current"] = float(data["current"]) if data["current"] else None
-        except Exception:
-            data["current"] = None
-        data["f_score"] = contract.piotroski
-        data["fv"] = {
-            "bear": contract.nine_box.earnings.v1 if contract.nine_box else None,
-            "base": contract.zones.silver_max if contract.zones else None,
-            "bull": contract.nine_box.earnings.v3 if contract.nine_box else None,
-            "vs": contract.margin_of_safety or 0.0
-        }
-        data["wl"] = [
-            ["g", "Financial statements verified by accounting identities (A = L + E)"] if contract.balance_identity.is_valid else ["r", "Balance sheet accounting identity check failed"],
-            ["g", "Company passed financial safety criteria"] if not contract.quarantine_reason else ["w", contract.quarantine_reason]
-        ]
-        data["khurafshi"] = {
-            "safety_score": contract.safety.get("raw_score", 0),
-            "safety_details": contract.safety.get("items", []),
-            "implied_growth_pct": contract.reverse_dcf.get("implied_growth_pct"),
-            "margin_of_safety_pct": contract.margin_of_safety
-        }
-        return data
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
@@ -487,132 +515,369 @@ def get_rebh_stats() -> Dict[str, Any]:
     return khurafshi_engine_service.get_khurafshi_live_market_stats()
 
 
+# saudi_economic_indicators has NO report_date column (see
+# app/models/saudi_macro.py): the only business-time label is `period`, a String
+# like '2026-03' or '2025-Q1-TTM', and retrieved_at/updated_at are scrape times.
+# Keys below are the ones written by scripts/SAMA&GaStat.py via macro_importer.
+_MACRO_KEY_MAP: Dict[str, str] = {
+    "repo_rate": "repo_rate_pct",
+    "saibor_3m": "saibor_3m_pct",
+    "saudi_unemployment": "unemployment_pct",
+    "saudi_buffett_indicator": "buffett_indicator_pct",
+    "saudi_inflation_cpi": "inflation_pct",
+}
+# Keys that would legitimately carry a GDP *growth rate* if/when they are ever
+# imported. saudi_gdp_annual is GDP at current prices in M SAR — a level, so it
+# is reported as gdp_level_m_sar and never mapped onto gdp_growth_pct.
+_GDP_GROWTH_KEYS: Tuple[str, ...] = (
+    "saudi_gdp_growth", "saudi_gdp_growth_yoy", "gdp_growth_pct",
+)
+# Regex for the TTM period label written by scripts/SAMA&GaStat.py.
+# Examples: '2025-Q4-TTM' (real trailing 12M), '2025-Q1-Annualized' (single Q*4).
+# Only TTM rows are used to derive a YoY rate; Annualized rows are skipped so
+# we never mix bases.
+_GDP_TTM_PERIOD_RE = re.compile(r"^(\d{4})-Q([1-4])-TTM$")
+# Read-only guard so a stuck query cannot hang the tools tab.
+_MACRO_TIMEOUT_MS = 5000
+
+
+def _macro_read_tx(db: Session, timeout_ms: int = _MACRO_TIMEOUT_MS) -> None:
+    """Start a clean transaction with a short statement timeout.
+
+    SET LOCAL is dropped when the transaction ends, so every section of
+    market-macro re-applies it. db.rollback() first also clears an aborted
+    transaction left behind by a failed section (nothing to lose — read only).
+    """
+    from sqlalchemy import text
+    db.rollback()
+    db.execute(text("SET LOCAL statement_timeout = :ms"), {"ms": timeout_ms})
+
+
 @router.get("/market-macro")
 def get_rebh_market_macro() -> Dict[str, Any]:
     """
     Get unified live macro and cross-market benchmark metrics:
-    - Saudi Macro: Repo, SAIBOR 3M, GDP Growth, Inflation CPI, Buffett Indicator (SAMA & GaStat).
+    - Saudi Macro: Repo, SAIBOR 3M, Unemployment, Buffett Indicator (SAMA/GaStat/KAPSARC).
+      Inflation prefers a saudi_economic_indicators 'saudi_inflation_cpi' row;
+      if absent, falls back to economic_indicators 'SAUCPALTT01GPM' (IMF Saudi
+      CPI growth rate, ingested by fred:SAUCPALTT01GPM).
     - US Market & Global Benchmarks: S&P 500 Close, P/E Ratio, Earnings Yield (SP500_EY).
     - US Treasury Yield Curve: 10-Year, 2-Year, and 10Y-2Y Spread.
+
+    Nothing is fabricated: an indicator with no usable row comes back as null
+    with an entry in `degraded`. 6 data queries + 6 timeout pragmas at most.
+
+    `gdp_growth_pct` is derived from `saudi_gdp_annual` when two TTM periods
+    exactly 1 calendar year apart exist in the table (i.e. at least two
+    macro_importer runs have landed). Otherwise the endpoint exposes the level
+    in `gdp_level_m_sar` / `gdp_level_unit` and leaves the growth null.
     """
+    from sqlalchemy import func as sa_func
     from app.core.database import SessionLocal
     from app.models.saudi_macro import SaudiEconomicIndicator
     from app.models.economic_indicators import SP500History, TreasuryYieldCurve, EconomicIndicator
-    
+
     db = SessionLocal()
-    saudi_macro = {}
-    sp500_data = {}
-    treasury_data = {}
-    
+    degraded: List[str] = []
+    observations: Dict[str, Dict[str, Any]] = {}
+    sp500_data: Dict[str, Any] = {}
+    treasury_data: Dict[str, Any] = {}
+    # Derived GDP growth: set only when two TTM levels exactly 1 year apart are
+    # present in saudi_economic_indicators. gdp_growth_source explains the pair.
+    gdp_growth_derived: Optional[float] = None
+    gdp_growth_source: Optional[str] = None
+    # FRED/IMF Saudi CPI growth (YoY %) — used only when SAMA/GaStat's own
+    # 'saudi_inflation_cpi' row is absent. Written by fred:SAUCPALTT01GPM.
+    fred_saudi_cpi: Optional[Dict[str, Any]] = None
+
     try:
-        # 1. Saudi Macro
-        macro_rows = db.query(SaudiEconomicIndicator).all()
-        for r in macro_rows:
-            if r.value is not None:
-                saudi_macro[r.indicator_key] = {
-                    "value": r.value,
-                    "date": str(r.report_date) if r.report_date else None,
-                    "source": r.source
+        # 1. Saudi Macro — ONE query, newest observation per indicator_key.
+        #    Newest = coalesce(updated_at, retrieved_at): the importer only bumps
+        #    updated_at when it overwrites an existing (key, period, source) row.
+        try:
+            _macro_read_tx(db)
+            freshness = sa_func.coalesce(
+                SaudiEconomicIndicator.updated_at,
+                SaudiEconomicIndicator.retrieved_at,
+            )
+            macro_rows = (
+                db.query(SaudiEconomicIndicator)
+                  .filter(SaudiEconomicIndicator.value.isnot(None))
+                  .distinct(SaudiEconomicIndicator.indicator_key)
+                  .order_by(
+                      SaudiEconomicIndicator.indicator_key.asc(),
+                      freshness.desc().nulls_last(),
+                      SaudiEconomicIndicator.id.desc(),
+                  )
+                  .all()
+            )
+            for r in macro_rows:
+                observations[r.indicator_key] = {
+                    "value": float(r.value),
+                    "name": r.indicator_name,
+                    "unit": r.unit,
+                    "period": r.period,
+                    "source": r.source,
+                    "is_fallback": bool(r.is_fallback),
+                    "retrieved_at": r.retrieved_at.isoformat() if r.retrieved_at else None,
+                    "updated_at": r.updated_at.isoformat() if r.updated_at else None,
                 }
-                
+        except Exception as e:
+            logger.warning("market-macro: saudi macro read failed: %s", e, exc_info=True)
+            degraded.append(f"saudi_macro: query failed ({type(e).__name__})")
+
         # 2. S&P 500 latest with valid closing price and P/E
-        sp_latest = db.query(SP500History).filter(
-            SP500History.close != None,
-            SP500History.pe_ratio != None
-        ).order_by(SP500History.trade_date.desc()).first()
-        
-        # Fallback if pe_ratio is missing on very latest day
-        if not sp_latest:
-            sp_latest = db.query(SP500History).filter(
-                SP500History.close != None
-            ).order_by(SP500History.trade_date.desc()).first()
+        try:
+            _macro_read_tx(db)
+            sp_latest = (
+                db.query(SP500History)
+                  .filter(SP500History.close.isnot(None), SP500History.pe_ratio.isnot(None))
+                  .order_by(SP500History.trade_date.desc())
+                  .first()
+            )
 
-        ey_latest = db.query(EconomicIndicator).filter(
-            EconomicIndicator.indicator_code == "SP500_EY"
-        ).order_by(EconomicIndicator.report_date.desc()).first()
-        
-        if sp_latest:
-            raw_ey = float(ey_latest.value) if ey_latest and ey_latest.value is not None else None
-            # Standardize EY: if stored as decimal (< 0.20), convert to percentage
-            if raw_ey is not None and raw_ey < 0.20:
-                standardized_ey = round(raw_ey * 100.0, 2)
-            elif raw_ey is not None:
-                standardized_ey = round(raw_ey, 2)
+            # Fallback if pe_ratio is missing on very latest day
+            if not sp_latest:
+                degraded.append("sp500: no row with both close and pe_ratio; "
+                                "relaxing to close-only")
+                sp_latest = (
+                    db.query(SP500History)
+                      .filter(SP500History.close.isnot(None))
+                      .order_by(SP500History.trade_date.desc())
+                      .first()
+                )
+
+            ey_latest = (
+                db.query(EconomicIndicator)
+                  .filter(EconomicIndicator.indicator_code == "SP500_EY")
+                  .order_by(EconomicIndicator.report_date.desc())
+                  .first()
+            )
+
+            if sp_latest:
+                raw_ey = float(ey_latest.value) if ey_latest and ey_latest.value is not None else None
+                # Standardize EY: if stored as decimal (< 0.20), convert to percentage
+                if raw_ey is not None and raw_ey < 0.20:
+                    standardized_ey = round(raw_ey * 100.0, 2)
+                elif raw_ey is not None:
+                    standardized_ey = round(raw_ey, 2)
+                else:
+                    # Derived from the live P/E, not a constant; None if P/E is absent.
+                    pe = float(sp_latest.pe_ratio) if sp_latest.pe_ratio else None
+                    standardized_ey = round(100.0 / pe, 2) if pe and pe > 0 else None
+
+                sp500_data = {
+                    "trade_date": str(sp_latest.trade_date),
+                    "close": float(sp_latest.close) if sp_latest.close is not None else None,
+                    "pe_ratio": float(sp_latest.pe_ratio) if sp_latest.pe_ratio is not None else None,
+                    "earnings_yield_pct": standardized_ey,
+                }
             else:
-                standardized_ey = round(100.0 / float(sp_latest.pe_ratio), 2) if sp_latest.pe_ratio and float(sp_latest.pe_ratio) > 0 else None
+                degraded.append("sp500: sp500_history has no row with a close price "
+                                "(run scraper:sp500_price)")
+        except Exception as e:
+            logger.warning("market-macro: S&P 500 read failed: %s", e, exc_info=True)
+            degraded.append(f"sp500: query failed ({type(e).__name__})")
 
-            sp500_data = {
-                "trade_date": str(sp_latest.trade_date),
-                "close": float(sp_latest.close) if sp_latest.close else None,
-                "pe_ratio": float(sp_latest.pe_ratio) if sp_latest.pe_ratio else None,
-                "earnings_yield_pct": standardized_ey
-            }
-            
-        # 3. US Treasury Yield Curve latest with valid 10Y and 2Y rates
-        yc_latest = db.query(TreasuryYieldCurve).filter(
-            TreasuryYieldCurve.year_10 != None
-        ).order_by(TreasuryYieldCurve.report_date.desc()).first()
-        
-        if yc_latest:
-            y10 = float(yc_latest.year_10) if yc_latest.year_10 is not None else None
-            y2 = float(yc_latest.year_2) if yc_latest.year_2 is not None else None
-            treasury_data = {
-                "report_date": str(yc_latest.report_date),
-                "year_10": y10,
-                "year_2": y2,
-                "spread_10y_2y": round(y10 - y2, 2) if (y10 is not None and y2 is not None) else None
-            }
-    except Exception as e:
-        pass
+        # 3. US Treasury Yield Curve latest with a valid 10Y rate
+        try:
+            _macro_read_tx(db)
+            yc_latest = (
+                db.query(TreasuryYieldCurve)
+                  .filter(TreasuryYieldCurve.year_10.isnot(None))
+                  .order_by(TreasuryYieldCurve.report_date.desc())
+                  .first()
+            )
+            if yc_latest:
+                y10 = float(yc_latest.year_10) if yc_latest.year_10 is not None else None
+                y2 = float(yc_latest.year_2) if yc_latest.year_2 is not None else None
+                treasury_data = {
+                    "report_date": str(yc_latest.report_date),
+                    "year_10": y10,
+                    "year_2": y2,
+                    "spread_10y_2y": round(y10 - y2, 2) if (y10 is not None and y2 is not None) else None
+                }
+                if y2 is None:
+                    degraded.append("treasury: 2Y is null on the latest curve row")
+            else:
+                degraded.append("treasury: treasury_yield_curves has no row with year_10 "
+                                "(run scraper:treasury_gov)")
+        except Exception as e:
+            logger.warning("market-macro: treasury read failed: %s", e, exc_info=True)
+            degraded.append(f"treasury: query failed ({type(e).__name__})")
+
+        # 4. GDP YoY growth — derived from the saudi_gdp_annual LEVEL history.
+        #    The importer stores period like '2025-Q4-TTM'; a pair of TTM rows
+        #    whose year differs by exactly 1 with the same quarter yields a
+        #    legitimate YoY rate. Anything else leaves gdp_growth_derived None
+        #    so the caller sees a null and the degraded array explains why.
+        try:
+            _macro_read_tx(db)
+            gdp_hist = (
+                db.query(SaudiEconomicIndicator)
+                  .filter(
+                      SaudiEconomicIndicator.indicator_key == "saudi_gdp_annual",
+                      SaudiEconomicIndicator.value.isnot(None),
+                      SaudiEconomicIndicator.period.isnot(None),
+                  )
+                  .order_by(SaudiEconomicIndicator.period.desc())
+                  .limit(8)
+                  .all()
+            )
+            parsed: List[Tuple[int, int, float, str]] = []
+            for r in gdp_hist:
+                m = _GDP_TTM_PERIOD_RE.match((r.period or "").strip())
+                if not m:
+                    continue
+                parsed.append((int(m.group(1)), int(m.group(2)), float(r.value), r.period))
+            parsed.sort(key=lambda t: (t[0], t[1]), reverse=True)
+            outer_done = False
+            for i in range(len(parsed) - 1):
+                y0, q0, v0, p0 = parsed[i]
+                for j in range(i + 1, len(parsed)):
+                    y1, q1, v1, p1 = parsed[j]
+                    if q0 == q1 and (y0 - y1) == 1 and v1 > 0:
+                        gdp_growth_derived = round(((v0 - v1) / v1) * 100, 2)
+                        gdp_growth_source = (
+                            f"derived: saudi_gdp_annual {p0} ({v0:,.0f} M SAR) "
+                            f"vs {p1} ({v1:,.0f} M SAR)"
+                        )
+                        outer_done = True
+                        break
+                if outer_done:
+                    break
+            if gdp_growth_derived is None:
+                degraded.append(
+                    "gdp_growth: no two saudi_gdp_annual TTM periods exactly 1 "
+                    "year apart in the table; at least two macro_importer runs "
+                    "(each summing 4 quarters to TTM) are required. gdp_level_m_sar "
+                    "below is the current absolute level, not a rate."
+                )
+        except Exception as e:
+            logger.warning("market-macro: GDP YoY derivation failed: %s", e, exc_info=True)
+            degraded.append(f"gdp_growth: derivation query failed ({type(e).__name__})")
+
+        # 5. Saudi inflation — FRED/IMF fallback.
+        #    SAMA & GaStat do not publish a monthly headline CPI growth number
+        #    in the sources scripts/SAMA&GaStat.py scrapes, so the
+        #    'saudi_inflation_cpi' key never appears in saudi_economic_indicators.
+        #    app/scrapers/fred_scraper.py ingests FRED 'SAUCPALTT01GPM'
+        #    (Saudi Arabia CPI Growth Rate) into economic_indicators instead.
+        #    Prefer the direct SAMA row if it is ever added later.
+        try:
+            _macro_read_tx(db)
+            sa_cpi_row = (
+                db.query(EconomicIndicator)
+                  .filter(
+                      EconomicIndicator.indicator_code == "SAUCPALTT01GPM",
+                      EconomicIndicator.value.isnot(None),
+                  )
+                  .order_by(EconomicIndicator.report_date.desc())
+                  .first()
+            )
+            if sa_cpi_row is not None and sa_cpi_row.value is not None:
+                fred_saudi_cpi = {
+                    "value": float(sa_cpi_row.value),
+                    "report_date": str(sa_cpi_row.report_date),
+                    "indicator_code": sa_cpi_row.indicator_code,
+                }
+        except Exception as e:
+            logger.warning("market-macro: FRED Saudi CPI read failed: %s", e, exc_info=True)
+            degraded.append(f"inflation: FRED SAUCPALTT01GPM read failed ({type(e).__name__})")
     finally:
         db.close()
-        
-    repo_item = saudi_macro.get("repo_rate")
-    saibor_item = saudi_macro.get("saibor_3m")
-    gdp_item = saudi_macro.get("saudi_gdp_annual")
-    buffett_item = saudi_macro.get("saudi_buffett_indicator")
-    cpi_item = saudi_macro.get("saudi_inflation_cpi")
-    unemp_item = saudi_macro.get("saudi_unemployment")
-    
-    repo = repo_item.get("value") if repo_item else 4.25
-    saibor = saibor_item.get("value") if saibor_item else 3.897
-    gdp = gdp_item.get("value") if gdp_item else 4.2
-    buffett = buffett_item.get("value") if buffett_item else None
-    inflation = cpi_item.get("value") if cpi_item else 1.6
-    unemployment = unemp_item.get("value") if unemp_item else 7.8
-    
-    is_repo_fallback = repo_item is None
-    is_saibor_fallback = saibor_item is None
-    is_gdp_fallback = gdp_item is None
-    is_buffett_fallback = buffett_item is None
-    is_inflation_fallback = cpi_item is None
-    is_unemployment_fallback = unemp_item is None
-    
+
+    def _resolve(key: str) -> Tuple[Optional[float], bool]:
+        """Return (value, is_fallback). A stored fallback constant counts as a
+        fallback — the row exists but the scraper never confirmed the number."""
+        obs = observations.get(key)
+        if not obs:
+            return None, True
+        return obs["value"], bool(obs["is_fallback"])
+
+    repo, is_repo_fallback = _resolve("repo_rate")
+    saibor, is_saibor_fallback = _resolve("saibor_3m")
+    unemployment, is_unemployment_fallback = _resolve("saudi_unemployment")
+    buffett, is_buffett_fallback = _resolve("saudi_buffett_indicator")
+    inflation, is_inflation_fallback = _resolve("saudi_inflation_cpi")
+    inflation_source: Optional[str] = None
+    if inflation is not None:
+        inflation_source = "direct:saudi_economic_indicators.saudi_inflation_cpi"
+    elif fred_saudi_cpi is not None:
+        inflation = fred_saudi_cpi["value"]
+        is_inflation_fallback = False
+        inflation_source = (
+            f"fred:SAUCPALTT01GPM @ {fred_saudi_cpi['report_date']} "
+            f"(IMF Saudi Arabia CPI growth rate)"
+        )
+    else:
+        inflation_source = None
+
+    gdp_growth_key = next((k for k in _GDP_GROWTH_KEYS if k in observations), None)
+    if gdp_growth_key:
+        gdp_growth, is_gdp_fallback = _resolve(gdp_growth_key)
+        gdp_growth_origin = f"direct:{gdp_growth_key}"
+    elif gdp_growth_derived is not None:
+        gdp_growth, is_gdp_fallback = gdp_growth_derived, False
+        gdp_growth_origin = "derived:saudi_gdp_annual_TTM_pair"
+    else:
+        gdp_growth, is_gdp_fallback = None, True
+        gdp_growth_origin = None
+        # The derivation block already appended a `degraded` entry explaining
+        # why no growth pair was available — do not duplicate it here.
+    if inflation is None:
+        degraded.append(
+            "inflation: saudi_inflation_cpi is not written in "
+            "saudi_economic_indicators AND economic_indicators has no "
+            "SAUCPALTT01GPM row. Run the fred:SAUCPALTT01GPM scraper "
+            "(scheduled monthly, day 10 02:00 Africa/Cairo; or admin Run now) "
+            "to ingest the IMF Saudi CPI growth series from FRED."
+        )
+
+    gdp_obs = observations.get("saudi_gdp_annual")
+
     tracked_flags = [
         is_repo_fallback,
         is_saibor_fallback,
         is_gdp_fallback,
         is_inflation_fallback,
         is_unemployment_fallback,
-        is_buffett_fallback
+        is_buffett_fallback,
     ]
     live_count = sum(1 for f in tracked_flags if not f)
     total_tracked = len(tracked_flags)  # 6 total tracked indicators
-    
+
     if live_count == total_tracked:
         macro_status = "° verified (DB Live)"
     elif live_count > 0:
-        macro_status = "° partially_live (SAMA/GaStat + Benchmark Fallback)"
+        macro_status = (
+            f"° partially_live ({live_count}/{total_tracked} from SAMA/GaStat/KAPSARC)"
+        )
     else:
-        macro_status = "≈ benchmark_fallback"
-    
+        macro_status = "≈ no_live_data"
+
+    # Regime/liquidity are derived only from values we actually have; a missing
+    # input yields null rather than a guess.
+    macro_regime = None
+    if gdp_growth is not None:
+        macro_regime = "توسعي / صحي" if gdp_growth >= 3.0 else "انكماشي / ضاغط"
+    liquidity_condition = None
+    if saibor is not None:
+        liquidity_condition = "مشددة" if saibor > 5.5 else "ميسرة"
+
     return {
         "saudi_macro": {
             "repo_rate_pct": repo,
             "saibor_3m_pct": saibor,
-            "gdp_growth_pct": gdp,
+            "gdp_growth_pct": gdp_growth,
+            "gdp_growth_origin": gdp_growth_origin,
+            "gdp_growth_source": gdp_growth_source,
+            "gdp_level_m_sar": gdp_obs["value"] if gdp_obs else None,
+            "gdp_level_unit": gdp_obs["unit"] if gdp_obs else None,
+            "gdp_level_period": gdp_obs["period"] if gdp_obs else None,
             "buffett_indicator_pct": buffett,
             "inflation_pct": inflation,
+            "inflation_source": inflation_source,
             "unemployment_pct": unemployment,
             "is_repo_fallback": is_repo_fallback,
             "is_saibor_fallback": is_saibor_fallback,
@@ -621,14 +886,15 @@ def get_rebh_market_macro() -> Dict[str, Any]:
             "is_inflation_fallback": is_inflation_fallback,
             "is_unemployment_fallback": is_unemployment_fallback,
             "live_indicators_count": live_count,
-            "macro_regime": "توسعي / صحي" if gdp >= 3.0 else "انكماشي / ضاغط",
-            "liquidity_condition": "مشددة" if saibor > 5.5 else "ميسرة",
-            "indicators": saudi_macro
+            "macro_regime": macro_regime,
+            "liquidity_condition": liquidity_condition,
+            "indicators": observations
         },
         "sp500_benchmark": sp500_data,
         "treasury_yield_curve": treasury_data,
         "status": macro_status,
-        "source": "SAMA, GaStat, FRED & S&P Global"
+        "degraded": degraded,
+        "source": "SAMA, GaStat, KAPSARC, FRED & S&P Global"
     }
 
 
@@ -1035,21 +1301,28 @@ def trigger_importer_run(
         run_filings_importer,
         run_engine_vintages_job
     )
-    if importer_key == "sukuk":
-        return run_sukuk_importer()
-    elif importer_key == "macro":
-        return run_macro_importer()
-    elif importer_key == "bank_lines":
-        return run_bank_lines_importer()
-    elif importer_key == "filings":
-        return run_filings_importer()
-    elif importer_key == "vintages":
-        return run_engine_vintages_job()
-    else:
+    from app.services.job_tracking import track_job, with_result_handling
+
+    # Each run_* importer catches its own exception and returns
+    # {"status": "failed", ...}, so with_result_handling() is what turns that
+    # dict into a real 'failed' row instead of a false 'success'.
+    importers = {
+        "sukuk": ("sukuk_importer", run_sukuk_importer),
+        "macro": ("macro_importer", run_macro_importer),
+        "bank_lines": ("bank_lines_importer", run_bank_lines_importer),
+        "filings": ("filings_importer", run_filings_importer),
+        "vintages": ("engine_vintages", run_engine_vintages_job),
+    }
+    if importer_key not in importers:
         raise HTTPException(
             status_code=400,
             detail=f"Unknown importer key '{importer_key}'. Valid: sukuk, macro, bank_lines, filings, vintages"
         )
+    job_name, fn = importers[importer_key]
+    with track_job(job_name, "manual") as run:
+        result = fn()
+        with_result_handling(run, result)
+    return result
 
 
 @router.get("/vintages/{symbol}")
@@ -1205,8 +1478,12 @@ def save_analyst_note(
     """
     Save or update an analyst thesis note for a company symbol.
     Persisted per user so it prints directly into THE REPORT.
+    Permanent save = user store (three-site-merge.md): sign-in required.
     """
     user_id = current_user.id if current_user else None
+    # Reject anonymous writes — prevents all visitors from sharing a single null-keyed row.
+    if user_id is None:
+        raise HTTPException(status_code=401, detail="Sign in to save your notes")
     note_obj = db.query(AnalystNote).filter(
         AnalystNote.symbol == symbol,
         AnalystNote.user_id == user_id
@@ -1245,6 +1522,9 @@ def delete_analyst_note(
     Delete an analyst thesis note for a company symbol.
     """
     user_id = current_user.id if current_user else None
+    # Reject anonymous writes — same guard as the save path.
+    if user_id is None:
+        raise HTTPException(status_code=401, detail="Sign in to manage your notes")
     note_obj = db.query(AnalystNote).filter(
         AnalystNote.symbol == symbol,
         AnalystNote.user_id == user_id
@@ -1319,8 +1599,12 @@ def create_trade_journal_entry(
 ) -> Dict[str, Any]:
     """
     Create a new trade journal entry.
+    Permanent save = user store (three-site-merge.md): sign-in required.
     """
     user_id = current_user.id if current_user else None
+    # Reject anonymous writes — prevents all visitors from sharing a single null-keyed row.
+    if user_id is None:
+        raise HTTPException(status_code=401, detail="Sign in to save your journal")
     new_trade = TradeJournal(
         user_id=user_id,
         symbol=trade.symbol.strip().upper(),
@@ -1367,6 +1651,9 @@ def update_trade_journal_entry(
     Update or close an existing trade record.
     """
     user_id = current_user.id if current_user else None
+    # Reject anonymous writes — same guard as the create path.
+    if user_id is None:
+        raise HTTPException(status_code=401, detail="Sign in to edit your journal")
     t = db.query(TradeJournal).filter(
         TradeJournal.id == trade_id,
         TradeJournal.user_id == user_id
@@ -1401,6 +1688,9 @@ def delete_trade_journal_entry(
     Delete a trade record from the journal.
     """
     user_id = current_user.id if current_user else None
+    # Reject anonymous writes — same guard as the create path.
+    if user_id is None:
+        raise HTTPException(status_code=401, detail="Sign in to manage your journal")
     t = db.query(TradeJournal).filter(
         TradeJournal.id == trade_id,
         TradeJournal.user_id == user_id
@@ -1450,8 +1740,12 @@ def toggle_user_watchlist(
 ) -> Dict[str, Any]:
     """
     Add or remove a symbol from the user's permanent watchlist.
+    Permanent save = user store (tools_template.html tab 'watch' 🔌 note): sign-in required.
     """
     user_id = current_user.id if current_user else None
+    # Reject anonymous writes — prevents all visitors from sharing a single null-keyed row.
+    if user_id is None:
+        raise HTTPException(status_code=401, detail="Sign in to save your watchlist")
     sym = item.symbol.strip().upper()
 
     existing = db.query(UserWatchlist).filter(
@@ -1598,10 +1892,11 @@ def save_company_council_checklist(
     user_id = current_user.id if current_user else None
 
     # Reject anonymous saves — prevents all visitors from sharing a single null-keyed row.
+    # REBH module ships English LTR (feature-coverage-matrix.md: zero Arabic characters).
     if user_id is None:
         raise HTTPException(
             status_code=401,
-            detail="يجب تسجيل الدخول لحفظ قائمة التدقيق"
+            detail="Sign in to save your checklist"
         )
 
     row = db.query(CouncilCompanyChecklist).filter(

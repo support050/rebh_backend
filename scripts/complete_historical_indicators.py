@@ -253,11 +253,15 @@ def calculate_complete_indicators_for_symbol(symbol: str, df_prices: pd.DataFram
 
                 'cfg_w': sf(df_merged.iloc[idx].get('cfg_w')) if 'cfg_w' in df_merged.columns else None,
                 'cfg_sma4_w': sf(df_merged.iloc[idx].get('cfg_sma4_w')) if 'cfg_sma4_w' in df_merged.columns else None,
+                'cfg_sma9_w': sf(df_merged.iloc[idx].get('cfg_sma9_w')) if 'cfg_sma9_w' in df_merged.columns else None,
+                'cfg_sma20_w': sf(df_merged.iloc[idx].get('cfg_sma20_w')) if 'cfg_sma20_w' in df_merged.columns else None,
                 'cfg_ema20_w': sf(df_merged.iloc[idx].get('cfg_ema20_w')) if 'cfg_ema20_w' in df_merged.columns else None,
                 'cfg_ema45_w': sf(df_merged.iloc[idx].get('cfg_ema45_w')) if 'cfg_ema45_w' in df_merged.columns else None,
                 'cfg_wma45_w': sf(df_merged.iloc[idx].get('cfg_wma45_w')) if 'cfg_wma45_w' in df_merged.columns else None,
 
                 'rsi_14_9days_ago_w': sf(df_merged.iloc[idx].get('rsi_14_9days_ago_w')) if 'rsi_14_9days_ago_w' in df_merged.columns else None,
+                'rsi_14_minus_9_w': sf(df_merged.iloc[idx].get('rsi_14_minus_9_w')) if 'rsi_14_minus_9_w' in df_merged.columns else None,
+                'rsi_14_w_shifted': sf(df_merged.iloc[idx].get('rsi_14_w_shifted')) if 'rsi_14_w_shifted' in df_merged.columns else None,
                 'stamp_a_value_w': sf(df_merged.iloc[idx].get('stamp_a_value_w')) if 'stamp_a_value_w' in df_merged.columns else None,
                 'stamp_s9rsi_w': sf(df_merged.iloc[idx].get('stamp_s9rsi_w')) if 'stamp_s9rsi_w' in df_merged.columns else None,
                 'stamp_e45cfg_w': sf(df_merged.iloc[idx].get('stamp_e45cfg_w')) if 'stamp_e45cfg_w' in df_merged.columns else None,

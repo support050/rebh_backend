@@ -657,7 +657,12 @@ def run_economic_sync() -> dict:
 
 
 if __name__ == "__main__":
-    res = run_economic_sync()
+    # Wrapped here (not inside run_economic_sync) to avoid a double row when
+    # APScheduler or the admin endpoint already wrapped the call.
+    from app.services.job_tracking import track_job
+    with track_job("macro_importer", "manual") as run:
+        res = run_economic_sync()
+        run.rows_written = len(res) if isinstance(res, dict) else None
     live_count     = sum(1 for v in res.values() if not v.get("is_fallback"))
     fallback_count = sum(1 for v in res.values() if v.get("is_fallback"))
     print(f"\n[SUCCESS] Macro Sync: {len(res)} indicators saved ({live_count} live, {fallback_count} fallback).")
