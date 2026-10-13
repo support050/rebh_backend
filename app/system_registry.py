@@ -658,6 +658,20 @@ SYSTEMS: List[Dict[str, Any]] = [
                        "engine_vintages moved to app/services/rebh_vintage_service.py "
                        "(same cron key, plus a CLI: python -m "
                        "app.services.rebh_vintage_service)."),
+            _i("fixed", "2026-10-13 · engine_vintages '100% quarantine' was a "
+                       "reporting conflation, not an engine failure. The runner "
+                       "counted fresh=False (statements past the pricing gate) as "
+                       "quarantined, so a routine Run-now logged '236 evaluated, "
+                       "236 in quarantine' while only ~11 rows actually failed the "
+                       "P0 guards. Staleness and guard-failure are now separate "
+                       "buckets (quarantined / stale) and the Rows column reads "
+                       "persisted snapshots. ROOT CAUSE of the staleness is data: "
+                       "most output/*_financials.json stop at Q1-2026 (period end "
+                       "2026-03-31 = 196d > 180d quarterly gate as of 2026-10-13); "
+                       "only ~18 companies have Q2 on disk. Re-ingest Q2/Q3 2026 "
+                       "XBRL, then re-sync R2 (scripts/upload_to_r2.py) so the "
+                       "Render container — which has no local output/ — stops "
+                       "reading stale R2 copies."),
             _i("note", "2026-10-13 · economy-rates reporting overhaul. Every scraper "
                        "in this system (sp500, treasury_gov, fred, sp500_pe, sp500_ey, "
                        "eurodollar, cmefedwatch, gurufocus) now returns "
@@ -816,7 +830,10 @@ SYSTEMS: List[Dict[str, Any]] = [
                "cron Sun–Thu 20:00", _DAILY, "cron", ["rebh_engine_vintages"],
                note="also POST /api/rebh/importers/run/vintages (trigger='manual', "
                     "same key) and the module CLI python -m "
-                    "app.services.rebh_vintage_service --limit N"),
+                    "app.services.rebh_vintage_service --limit N. Full-universe "
+                    "runs take ~6-7 min (236 companies). Rows column = snapshots "
+                    "persisted; the job reports quarantined (P0 guards) and stale "
+                    "(past the 180d/270d pricing gate) as SEPARATE buckets."),
             _j("filings_importer", "backend/app/services/rebh_importers_service.py",
                "cron Sun–Thu 19:45", _DAILY, "cron", ["company_official_filings"]),
             _j("corporate_actions_watcher", "backend/scripts/corporate_actions_watcher.py",

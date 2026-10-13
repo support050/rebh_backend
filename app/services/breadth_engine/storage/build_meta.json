@@ -1,15 +1,15 @@
 {
-  "built_at": "2026-10-07T18:44:04",
+  "built_at": "2026-10-13T19:39:33",
   "prices_csv": "db",
-  "prices_sha256": "db:prices@2026-10-07",
+  "prices_sha256": "db:prices@2026-10-13",
   "index_csv": "db",
-  "index_sha256": "db:prices@2026-10-07",
-  "rows_raw": 988815,
-  "rows_clean": 994068,
+  "index_sha256": "db:prices@2026-10-13",
+  "rows_raw": 989907,
+  "rows_clean": 995160,
   "symbols": 294,
   "symbols_in_universe": 275,
   "date_min": "2001-12-31",
-  "date_max": "2026-10-07",
+  "date_max": "2026-10-13",
   "events_detected": 11,
-  "seconds": 15.4
+  "seconds": 25.6
 }

@@ -53,7 +53,8 @@ def run_engine_vintages_job(limit: Optional[int] = None) -> Dict[str, Any]:
         if limit and limit > 0:
             companies = companies[:limit]
         processed = 0
-        quarantined = 0
+        quarantined = 0   # P0 accounting-guard failures (the engine's own verdict)
+        stale = 0         # statements older than the pricing gate — needs newer filings
         persisted = 0
         now_dt = datetime.now(timezone.utc)
         batch_id = f"batch_{now_dt.strftime('%Y%m%d_%H%M%S')}"
@@ -62,9 +63,17 @@ def run_engine_vintages_job(limit: Optional[int] = None) -> Dict[str, Any]:
             try:
                 payload = calculate_full_company_payload(c.symbol)
                 processed += 1
-                is_q = (not payload.fresh) or bool(payload.quarantine_reason)
-                if is_q:
+                # The engine keeps two distinct concepts — do not conflate them:
+                #   quarantine_reason ⇒ A=L+E / IS-plausibility guards failed (bad data)
+                #   fresh=False       ⇒ statements aged past the pricing gate (old data)
+                # Counting stale rows as "quarantined" made every routine run look
+                # like a 100% integrity failure (2026-10-13: 236/236 "quarantined"
+                # while only ~11 rows actually failed the P0 guards).
+                if payload.quarantine_reason:
                     quarantined += 1
+                elif not payload.fresh:
+                    stale += 1
+                is_q = bool(payload.quarantine_reason)
 
                 # Check if identical record exists in this batch
                 exists = db.query(RebhEngineVintage).filter(
@@ -95,8 +104,11 @@ def run_engine_vintages_job(limit: Optional[int] = None) -> Dict[str, Any]:
                 db.add(v_record)
                 persisted += 1
             except Exception as item_err:
+                # A hard computation error is its own bucket — count it alongside
+                # the P0 guards (the row never reaches the DB) but name it in the
+                # log so it cannot masquerade as an accounting-quarantine.
                 quarantined += 1
-                logger.debug(f"Skipping vintage snapshot for {c.symbol}: {item_err}")
+                logger.warning(f"Vintage snapshot failed for {c.symbol} (counted as blocked, not quarantined-by-guards): {item_err}")
 
         db.commit()
         now_str = now_dt.isoformat()
@@ -104,7 +116,9 @@ def run_engine_vintages_job(limit: Optional[int] = None) -> Dict[str, Any]:
         _VINTAGE_STATUS["status"] = "ok"
         _VINTAGE_STATUS["records_processed"] = processed
         _VINTAGE_STATUS["error"] = None
-        logger.info(f"✅ Engine Vintage Snapshot complete: {processed} evaluated, {persisted} persisted to DB, {quarantined} in quarantine.")
+        logger.info(
+            f"✅ Engine Vintage Snapshot complete: {processed} evaluated, {persisted} persisted to DB, "
+            f"{quarantined} quarantined (P0 guards), {stale} stale (past pricing gate).")
 
         # Rebuild the DB-backed universe snapshot so /peers + /universe reflect the new batch.
         universe_persisted = None
@@ -117,10 +131,15 @@ def run_engine_vintages_job(limit: Optional[int] = None) -> Dict[str, Any]:
 
         return {
             "status": "ok",
+            # "rows" is the key job_tracking._infer_rows reads for the Runbook
+            # Rows column — without it the tile shows "—" even on a green run
+            # (2026-10-13 fix; the other keys name the same work in prose).
+            "rows": persisted,
             "evaluated_companies": processed,
             "persisted_snapshots": persisted,
             "universe_snapshot": universe_persisted,
             "quarantined": quarantined,
+            "stale": stale,
             "timestamp": now_str
         }
     except Exception as e:
