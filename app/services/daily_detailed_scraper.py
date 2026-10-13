@@ -14,6 +14,24 @@ import os
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Selenium's urllib3 client that talks to the LOCAL chromedriver server defaults
+# to a 120s read timeout. On 2026-10-13 the Render run of market_reports died
+# exactly there — "HTTPConnectionPool(host='localhost', port=39099): Read timed
+# out. (read timeout=120)" — while Chrome was still loading the Tadawul page.
+# 300s sits above any legitimate command duration once page_load_strategy is
+# 'eager' (RemoteConnection.set_timeout() is deprecated/broken in Selenium 4.39,
+# so we set timeout on the driver's own ClientConfig after creation).
+_SELENIUM_CLIENT_TIMEOUT = 300
+
+
+def _apply_client_timeout(driver):
+    """Raise the per-driver HTTP read timeout away from the 120s default."""
+    try:
+        driver.command_executor._client_config.timeout = _SELENIUM_CLIENT_TIMEOUT
+    except Exception as e:
+        logger.warning(f"\u26a0\ufe0f Could not raise Selenium client timeout: {e}")
+    return driver
+
 def build_driver(headless=True):
     """
     إعداد متصفح كروم بنفس إعدادات السكريبت القديم
@@ -34,6 +52,12 @@ def build_driver(headless=True):
     logger.info(f"🔍 DEBUG: Render ChromeDriver exists = {os.path.exists(render_driver)}")
     
     options = Options()
+    
+    # 'eager': navigation resolves when the DOM is ready, not when every
+    # sub-resource finishes. The WebDriverWait(table) calls in the scrapers
+    # are what actually guard data readiness, so this only sheds the parts
+    # of the page load that were blowing the 120s chromedriver read timeout.
+    options.page_load_strategy = "eager"
     
     # إعدادات أساسية للاستقرار
     options.add_argument("--no-sandbox")
@@ -144,7 +168,7 @@ def build_driver(headless=True):
             service = Service(chromedriver_path)
             driver = webdriver.Chrome(service=service, options=options)
             logger.info("✅ Chrome WebDriver initialized successfully (via explicit path)")
-            return driver
+            return _apply_client_timeout(driver)
         except Exception as e:
             logger.warning(f"⚠️ Explicit ChromeDriver failed, falling back to manager: {e}")
 
@@ -158,7 +182,7 @@ def build_driver(headless=True):
         service = Service(_CACHED_CHROMEDRIVER_PATH)
         driver = webdriver.Chrome(service=service, options=options)
         logger.info("✅ Chrome WebDriver initialized successfully (via cached driver path)")
-        return driver
+        return _apply_client_timeout(driver)
     except Exception as e:
         logger.error(f"❌ All methods failed to initialize Chrome: {e}")
         raise

@@ -218,15 +218,31 @@ def fetch_fred_observations(
     return all_observations
 
 
-def scrape_fred_indicator(indicator_code: str) -> bool:
+def _job_result(code: str, ok: bool, rows: int = 0, error: str = "") -> dict:
+    """Return shape understood by job_tracking.with_result_handling:
+    'rows' feeds job_runs.rows_written; ok=False + stage_failures turns the
+    System Map entry red with the reason. Replaces the old bool return, which
+    made _infer_rows() give up (bools are explicitly skipped) so the Rows
+    column showed an em dash even when 75 records landed.
+    """
+    out: Dict[str, Any] = {"ok": bool(ok), "rows": int(rows)}
+    if not ok:
+        out["stage_failures"] = [{"stage": f"fred:{code}",
+                                  "error": (error or "failed")[:400]}]
+    return out
+
+
+def scrape_fred_indicator(indicator_code: str) -> dict:
     """
     Fetch and store historical data from the official FRED API for one indicator code.
     Uses bulk insert with existing-date check to avoid duplicating rows.
+    Returns {"ok": bool, "rows": n} (plus stage_failures on failure).
     """
     indicator_code = indicator_code.upper()
     if indicator_code not in FRED_SERIES_CONFIG:
         logger.error(f"Unknown indicator code: {indicator_code}")
-        return False
+        return _job_result(indicator_code, False, 0,
+                           f"unknown indicator code {indicator_code}")
 
     config = FRED_SERIES_CONFIG[indicator_code]
     series_id = config["series_id"]
@@ -267,7 +283,7 @@ def scrape_fred_indicator(indicator_code: str) -> bool:
 
         if not parsed_data:
             logger.info(f"ℹ️ {indicator_code}: already up-to-date (0 new records)")
-            return True
+            return _job_result(indicator_code, True, 0)
 
         # ── Atomic UPSERT ──
         # We target the (report_date, indicator_code) unique index by its
@@ -298,24 +314,30 @@ def scrape_fred_indicator(indicator_code: str) -> bool:
         db.execute(stmt)
         db.commit()
         logger.info(f"✅ {indicator_code}: processed {len(records_to_insert)} records via atomic UPSERT (new & revised values updated).")
-        return True
+        return _job_result(indicator_code, True, len(records_to_insert))
 
     except Exception as e:
         db.rollback()
         logger.error(f"DB error saving {indicator_code}: {e}", exc_info=True)
-        return False
+        return _job_result(indicator_code, False, 0, str(e))
     finally:
         db.close()
 
 
-def scrape_all_fred() -> Dict[str, bool]:
-    """Run all configured FRED indicators and return a status map."""
+def scrape_all_fred() -> Dict[str, Any]:
+    """Run all configured FRED indicators; returns an aggregate in the same
+    {ok, rows, ...} shape, with per-indicator detail under 'per_indicator'."""
     logger.info(f"Starting FRED API scrape for all {len(FRED_SERIES_CONFIG)} indicators...")
-    results = {}
+    results: Dict[str, Any] = {}
+    total = 0
+    all_ok = True
     for code in FRED_SERIES_CONFIG:
-        results[code] = scrape_fred_indicator(code)
+        res = scrape_fred_indicator(code)
+        results[code] = res
+        total += res.get("rows", 0)
+        all_ok = all_ok and bool(res.get("ok"))
         time.sleep(0.5)  # Respect FRED API rate limit (120 requests/minute)
-    return results
+    return {"ok": all_ok, "rows": total, "per_indicator": results}
 
 
 if __name__ == "__main__":
@@ -332,8 +354,8 @@ if __name__ == "__main__":
             sys.exit(2)
         results = {c: scrape_fred_indicator(c) for c in codes}
     else:
-        results = scrape_all_fred()
+        results = scrape_all_fred()["per_indicator"]
     print("\nSummary of FRED scraping:")
-    for code, ok in results.items():
-        print(f"  {'✅' if ok else '❌'} {code}")
-    sys.exit(0 if all(results.values()) else 1)
+    for code, res in results.items():
+        print(f"  {'✅' if res.get('ok') else '❌'} {code}: {res.get('rows', 0)} rows")
+    sys.exit(0 if all(r.get("ok") for r in results.values()) else 1)

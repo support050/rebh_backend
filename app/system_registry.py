@@ -422,7 +422,18 @@ SYSTEMS: List[Dict[str, Any]] = [
                "cron Sun–Thu 18:00 (Africa/Cairo)", _DAILY, "cron",
                writes=["substantial_shareholders", "net_short_positions",
                        "foreign_headrooms", "share_buybacks", "sbl_positions",
-                       "historical_reports"]),
+                       "historical_reports"],
+               note="2026-10-13 incident: Run Now showed 'Scraped 0 Substantial "
+                    "Shareholders records' — Selenium's urllib3 client to the local "
+                    "chromedriver hit its 120s read timeout while Chrome was still "
+                    "loading the Tadawul page, and the run was recorded green with "
+                    "0 rows. Fixed 2026-10-13: page_load_strategy='eager' + 300s "
+                    "client timeout in build_driver, read-timeout falls through to "
+                    "partial parse in market_reports_scraper, one fresh-driver retry "
+                    "per scraper, and main() now returns "
+                    "{ok, stage_failures, rows} so an all-zero run records as failed. "
+                    "Partial zeros stay success (some reports legitimately publish "
+                    "empty tables)."),
             _j("scraper:tasi_components", "backend/app/scrapers/daily_financial_indicators_scraper.py",
                "manual — Admin 'Daily Financial Indicators' button "
                "(POST /api/admin/system/run-scraper {\"scraper\":\"tasi\"})",
@@ -565,22 +576,32 @@ SYSTEMS: List[Dict[str, Any]] = [
                "cron Sun 19:30", _WEEKLY, "cron", [],
                note="verification importer — see the REBH system for what it checks"),
             _j("manual:eurodollar", "backend/app/scrapers/eurodollar_scraper.py",
-               "manual only — Admin button POST /api/economic-indicators/scrape/eurodollar-futures",
-               None, "manual", writes=["eurodollar_futures"], tracked=False,
+               "manual only — Admin button POST /api/economic-indicators/scrape/eurodollar-futures "
+               "or Run Now",
+               None, "manual", writes=["eurodollar_futures"], tracked=True,
                note="not scheduled on purpose: Investing.com returns 403 from "
-                    "datacenter IPs. The scrape endpoints are not wrapped by track_job, "
-                    "so nothing lands in job_runs for these."),
+                    "datacenter IPs. Since 2026-10-13 the Admin endpoint wraps the "
+                    "scrape in track_job('manual:eurodollar') and job_runner has a "
+                    "Run Now callable, so runs land in job_runs."),
             _j("manual:cme_fedwatch", "backend/app/scrapers/cmefedwatch_scraper.py",
-               "manual only — Admin button POST /api/economic-indicators/scrape/cme-fedwatch",
-               None, "manual", writes=["cme_fedwatch"], tracked=False,
-               note="not scheduled: QuikStrike returns an error page from server IPs. "
-                    "Needs Selenium."),
+               "manual only — Admin button POST /api/economic-indicators/scrape/cme-fedwatch "
+               "or Run Now",
+               None, "manual", writes=["cme_fedwatch"], tracked=True,
+               note="not scheduled: QuikStrike is flaky from server IPs. Since "
+                    "2026-10-13 both the Admin endpoint and Run Now record under "
+                    "track_job('manual:cme_fedwatch'); the scraper now returns "
+                    "{ok, rows} so rows_written is real, and a failed snapshot is "
+                    "recorded red instead of an empty success."),
             _j("manual:gurufocus", "backend/app/scrapers/gurufocus_scraper.py",
-               "manual only — Admin monthly buttons /scrape/SP500_EY and /scrape/SP500_PE",
-               None, "manual", writes=["economic_indicators"], tracked=False,
+               "manual only — Admin monthly buttons /scrape/SP500_EY and /scrape/SP500_PE "
+               "or Run Now",
+               None, "manual", writes=["economic_indicators"], tracked=True,
                note="un-scheduled from the monthly cron for RAM/CPU (headless Chrome). "
-                    "sp500_ey_scraper.py is the lighter alternative used by "
-                    "scraper_service.run_sp500_ey."),
+                    "Since 2026-10-13 tracked (Admin endpoints + Run Now via "
+                    "scheduler._gurufocus) and the driver comes from the shared "
+                    "daily_detailed_scraper.build_driver (page_load_strategy=eager, "
+                    "300s client timeout). sp500_ey_scraper.py is the lighter "
+                    "alternative used by scraper_service.run_sp500_ey."),
             _j("scraper:sp500_ey", "backend/app/scrapers/sp500_ey_scraper.py",
                "manual — POST /api/admin/system/run-scraper {\"scraper\":\"sp500_ey\"}",
                None, "manual", writes=["economic_indicators"], tracked=True,
@@ -619,6 +640,21 @@ SYSTEMS: List[Dict[str, Any]] = [
                note="`as_of` is a String; updated_at is the only real timestamp"),
         ],
         "issues": [
+            _i("note", "2026-10-13 · economy-rates reporting overhaul. Every scraper "
+                       "in this system (sp500, treasury_gov, fred, sp500_pe, sp500_ey, "
+                       "eurodollar, cmefedwatch, gurufocus) now returns "
+                       "{ok, rows, [stage_failures]} instead of a bare bool/None, so "
+                       "job_tracking.with_result_handling fills job_runs.rows_written "
+                       "(the System Map 'Rows' column was '—' because bools are skipped) "
+                       "and a 0-row/failed run records status='failed' (red) instead of "
+                       "an empty success. The three manual jobs became Run Now "
+                       "callables in scheduler.JOB_CALLABLES and their Admin scrape "
+                       "endpoints went through track_job, clearing the 'Untracked' "
+                       "state. gurufocus switched to the shared hardened build_driver. "
+                       "The 'Bad / Never' states seen for the other jobs simply mean "
+                       "job_runs has no row for that key yet — the table only shipped "
+                       "2026-10-11 and cron requires ENABLE_SCHEDULER=true on the "
+                       "Render background worker."),
             _i("note", "2026-10-12 · Bug 2 FIXED. GET /api/rebh/market-macro used to "
                        "read SaudiEconomicIndicator.report_date (does not exist on "
                        "app/models/saudi_macro.py — real columns are period:String / "
@@ -933,6 +969,21 @@ SYSTEMS: List[Dict[str, Any]] = [
                        "(breadth_* tables) and the old market_breadth aggregate used by "
                        "/Percent_of_Stocks_Above_MA. app/models/breadth.py says so in its "
                        "docstring. Do not merge them."),
+            _i("note", "2026-10-12 · Render deploy produced five 500s (breadth "
+                       "meta/events/series/today + auth/me) during a ~25s window "
+                       "while PG restarted ('FATAL: the database system is in "
+                       "recovery mode'). The reason they PERSISTED was NOT the pool: "
+                       "app/core/database.py already has pool_pre_ping=True + "
+                       "keepalives + pool_recycle=1800. It was "
+                       "app/core/cache_helpers.py:cache_read_through — its outer "
+                       "try wrapped Redis GET and the DB fetch together, so the "
+                       "OperationalError was logged as 'cache_error read' and the "
+                       "fallback RE-invoked fetch_func on the same poisoned "
+                       "session → PendingRollbackError → 500. FIXED 2026-10-13: "
+                       "only Redis ops are wrapped now; fetch errors propagate "
+                       "and get_db rolls the session back on exit. A PG restart "
+                       "still fails the in-flight request once — unavoidable — "
+                       "but it no longer double-fails."),
         ],
     },
 

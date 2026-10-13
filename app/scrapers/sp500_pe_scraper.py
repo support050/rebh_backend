@@ -55,13 +55,15 @@ def _fetch_multpl_pe() -> list:
     return records
 
 
-def scrape_sp500_pe(mode: str = "incremental") -> bool:
+def scrape_sp500_pe(mode: str = "incremental") -> dict:
     """
     Scrape S&P 500 TTM P/E from Multpl and upsert into sp500_history.pe_ratio.
 
     mode:
       incremental  - fetch only the last INCREMENTAL_LOOKBACK_MONTHS months (default)
       full         - fetch and upsert all available history
+
+    Returns {"ok": bool, "rows": updated+inserted} for job_tracking.
     """
     logger.info(f"[sp500_pe] Starting (mode={mode}) ...")
     db = SessionLocal()
@@ -79,7 +81,9 @@ def scrape_sp500_pe(mode: str = "incremental") -> bool:
 
         all_records = _fetch_multpl_pe()
         if not all_records:
-            return False
+            # Multpl served nothing — a source failure, not "up to date"
+            return {"ok": False, "rows": 0, "stage_failures": [
+                {"stage": "sp500_pe", "error": "Multpl returned no P/E rows"}]}
 
         # Incremental: keep only recent months
         if mode == "incremental":
@@ -89,7 +93,7 @@ def scrape_sp500_pe(mode: str = "incremental") -> bool:
 
         if not all_records:
             logger.info("   Nothing to upsert.")
-            return True
+            return {"ok": True, "rows": 0}
 
         # Build month -> first-of-month mapping
         # Multpl returns exact dates (e.g. Sep 25); normalise to 1st of month
@@ -127,12 +131,14 @@ def scrape_sp500_pe(mode: str = "incremental") -> bool:
 
         db.commit()
         logger.info(f"[sp500_pe] Done -- updated: {updated}, inserted stubs: {inserted}")
-        return True
+        return {"ok": True, "rows": updated + inserted,
+                "updated": updated, "inserted_stubs": inserted}
 
     except Exception as e:
         db.rollback()
         logger.error(f"[sp500_pe] Failed: {e}")
-        return False
+        return {"ok": False, "rows": 0, "stage_failures": [
+            {"stage": "sp500_pe", "error": str(e)[:400]}]}
     finally:
         db.close()
 

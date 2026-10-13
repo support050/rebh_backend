@@ -42,10 +42,16 @@ def _run(name: str, fn, *args, **kwargs) -> bool:
         with track_job(f"scraper:{name}", "manual") as run:
             result = fn(*args, **kwargs)
             with_result_handling(run, result)
-            ok = result if isinstance(result, bool) else bool(result)
-            if not ok and run.status is None:
-                run.status = "failed"
-                run.error_message = "scraper returned a falsy result"
+            if isinstance(result, dict):
+                # Dict-returning scrapers report honestly through
+                # with_result_handling (ok=False / status=failed → run.status
+                # becomes 'failed'). bool(dict) is always True — never use it.
+                ok = run.status != "failed"
+            else:
+                ok = result if isinstance(result, bool) else bool(result)
+                if not ok and run.status is None:
+                    run.status = "failed"
+                    run.error_message = "scraper returned a falsy result"
         _record(name, ok)
         logger.info(f"  {'✅' if ok else '⚠️'} {name}: {'ok' if ok else 'returned falsy'}")
         return ok

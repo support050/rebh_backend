@@ -22,6 +22,28 @@ from app.core.redis import redis_cache
 # Configure logging
 logger = logging.getLogger(__name__)
 
+
+def _start_tracked(job_key: str, fn, *args, **kwargs) -> None:
+    """Run a scrape in a daemon thread, recorded in job_runs under job_key.
+
+    Before 2026-10-13 these endpoints fired bare threads: a scrape started
+    from the Admin buttons never appeared in the Runbook, so jobs showed
+    'Never recorded' / 'Untracked' even right after a successful run. The
+    keys here are the same ones system_registry.py lists, so the Runbook and
+    job_runs agree. track_job owns a short-lived session and never re-raises
+    tracking failures; the try/except here still records a crashed scraper.
+    """
+    from app.services.job_tracking import track_job, with_result_handling
+
+    def _body():
+        try:
+            with track_job(job_key, "manual") as run:
+                with_result_handling(run, fn(*args, **kwargs))
+        except Exception as e:
+            logger.error(f"tracked scrape {job_key} crashed: {e}", exc_info=True)
+
+    threading.Thread(target=_body, daemon=True).start()
+
 def fetch_sp500_db(db: Session, start_date, end_date, limit):
     query = db.query(SP500History.trade_date, SP500History.close, SP500History.pe_ratio)
     if start_date:
@@ -56,16 +78,8 @@ async def get_sp500_history(
 @router.get("/scrape/SP500")
 def trigger_scrape_sp500(_: bool = Depends(verify_internal_key)):
     from app.scrapers.sp500_scraper import scrape_sp500
-    
-    def scrape_with_error_handling():
-        try:
-            scrape_sp500()
-            logger.info("SP500 scraping completed successfully")
-        except Exception as e:
-            logger.error(f"SP500 scraping failed: {e}")
-    
-    thread = threading.Thread(target=scrape_with_error_handling, daemon=True)
-    thread.start()
+
+    _start_tracked("sp500", scrape_sp500)
     return {"message": "Scraping started for S&P 500 in background"}
 
 def fetch_yield_curve_db(db: Session, start_date, end_date, limit):
@@ -121,31 +135,15 @@ async def get_yield_curve(
 @router.get("/scrape/yield-curve")
 def trigger_scrape_yield_curve(_: bool = Depends(verify_internal_key)):
     from app.scrapers.treasury_gov_scraper import scrape_treasury_gov
-    
-    def scrape_with_error_handling():
-        try:
-            scrape_treasury_gov(mode="incremental")
-            logger.info("Treasury yield curve scraping completed successfully (Treasury.gov)")
-        except Exception as e:
-            logger.error(f"Treasury yield curve scraping failed: {e}")
-    
-    thread = threading.Thread(target=scrape_with_error_handling, daemon=True)
-    thread.start()
+
+    _start_tracked("treasury_gov", scrape_treasury_gov, mode="incremental")
     return {"message": "Scraping started for US Treasury Yield Curve (Treasury.gov) in background"}
 
 @router.get("/scrape/treasury-gov")
 def trigger_scrape_treasury_gov(mode: str = Query("incremental", description="incremental | backfill_recent | backfill"), _: bool = Depends(verify_internal_key)):
     from app.scrapers.treasury_gov_scraper import scrape_treasury_gov
-    
-    def scrape_with_error_handling():
-        try:
-            scrape_treasury_gov(mode)
-            logger.info(f"Treasury.gov CSV scraping completed successfully (mode={mode})")
-        except Exception as e:
-            logger.error(f"Treasury.gov CSV scraping failed (mode={mode}): {e}")
-    
-    thread = threading.Thread(target=scrape_with_error_handling, daemon=True)
-    thread.start()
+
+    _start_tracked("treasury_gov", scrape_treasury_gov, mode)
     return {"message": f"Treasury.gov CSV scraper started (mode={mode}). This fetches all maturities and fills missing days."}
 
 @router.get("/clear-cache")
@@ -163,31 +161,15 @@ async def clear_yield_cache():
 @router.get("/scrape/eurodollar-futures")
 def trigger_scrape_eurodollar(_: bool = Depends(verify_internal_key)):
     from app.scrapers.eurodollar_scraper import scrape_eurodollar_futures
-    
-    def scrape_with_error_handling():
-        try:
-            scrape_eurodollar_futures(save_db=True, force=True)
-            logger.info("Eurodollar futures scraping completed successfully")
-        except Exception as e:
-            logger.error(f"Eurodollar futures scraping failed: {e}")
-    
-    thread = threading.Thread(target=scrape_with_error_handling, daemon=True)
-    thread.start()
+
+    _start_tracked("manual:eurodollar", scrape_eurodollar_futures, save_db=True, force=True)
     return {"message": "Scraping started for Eurodollar Futures (Investing.com) in background"}
 
 @router.get("/scrape/sp500-pe")
 def trigger_scrape_sp500_pe(_: bool = Depends(verify_internal_key)):
     from app.scrapers.sp500_pe_scraper import scrape_sp500_pe
-    
-    def scrape_with_error_handling():
-        try:
-            scrape_sp500_pe()
-            logger.info("S&P 500 PE Ratio scraping completed successfully")
-        except Exception as e:
-            logger.error(f"S&P 500 PE Ratio scraping failed: {e}")
-    
-    thread = threading.Thread(target=scrape_with_error_handling, daemon=True)
-    thread.start()
+
+    _start_tracked("sp500_pe", scrape_sp500_pe)
     return {"message": "S&P 500 PE Ratio scraper started in background"}
 
 # ──────────────────── CME FedWatch ────────────────────
@@ -195,16 +177,8 @@ def trigger_scrape_sp500_pe(_: bool = Depends(verify_internal_key)):
 @router.get("/scrape/cme-fedwatch")
 def trigger_scrape_cmefedwatch(_: bool = Depends(verify_internal_key)):
     from app.scrapers.cmefedwatch_scraper import scrape_cme_fedwatch
-    
-    def scrape_with_error_handling():
-        try:
-            scrape_cme_fedwatch(force=True)
-            logger.info("CME FedWatch scraping completed successfully")
-        except Exception as e:
-            logger.error(f"CME FedWatch scraping failed: {e}")
-    
-    thread = threading.Thread(target=scrape_with_error_handling, daemon=True)
-    thread.start()
+
+    _start_tracked("manual:cme_fedwatch", scrape_cme_fedwatch, force=True)
     return {"message": "CME FedWatch scraper started in background"}
 
 
@@ -230,13 +204,6 @@ def get_cme_fedwatch_latest(db: Session = Depends(get_db)):
 
 @router.get("/scrape/{indicator_code}")
 def trigger_scrape_specific(indicator_code: str, mode: str = Query("update", description="update or historical"), _: bool = Depends(verify_internal_key)):
-    def scrape_with_error_handling(scraper_func, *args):
-        try:
-            scraper_func(*args)
-            logger.info(f"Scraping for {indicator_code} completed successfully")
-        except Exception as e:
-            logger.error(f"Scraping for {indicator_code} failed: {e}")
-    
     if indicator_code.upper() == "SP500_PE":
         from app.scrapers.gurufocus_scraper import scrape_gurufocus_indicator
         
@@ -245,8 +212,7 @@ def trigger_scrape_specific(indicator_code: str, mode: str = Query("update", des
         guru_mode = "incremental" if mode == "update" else "full"
         max_pages = 3 if guru_mode == "incremental" else None
         
-        thread = threading.Thread(target=scrape_with_error_handling, args=(scrape_gurufocus_indicator, url, indicator_code.upper(), guru_mode, max_pages), daemon=True)
-        thread.start()
+        _start_tracked("manual:gurufocus", scrape_gurufocus_indicator, url, indicator_code.upper(), guru_mode, max_pages)
         return {"message": f"GuruFocus Scraping started for {indicator_code} in background (mode={guru_mode})"}
     
     if indicator_code.upper() == "SP500_EY":
@@ -258,28 +224,22 @@ def trigger_scrape_specific(indicator_code: str, mode: str = Query("update", des
         guru_mode = "incremental" if mode == "update" else "full"
         max_pages = 3 if guru_mode == "incremental" else None
         
-        thread = threading.Thread(target=scrape_with_error_handling, args=(scrape_gurufocus_indicator, url, indicator_code.upper(), guru_mode, max_pages), daemon=True)
-        thread.start()
+        _start_tracked("manual:gurufocus", scrape_gurufocus_indicator, url, indicator_code.upper(), guru_mode, max_pages)
         return {"message": f"GuruFocus Scraping started for {indicator_code} in background (mode={guru_mode})"}
         
     from app.scrapers.fred_scraper import scrape_fred_indicator
-    thread = threading.Thread(target=scrape_with_error_handling, args=(scrape_fred_indicator, indicator_code.upper()), daemon=True)
-    thread.start()
+    # tracked under the SAME fred:<CODE> key the cron and Run Now use, so an
+    # Admin-button scrape shows up in the Runbook entry for that indicator
+    _start_tracked(f"fred:{indicator_code.upper()}", scrape_fred_indicator, indicator_code.upper())
     return {"message": f"Scraping started for {indicator_code} in background"}
 
 @router.get("/scrape")
 def trigger_scrape_all(_: bool = Depends(verify_internal_key)):
     from app.scrapers.fred_scraper import scrape_all_fred
-    
-    def scrape_with_error_handling():
-        try:
-            scrape_all_fred()
-            logger.info("All FRED indicators scraping completed successfully")
-        except Exception as e:
-            logger.error(f"All FRED indicators scraping failed: {e}")
-    
-    thread = threading.Thread(target=scrape_with_error_handling, daemon=True)
-    thread.start()
+
+    # aggregate run of every FRED series — its own key so it never clutters
+    # the per-indicator entries
+    _start_tracked("fred:ALL", scrape_all_fred)
     return {"message": "Scraping started for all indicators in background"}
 
 # ──────────────────── Eurodollar Futures ────────────────────

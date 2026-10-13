@@ -43,39 +43,65 @@ def _run_scraper_with_own_driver(scrape_fn, save_fn, name):
 
     Each scraper gets a fresh driver that is quit immediately after,
     preventing Chrome from accumulating memory over 17+ minutes.
+
+    Returns (rows_saved, error_or_None). A first pass that yields 0 records
+    (e.g. the 2026-10-13 chromedriver read-timeout) is retried ONCE with a
+    fresh driver — Render's slowness is bursty and most transient failures
+    succeed on the second attempt.
     """
-    driver = None
-    try:
-        logger.info(f"Initializing ChromeDriver for {name}...")
-        driver = _create_driver()
-        logger.info(f"Scraping {name}...")
-
-        data = scrape_fn(driver)
-        logger.info(f"Scraped {len(data)} {name} records. Closing ChromeDriver...")
-
-        # Quit driver BEFORE saving to DB (frees ~300MB)
-        driver.quit()
+    max_attempts = 2
+    data = []
+    error = None
+    for attempt in range(1, max_attempts + 1):
         driver = None
-        gc.collect()
+        try:
+            logger.info(f"Initializing ChromeDriver for {name} (attempt {attempt}/{max_attempts})...")
+            driver = _create_driver()
+            logger.info(f"Scraping {name}...")
 
-        # Now save to DB without Chrome in memory
-        save_fn(data)
+            data = scrape_fn(driver) or []
+            logger.info(f"Scraped {len(data)} {name} records. Closing ChromeDriver...")
 
-        # Free the data list
-        del data
-        gc.collect()
-
-    except Exception as e:
-        logger.error(f"Error during {name}: {e}")
-    finally:
-        if driver:
-            try:
-                driver.quit()
-            except Exception:
-                pass
+            # Quit driver BEFORE saving to DB (frees ~300MB)
+            driver.quit()
             driver = None
             gc.collect()
 
+            if data:
+                error = None
+                break
+            error = f"attempt {attempt}: scraper returned 0 records"
+            if attempt < max_attempts:
+                logger.warning(f"{name}: 0 records — retrying once with a fresh driver...")
+
+        except Exception as e:
+            error = f"attempt {attempt}: {type(e).__name__}: {e}"
+            logger.error(f"Error during {name} ({error})")
+            data = []
+            if attempt < max_attempts:
+                logger.warning(f"{name}: failed — retrying once with a fresh driver...")
+
+        finally:
+            if driver:
+                try:
+                    driver.quit()
+                except Exception:
+                    pass
+                driver = None
+                gc.collect()
+
+    rows = 0
+    if data:
+        # Save to DB without Chrome in memory
+        save_fn(data)
+        rows = len(data)
+    else:
+        logger.error(f"{name}: still empty after {max_attempts} attempts — nothing saved.")
+
+    # Free the data list
+    del data
+    gc.collect()
+    return rows, (None if rows else error)
 
 def save_substantial_shareholders(data):
     if not data:
@@ -239,17 +265,38 @@ def main():
         (scrape_sbl_positions,            save_sbl_positions,            "SBL Positions"),
     ]
 
+    per_scraper = {}
+    stage_failures = []
     for scrape_fn, save_fn, name in tasks:
-        _run_scraper_with_own_driver(scrape_fn, save_fn, name)
+        rows, err = _run_scraper_with_own_driver(scrape_fn, save_fn, name)
+        per_scraper[name] = rows
+        if err:
+            stage_failures.append({"stage": name, "error": err})
 
+    total = sum(per_scraper.values())
     logger.info("=" * 50)
-    logger.info("Market Reports Update finished.")
+    logger.info(f"Market Reports Update finished. Rows per scraper: {per_scraper} (total {total}).")
     logger.info("=" * 50)
+
+    # Honesty for job_runs: a run where EVERY scraper produced nothing is a
+    # failure, not a silent success (the 2026-10-13 Run Now showed green with
+    # 0 rows saved). Partial zeros stay success — some reports legitimately
+    # publish empty tables — but the reasons are logged per stage above.
+    # This shape is read by job_tracking.with_result_handling (ok/stage_failures)
+    # and the total feeds rows_written via the "rows" key.
+    ok = total > 0
+    if not ok:
+        stage_failures.append({
+            "stage": "all_scrapers",
+            "error": "every scraper returned 0 rows — nothing was saved",
+        })
+    return {"ok": ok, "stage_failures": stage_failures, "rows": total,
+            "per_scraper": per_scraper}
 
 
 if __name__ == "__main__":
     # Tracking lives here, not inside main(), so the same job is never recorded
     # twice when APScheduler or the admin endpoint already wrapped its own call.
-    from app.services.job_tracking import track_job
-    with track_job("market_reports", "manual"):
-        main()
+    from app.services.job_tracking import track_job, with_result_handling
+    with track_job("market_reports", "manual") as run:
+        with_result_handling(run, main())

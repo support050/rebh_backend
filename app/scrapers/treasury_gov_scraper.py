@@ -121,7 +121,7 @@ def fetch_treasury_csv(year: int, month: int) -> list[dict]:
     return []
 
 
-def scrape_treasury_gov(mode: str = "incremental"):
+def scrape_treasury_gov(mode: str = "incremental") -> dict:
     """
     Fetch all maturity data from Treasury.gov
     and UPDATE existing rows or INSERT new rows in the DB.
@@ -130,6 +130,10 @@ def scrape_treasury_gov(mode: str = "incremental"):
       - "incremental": Current month + previous month.
       - "backfill_recent": Last 5 years.
       - "backfill": All months from 1990 to today.
+
+    Returns {"ok": bool, "rows": n_written, "updated": .., "skipped": ..} —
+    the shape job_tracking.with_result_handling turns into rows_written / a
+    red Runbook entry (the old bool return left the Rows column empty).
     """
     logger.info(f"🏛️ Treasury.gov full scraper started (mode={mode})")
 
@@ -171,11 +175,13 @@ def scrape_treasury_gov(mode: str = "incremental"):
         total_updated = 0
         total_inserted = 0
         total_skipped = 0
+        months_with_data = 0
 
         for year, month in months_to_fetch:
             records = fetch_treasury_csv(year, month)
             if not records:
                 continue
+            months_with_data += 1
 
             from sqlalchemy.dialects.postgresql import insert as pg_insert
 
@@ -206,12 +212,21 @@ def scrape_treasury_gov(mode: str = "incremental"):
             time.sleep(0.5)  # Be polite to Treasury servers
 
         logger.info(f"✅ Treasury.gov scraper done: {total_inserted} inserted, {total_updated} updated, {total_skipped} skipped (no changes)")
-        return True
+        if months_with_data == 0:
+            # Every monthly file was missing/blocked (fetch_treasury_csv
+            # returns [] on non-200) — that is a source failure, not "fresh".
+            return {"ok": False, "rows": 0, "stage_failures": [{
+                "stage": "treasury_gov",
+                "error": f"Treasury.gov served no data for any of the "
+                        f"{len(months_to_fetch)} requested month(s)"}]}
+        return {"ok": True, "rows": total_updated + total_inserted,
+                "updated": total_updated, "skipped": total_skipped}
 
     except Exception as e:
         db.rollback()
         logger.error(f"❌ Treasury.gov scraper error: {e}", exc_info=True)
-        return False
+        return {"ok": False, "rows": 0, "stage_failures": [
+            {"stage": "treasury_gov", "error": str(e)[:400]}]}
     finally:
         db.close()
 

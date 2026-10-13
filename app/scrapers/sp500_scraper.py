@@ -77,7 +77,10 @@ def fetch_sp500_yahoo(start_date: str = "1990-01-01", max_retries: int = 3):
             logger.error(f"   ❌ Failed to parse Yahoo Finance response: {e}")
             return []
 
-def scrape_sp500(mode: str = "incremental"):
+def scrape_sp500(mode: str = "incremental") -> dict:
+    """Returns {"ok": bool, "rows": n_new} — the shape job_tracking.
+    with_result_handling understands (bools left rows_written NULL, which is
+    why the System Map Rows column showed an em dash)."""
     logger.info(f"Fetching S&P 500 history from Yahoo Finance (mode={mode})...")
 
     db = SessionLocal()
@@ -102,8 +105,10 @@ def scrape_sp500(mode: str = "incremental"):
         records = fetch_sp500_yahoo(start_date=start_date)
 
         if not records:
+            # Source came back empty — that is a fetch failure, not "up to date"
             logger.warning("⚠️ No data fetched. Aborting.")
-            return False
+            return {"ok": False, "rows": 0, "stage_failures": [
+                {"stage": "sp500", "error": "Yahoo Finance returned no rows"}]}
 
         # ✅ Get existing dates to avoid duplicates
         existing_dates = {
@@ -130,12 +135,13 @@ def scrape_sp500(mode: str = "incremental"):
         else:
             logger.info("ℹ️ Already up to date — no new records")
 
-        return True
+        return {"ok": True, "rows": len(new_objs)}
 
     except Exception as e:
         db.rollback()
         logger.error(f"❌ Error saving S&P 500 data: {e}")
-        return False
+        return {"ok": False, "rows": 0, "stage_failures": [
+            {"stage": "sp500", "error": str(e)[:400]}]}
     finally:
         db.close()
 

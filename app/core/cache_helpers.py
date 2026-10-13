@@ -227,36 +227,60 @@ async def cache_read_through(
     
     Returns:
         Cached or fetched data
+
+    Error discipline (2026-10-12, after the Render PG-restart 500s):
+    ONLY Redis operations are wrapped in try/except. A fetch_func failure
+    propagates as-is. The previous shape wrapped the DB fetch in the same
+    catch-all as the Redis read and then RE-INVOKED fetch_func on the same
+    session — after a mid-query connection drop that second execute always
+    raised PendingRollbackError (invalid transaction), turning a transient
+    PG restart into a 500 instead of one clean, retryable error.
     """
+    # 1. Try to get from cache — a broken cache must not mask or redo a DB read.
+    cache_available = True
     try:
-        # 1. Try to get from cache
         cached_value = await redis_cache.get(key)
-        if cached_value is not None:
-            logger.info(
-                "cache_hit",
-                extra={
-                    "key": key,
-                    "ttl": ttl
-                }
-            )
-            return cached_value
-        
-        # 2. Cache miss - fetch from DB / service
+    except Exception as cache_error:
+        cache_available = False
+        cached_value = None
+        logger.warning(
+            "cache_error",
+            extra={
+                "key": key,
+                "operation": "read",
+                "error": str(cache_error)
+            }
+        )
+
+    if cached_value is not None:
         logger.info(
-            "cache_miss",
+            "cache_hit",
             extra={
                 "key": key,
                 "ttl": ttl
             }
         )
-        if inspect.iscoroutinefunction(fetch_func):
-            result = await fetch_func(*args, **kwargs)
-        else:
-            result = fetch_func(*args, **kwargs)
-            if inspect.isawaitable(result):
-                result = await result
-        
-        # 3. Set in cache
+        return cached_value
+
+    # 2. Cache miss - fetch from DB / service. NO try/except here on purpose:
+    #    the caller's get_db dependency rolls the session back when the
+    #    exception propagates, so the next request starts from a clean state.
+    logger.info(
+        "cache_miss",
+        extra={
+            "key": key,
+            "ttl": ttl
+        }
+    )
+    if inspect.iscoroutinefunction(fetch_func):
+        result = await fetch_func(*args, **kwargs)
+    else:
+        result = fetch_func(*args, **kwargs)
+        if inspect.isawaitable(result):
+            result = await result
+
+    # 3. Set in cache — a set failure never invalidates a good fetch.
+    if cache_available:
         try:
             await redis_cache.set(key, result, expire=ttl)
             logger.info(
@@ -275,26 +299,8 @@ async def cache_read_through(
                     "error": str(cache_set_error)
                 }
             )
-        
-        return result
-        
-    except Exception as cache_error:
-        # Redis error - fall back to DB without error
-        logger.warning(
-            "cache_error",
-            extra={
-                "key": key,
-                "operation": "read",
-                "error": str(cache_error)
-            }
-        )
-        # Execute fetch_func without caching
-        if inspect.iscoroutinefunction(fetch_func):
-            return await fetch_func(*args, **kwargs)
-        res = fetch_func(*args, **kwargs)
-        if inspect.isawaitable(res):
-            return await res
-        return res
+
+    return result
 
 
 # ============================================================================

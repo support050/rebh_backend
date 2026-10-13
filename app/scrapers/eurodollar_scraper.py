@@ -246,7 +246,9 @@ def scrape_eurodollar_futures(
     save_db: bool = False,
     print_results: bool = True,
     force: bool = False,
-) -> Optional[list[dict]]:
+) -> dict:
+    """Returns {"ok": bool, "rows": n} for job_tracking (the old Optional[list]
+    return was neither bool nor dict, so rows_written stayed NULL)."""
     logger.info("=" * 60)
     logger.info("🚀 Eurodollar Futures Scraper [Cleaned v3]")
     logger.info(f"   التاريخ: {date.today()}")
@@ -264,7 +266,7 @@ def scrape_eurodollar_futures(
                 ).count()
                 if existing_count > 0:
                     logger.info(f"ℹ️ تم السحب مسبقاً اليوم ({date.today()}). يوجد {existing_count} سجل. استخدم --force لإعادة السحب.")
-                    return None
+                    return {"ok": True, "rows": 0, "skipped": "already scraped today"}
             finally:
                 _db.close()
         except ImportError:
@@ -274,7 +276,10 @@ def scrape_eurodollar_futures(
 
     if not records:
         logger.error("❌ فشل السحب!")
-        return None
+        return {"ok": False, "rows": 0, "stage_failures": [{
+            "stage": "eurodollar",
+            "error": "Investing.com served no parseable snapshot "
+                     "(403-from-datacenter known failure mode)"}]}
 
     logger.info(f"\n✅ تم سحب {len(records)} عقد بنجاح!")
 
@@ -284,10 +289,16 @@ def scrape_eurodollar_futures(
         save_csv(records, output_csv)
     if output_json:
         save_json(records, output_json)
+    db_ok = True
     if save_db:
-        upsert_db(records)
+        db_ok = upsert_db(records)
 
-    return records
+    out: dict = {"ok": bool(db_ok), "rows": len(records) if (save_db and db_ok) else 0}
+    if save_db and not db_ok:
+        out["stage_failures"] = [{
+            "stage": "eurodollar_db",
+            "error": f"DB upsert failed for {len(records)} parsed rows (see log)"}]
+    return out
 
 # ─── CLI ──────────────────────────────────────────────────────────────────────
 if __name__ == "__main__":
@@ -319,4 +330,4 @@ if __name__ == "__main__":
         print_results=not args.quiet,
         force=args.force,
     )
-    sys.exit(0 if result else 1)
+    sys.exit(0 if result.get("ok") else 1)

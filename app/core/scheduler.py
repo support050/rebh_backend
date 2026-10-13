@@ -285,6 +285,66 @@ def _importer(fn_name: str) -> Callable[[], Any]:
     return _run
 
 
+def _with_one_retry(fn: Callable[[], Any]) -> Any:
+    """Run a dict-returning scraper once, retry once on failure.
+
+    These manual jobs are the ones blocked/served slowly by their sources
+    (Investing.com 403s, QuikStrike error pages, GuruFocus behind Cloudflare +
+    headless Chrome). Render's slowness is bursty, so one retry with fresh
+    process state converts most transient failures without doubling the
+    worst-case runtime. Failure honesty comes from the dict shape itself.
+    """
+    result = fn()
+    if isinstance(result, dict) and not result.get("ok"):
+        logger.warning("  🔁 first attempt failed, retrying once…")
+        result = fn()
+    return result
+
+
+def _eurodollar():
+    return _with_one_retry(lambda: __import__(
+        "app.scrapers.eurodollar_scraper", fromlist=["scrape_eurodollar_futures"]
+    ).scrape_eurodollar_futures(save_db=True, force=True, print_results=False))
+
+
+def _cme_fedwatch():
+    return _with_one_retry(lambda: __import__(
+        "app.scrapers.cmefedwatch_scraper", fromlist=["scrape_cme_fedwatch"]
+    ).scrape_cme_fedwatch(force=True))
+
+
+_GURUFOCUS_URLS = {
+    "SP500_EY": "https://www.gurufocus.com/economic_indicators/151/sp-500-earnings-yield",
+    "SP500_PE": "https://www.gurufocus.com/economic_indicators/57/sp-500-pe-ratio",
+}
+
+
+def _gurufocus():
+    """Both GuruFocus series, incrementally, each with one retry; aggregates
+    into the single {ok, rows, stage_failures} shape job_tracking reads."""
+    mod = __import__(
+        "app.scrapers.gurufocus_scraper", fromlist=["scrape_gurufocus_indicator"]
+    )
+    per: Dict[str, Any] = {}
+    total = 0
+    failures = []
+    for code, url in _GURUFOCUS_URLS.items():
+        res = _with_one_retry(
+            lambda u=url, c=code: mod.scrape_gurufocus_indicator(u, c, "incremental")
+        )
+        if not isinstance(res, dict):  # defensive: unknown return shape = failed
+            res = {"ok": False, "rows": 0,
+                  "stage_failures": [{"stage": f"gurufocus:{code}",
+                                      "error": "scraper returned no result dict"}]}
+        per[code] = res
+        total += int(res.get("rows") or 0)
+        failures.extend(res.get("stage_failures") or [])
+    out: Dict[str, Any] = {"ok": not failures, "rows": total, "per_indicator": per}
+    if failures:
+        out["stage_failures"] = failures
+    return out
+
+
 JOB_CALLABLES: Dict[str, Callable[[], Any]] = {
     # scrapers (steps of the daily / weekly / monthly groups)
     "sp500": _sp500,
@@ -305,6 +365,12 @@ JOB_CALLABLES: Dict[str, Callable[[], Any]] = {
     "filings_importer": _importer("run_filings_importer"),
     "engine_vintages": _importer("run_engine_vintages_job"),
     "breadth_daily": _breadth_daily_body,
+    # economy-rates manual jobs — Run Now-able and tracked in job_runs under
+    # the same keys the registry lists (deliberately NOT on any cron: their
+    # sources block datacenter IPs / need headless Chrome)
+    "manual:eurodollar": _eurodollar,
+    "manual:cme_fedwatch": _cme_fedwatch,
+    "manual:gurufocus": _gurufocus,
 }
 
 # Human labels, so refactoring the group functions did not change the logs.
@@ -326,12 +392,20 @@ JOB_LABELS: Dict[str, str] = {
     "filings_importer": "Filings Importer",
     "engine_vintages": "Engine Vintage Snapshot",
     "breadth_daily": "Market Breadth Daily Engine",
+    "manual:eurodollar": "Eurodollar Futures (Investing.com)",
+    "manual:cme_fedwatch": "CME FedWatch (QuikStrike)",
+    "manual:gurufocus": "GuruFocus (SP500 EY + SP500 PE)",
 }
 
 # Jobs whose output is served through a Redis cache. The cron groups clear it
 # once at the end of the group; a single manual run has to clear it too, or the
 # admin sees stale numbers right after a successful Run Now.
-ECONOMIC_CACHE_JOBS: Tuple[str, ...] = DAILY_SCRAPER_KEYS + WEEKLY_SCRAPER_KEYS + MONTHLY_SCRAPER_KEYS
+# The three manual:* keys serve economic-indicator / eurodollar / fedwatch
+# caches as well, so they join the clear list even though no cron fires them.
+MANUAL_ECONOMIC_KEYS: Tuple[str, ...] = (
+    "manual:eurodollar", "manual:cme_fedwatch", "manual:gurufocus",
+)
+ECONOMIC_CACHE_JOBS: Tuple[str, ...] = DAILY_SCRAPER_KEYS + WEEKLY_SCRAPER_KEYS + MONTHLY_SCRAPER_KEYS + MANUAL_ECONOMIC_KEYS
 
 
 def _safe_job(key: str) -> None:

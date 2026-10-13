@@ -4,6 +4,7 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
+from selenium.common.exceptions import TimeoutException
 from bs4 import BeautifulSoup
 import time
 from datetime import datetime, timedelta
@@ -15,9 +16,16 @@ from app.models.economic_indicators import EconomicIndicator
 
 logger = logging.getLogger(__name__)
 
-def scrape_gurufocus_indicator(url: str, indicator_code: str, mode: str = "incremental", max_pages: int = None):
+def _guru_fail(error: str) -> dict:
+    """Failure shape understood by job_tracking.with_result_handling."""
+    return {"ok": False, "rows": 0, "stage_failures": [
+        {"stage": "gurufocus", "error": error[:400]}]}
+
+
+def scrape_gurufocus_indicator(url: str, indicator_code: str, mode: str = "incremental", max_pages: int = None) -> dict:
     """
     Generic scraper for GuruFocus indicators using Selenium.
+    Returns {"ok": bool, "rows": n_written} for job_tracking.
     
     mode:
       - "incremental": سحب أحدث البيانات فقط (آخر 3 صفحات ≈ شهرين)
@@ -32,18 +40,27 @@ def scrape_gurufocus_indicator(url: str, indicator_code: str, mode: str = "incre
             logger.info("📋 وضع full: سيتم سحب كل الصفحات التاريخية")
     logger.info(f"🚀 Starting GuruFocus Scraper for {indicator_code} (mode={mode})...")
 
-    options = Options()
-    options.add_argument("--headless")
-    options.add_argument("--disable-gpu")
-    options.add_argument("--no-sandbox")
-    options.add_argument("--window-size=1920,1080")
-    # Add User Agent to prevent basic bot blocking
-    options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
-    
-    driver = webdriver.Chrome(options=options)
+    # 2026-10-13: use the shared hardened driver — page_load_strategy='eager'
+    # + 300s chromedriver client timeout + Render Chrome/Driver paths
+    # (app/services/daily_detailed_scraper.build_driver). The old inline
+    # Options() relied on Selenium Manager's own Chrome discovery with the
+    # default 'normal' load strategy, which is exactly the combination that
+    # tripped 120s read timeouts on the other Selenium jobs.
+    from app.services.daily_detailed_scraper import build_driver
+    driver = build_driver(headless=True)
+    driver.set_page_load_timeout(60)
+    driver.set_script_timeout(30)
     
     try:
-        driver.get(url)
+        try:
+            driver.get(url)
+        except TimeoutException:
+            logger.warning("⚠️ Page load timed out, parsing whatever rendered...")
+        except Exception as e:
+            # urllib3 ReadTimeoutError is neither TimeoutException nor
+            # WebDriverException — do not abort; the WebDriverWait below
+            # decides whether the table actually appeared.
+            logger.warning(f"Navigation error ({type(e).__name__}: {e}), attempting partial parse...")
         logger.info("⏳ Waiting for the historical data table to load...")
         
         # Wait until the history table is present (Checking for rows)
@@ -220,7 +237,7 @@ def scrape_gurufocus_indicator(url: str, indicator_code: str, mode: str = "incre
                     
         if not data_records:
             logger.warning("⚠️ No valid records parsed from table.")
-            return False
+            return _guru_fail("no valid records parsed from the GuruFocus page")
             
         logger.info(f"✅ Successfully parsed {len(data_records)} records.")
         
@@ -285,14 +302,14 @@ def scrape_gurufocus_indicator(url: str, indicator_code: str, mode: str = "incre
             
             db.commit()
             logger.info(f"💾 Inserted {len(new_objs)} NEW records. Updated YOY for {updated_count} existing records.")
+            return {"ok": True, "rows": len(new_objs) + updated_count,
+                    "inserted": len(new_objs), "yoy_updated": updated_count}
         finally:
             db.close()
-            
-        return True
-        
+
     except Exception as e:
         logger.error(f"❌ Scraper Failed: {e}")
-        return False
+        return _guru_fail(str(e))
     finally:
         driver.quit()
 

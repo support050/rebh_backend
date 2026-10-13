@@ -35,6 +35,10 @@ def extract_table_rows(driver, url, wait_time=5):
     except WebDriverException as e:
         logger.error(f"WebDriver error loading {url}: {e}")
         return datetime.now().date(), [], []
+    except Exception as e:
+        # e.g. urllib3 ReadTimeoutError from Selenium's localhost HTTP client:
+        # chromedriver may still have a usable (partial) page — do not abort.
+        logger.warning(f"Navigation error for {url} ({type(e).__name__}: {e}), attempting partial parse...")
     # Wait for tables to render dynamically via JavaScript
     try:
         WebDriverWait(driver, max(wait_time, 15)).until(
@@ -115,6 +119,11 @@ def scrape_substantial_shareholders(driver):
         except WebDriverException as e:
             logger.error(f"WebDriver error loading Substantial Shareholders: {e}")
             return data
+        except Exception as e:
+            # urllib3 ReadTimeoutError (2026-10-13 Render incident) is neither of
+            # the above — keep going and let the WebDriverWait + parse steps judge
+            # whether the page actually rendered.
+            logger.warning(f"Navigation error for Substantial Shareholders ({type(e).__name__}: {e}), attempting partial parse...")
         # Wait for table to render dynamically
         try:
             WebDriverWait(driver, 20).until(

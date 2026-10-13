@@ -165,10 +165,11 @@ def _save_sp500_ey(value: float, report_date: date) -> bool:
 
 # ── Main entry point ──────────────────────────────────────────────────────────
 
-def scrape_sp500_earnings_yield(force: bool = False) -> bool:
+def scrape_sp500_earnings_yield(force: bool = False) -> dict:
     """
     Fetch and store today's S&P 500 Earnings Yield.
     Skips if a value already exists for today unless force=True.
+    Returns {"ok": bool, "rows": 0|1} for job_tracking.
     """
     today = date.today()
 
@@ -185,7 +186,7 @@ def scrape_sp500_earnings_yield(force: bool = False) -> bool:
             )
             if exists:
                 logger.info(f"SP500_EY already scraped today ({today}). Use force=True to re-fetch.")
-                return True
+                return {"ok": True, "rows": 0, "skipped": "already scraped today"}
         finally:
             db.close()
 
@@ -198,9 +199,16 @@ def scrape_sp500_earnings_yield(force: bool = False) -> bool:
 
     if ey_value is None:
         logger.error("❌ Failed to fetch SP500_EY from all sources")
-        return False
+        return {"ok": False, "rows": 0, "stage_failures": [
+            {"stage": "sp500_ey",
+             "error": "GuruFocus and Yahoo both returned no EY value"}]}
 
-    return _save_sp500_ey(ey_value, today)
+    saved = _save_sp500_ey(ey_value, today)
+    if not saved:
+        return {"ok": False, "rows": 0, "stage_failures": [
+            {"stage": "sp500_ey",
+             "error": "EY value fetched but the DB save failed (see log)"}]}
+    return {"ok": True, "rows": 1}
 
 
 if __name__ == "__main__":
@@ -211,4 +219,4 @@ if __name__ == "__main__":
     parser.add_argument("--force", action="store_true", help="Re-fetch even if today already has data")
     args = parser.parse_args()
     ok = scrape_sp500_earnings_yield(force=args.force)
-    sys.exit(0 if ok else 1)
+    sys.exit(0 if ok.get("ok") else 1)

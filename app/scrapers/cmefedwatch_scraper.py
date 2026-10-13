@@ -95,7 +95,15 @@ def _save_records(records: list[dict], today: date) -> bool:
 
 
 # ─── الدالة الرئيسية ──────────────────────────────────────────────────────────
-def scrape_cme_fedwatch(force: bool = False, **kwargs) -> bool:
+def _cme_fail(error: str) -> dict:
+    """Failure shape understood by job_tracking.with_result_handling."""
+    return {"ok": False, "rows": 0, "stage_failures": [
+        {"stage": "cme_fedwatch", "error": error[:400]}]}
+
+
+def scrape_cme_fedwatch(force: bool = False, **kwargs) -> dict:
+    """Returns {"ok": bool, "rows": n_records} for job_tracking — the old bool
+    return left job_runs.rows_written NULL even on good snapshots."""
     logger.info("🚀 CME FedWatch scraper بيبدأ...")
     today = date.today()
 
@@ -107,7 +115,7 @@ def scrape_cme_fedwatch(force: bool = False, **kwargs) -> bool:
             cnt = _db.query(_CF).filter(_CF.scrape_date == today).count()
             if cnt > 0:
                 logger.info(f"ℹ️ تم السحب مسبقاً ({today}): {cnt} سجل.")
-                return True
+                return {"ok": True, "rows": 0, "skipped": "already scraped today"}
         finally:
             _db.close()
 
@@ -133,7 +141,7 @@ def scrape_cme_fedwatch(force: bool = False, **kwargs) -> bool:
 
     if not iframe_url:
         logger.error("❌ لم نجد الـ iframe URL")
-        return False
+        return _cme_fail("no iframe URL on the CME FedWatch page")
 
     logger.info(f"✅ iframe URL: {iframe_url[:100]}")
 
@@ -143,7 +151,7 @@ def scrape_cme_fedwatch(force: bool = False, **kwargs) -> bool:
 
     if not page_data:
         logger.error("❌ فشل تحميل QuikStrike iframe")
-        return False
+        return _cme_fail("QuikStrike iframe shell failed to load")
 
     # ══ Step 2b: نبعت POST أولي عشان نجيب insid و qsid الجداد ═══════════════
     logger.info("📡 Step 2b: POST أولي لتهيئة الـ Session...")
@@ -165,7 +173,7 @@ def scrape_cme_fedwatch(force: bool = False, **kwargs) -> bool:
             
     if not new_insid or not new_qsid:
         logger.error("❌ فشل في جلب Session IDs")
-        return False
+        return _cme_fail("could not extract insid/qsid session ids")
 
     # ══ Step 3: تحميل صفحة الأداة الفعلية (QuikStrikeView.aspx) ════════════
     logger.info("🌐 Step 3: تحميل صفحة الأداة الفعلية...")
@@ -179,7 +187,7 @@ def scrape_cme_fedwatch(force: bool = False, **kwargs) -> bool:
     view_data = _load_quikstrike_page(session, view_url)
     if not view_data:
         logger.error("❌ فشل تحميل صفحة الأداة")
-        return False
+        return _cme_fail("QuikStrike tool page failed to load")
 
     # ══ Step 4: نبعت POST لـ "Probabilities" من جوه صفحة الأداة ═════════════
     logger.info("📡 Step 4: POST → Probabilities tab...")
@@ -187,7 +195,7 @@ def scrape_cme_fedwatch(force: bool = False, **kwargs) -> bool:
 
     if not html_delta:
         logger.error("❌ فشل POST للـ Probabilities")
-        return False
+        return _cme_fail("POST to Probabilities tab returned nothing")
 
     # ══ Step 5: نحلّل الـ HTML ونستخرج الجدول ════════════════════════════════
     logger.info("📊 Step 5: تحليل الجدول...")
@@ -199,10 +207,13 @@ def scrape_cme_fedwatch(force: bool = False, **kwargs) -> bool:
 
     if not records:
         logger.error(f"❌ لا بيانات. HTML[0:2000]:\n{html_delta[:2000]}")
-        return False
+        return _cme_fail("no probability rows parsed")
 
     logger.info(f"✅ {len(records)} سجل")
-    return _save_records(records, today)
+    saved = _save_records(records, today)
+    if not saved:
+        return _cme_fail(f"{len(records)} rows parsed but the DB save failed (see log)")
+    return {"ok": True, "rows": len(records)}
 
 
 # ─── Step 1: استخراج iframe URL من CME ───────────────────────────────────────
@@ -640,5 +651,5 @@ if __name__ == "__main__":
     parser.add_argument("--force", action="store_true")
     args = parser.parse_args()
 
-    success = scrape_cme_fedwatch(force=args.force)
-    print("\n" + ("✅ نجح" if success else "❌ فشل"))
+    res = scrape_cme_fedwatch(force=args.force)
+    print("\n" + ("✅ نجح" if res.get("ok") else f"❌ فشل: {res.get('stage_failures')}"))
