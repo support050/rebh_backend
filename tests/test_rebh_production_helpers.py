@@ -156,7 +156,9 @@ def test_peer_relative_grades_sector_anchored():
 
 
 def test_vintages_job_persists_snapshots():
-    from app.services.rebh_importers_service import run_engine_vintages_job
+    # 2026-10-13: the vintage runner moved to its own module when the
+    # sukuk/macro/bank-lines wrapper importers were retired.
+    from app.services.rebh_vintage_service import run_engine_vintages_job
     from app.core.database import SessionLocal
     from app.models.rebh_engine_vintage import RebhEngineVintage
     import pytest

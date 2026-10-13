@@ -112,25 +112,11 @@ def job_market_reports_scrapers():
 # next to the database). The mutex in update_status refuses concurrent runs.
 
 
-# ─── Job: Sukuk Importer (Phase 4 / Phase 12) ──────────────────
-def job_sukuk_importer():
-    logger.info("📜 [Scheduler] SUKUK & BONDS importer starting…")
-    _safe_job("sukuk_importer")
-    logger.info("📜 [Scheduler] SUKUK & BONDS importer finished.")
-
-
-# ─── Job: SAMA & GaStat Macro Importer (Phase 5 / Phase 12) ────
-def job_macro_importer():
-    logger.info("🏛️ [Scheduler] SAMA & GASTAT Macro importer starting…")
-    _safe_job("macro_importer")
-    logger.info("🏛️ [Scheduler] SAMA & GASTAT Macro importer finished.")
-
-
-# ─── Job: Bank Financial Lines Importer (Phase 3 / Phase 12) ───
-def job_bank_lines_importer():
-    logger.info("🏦 [Scheduler] Bank Lines Verification starting…")
-    _safe_job("bank_lines_importer")
-    logger.info("🏦 [Scheduler] Bank Lines Verification finished.")
+# ─── Sukuk / Macro / Bank-lines wrapper jobs: RETIRED 2026-10-13 ───
+# The ingestion itself runs manually via scripts/Sukuk&Bonds.py and
+# scripts/SAMA&GaStat.py — each __main__ records its own job_runs row under
+# the keys 'sukuk_importer' / 'macro_importer' (trigger='manual'). The
+# bank-lines verification wrapper wrote nothing and was dropped entirely.
 
 
 # ─── Job: Filings Importer (Phase 12) ──────────────────────────
@@ -277,11 +263,10 @@ def _market_reports():
     ).main()
 
 
-def _importer(fn_name: str) -> Callable[[], Any]:
+def _importer(fn_name: str,
+              module: str = "app.services.rebh_importers_service") -> Callable[[], Any]:
     def _run():
-        return getattr(__import__(
-            "app.services.rebh_importers_service", fromlist=[fn_name]
-        ), fn_name)()
+        return getattr(__import__(module, fromlist=[fn_name]), fn_name)()
     return _run
 
 
@@ -359,11 +344,10 @@ JOB_CALLABLES: Dict[str, Callable[[], Any]] = {
     "sp500_pe": _sp500_pe,
     # separately-scheduled jobs
     "market_reports": _market_reports,
-    "sukuk_importer": _importer("run_sukuk_importer"),
-    "macro_importer": _importer("run_macro_importer"),
-    "bank_lines_importer": _importer("run_bank_lines_importer"),
     "filings_importer": _importer("run_filings_importer"),
-    "engine_vintages": _importer("run_engine_vintages_job"),
+    # decoupled 2026-10-13 — dedicated snapshot module, not the importers service
+    "engine_vintages": _importer("run_engine_vintages_job",
+                                 "app.services.rebh_vintage_service"),
     "breadth_daily": _breadth_daily_body,
     # economy-rates manual jobs — Run Now-able and tracked in job_runs under
     # the same keys the registry lists (deliberately NOT on any cron: their
@@ -386,9 +370,6 @@ JOB_LABELS: Dict[str, str] = {
     "fred:SAUCPALTT01GPM": "FRED:SAUCPALTT01GPM (Saudi CPI)",
     "sp500_pe": "SP500 PE (Multpl)",
     "market_reports": "Market Reports (Tadawul)",
-    "sukuk_importer": "Sukuk Importer",
-    "macro_importer": "Macro Importer",
-    "bank_lines_importer": "Bank Lines Importer",
     "filings_importer": "Filings Importer",
     "engine_vintages": "Engine Vintage Snapshot",
     "breadth_daily": "Market Breadth Daily Engine",
@@ -467,21 +448,8 @@ def start_scheduler():
         id="market_reports", name="Saudi Market Reports Scrapers", replace_existing=True,
     )
     # daily_market_update is manual / admin-triggered — see job comment above.
-    _scheduler.add_job(
-        job_sukuk_importer,
-        CronTrigger(day_of_week="sun", hour=19, minute=0, timezone=EGYPT_TZ),
-        id="sukuk_importer", name="Sukuk & Debt Instruments Importer", replace_existing=True,
-    )
-    _scheduler.add_job(
-        job_macro_importer,
-        CronTrigger(day=1, hour=3, minute=0, timezone=EGYPT_TZ),
-        id="macro_importer", name="SAMA & GaStat Macro Importer", replace_existing=True,
-    )
-    _scheduler.add_job(
-        job_bank_lines_importer,
-        CronTrigger(day_of_week="sun", hour=19, minute=30, timezone=EGYPT_TZ),
-        id="bank_lines_importer", name="Bank Financial Lines Importer", replace_existing=True,
-    )
+    # Sukuk / Macro / Bank-lines wrapper crons retired 2026-10-13 — the
+    # ingestion runs manually via scripts/Sukuk&Bonds.py & SAMA&GaStat.py.
     _scheduler.add_job(
         job_filings_importer,
         CronTrigger(day_of_week="sun,mon,tue,wed,thu", hour=19, minute=45, timezone=EGYPT_TZ),

@@ -1273,13 +1273,13 @@ def get_quarantine_records() -> Dict[str, Any]:
 @router.get("/importers/health")
 def get_importers_health() -> Dict[str, Any]:
     """
-    Expose health, readiness, and runtime execution status for all data importers:
-    - Daily market update (Tadawul prices and RS)
-    - Sukuk & debt importer
-    - SAMA & GaStat macro importer
-    - Bank lines importer
-    - Official filings importer
-    - Engine vintage snapshots
+    Expose health, readiness and execution status, read DIRECTLY from Postgres:
+    - Daily market update readiness (UpdateStatus row)
+    - Official filings ingestion + engine vintage snapshots (live telemetry)
+    - Sukuk & SAMA/GaStat tables: freshness from sukuk_market_data /
+      saudi_economic_indicators + the last standalone-script run from job_runs
+      (their wrapper importers were retired 2026-10-13 — ingestion runs via
+      scripts/Sukuk&Bonds.py and scripts/SAMA&GaStat.py)
     """
     from app.services.rebh_importers_service import get_importers_health_status
     return get_importers_health_status()
@@ -1291,32 +1291,28 @@ def trigger_importer_run(
     user=Depends(get_current_user)
 ) -> Dict[str, Any]:
     """
-    Trigger manual execution of a specific importer (requires authentication):
-    Available keys: 'sukuk', 'macro', 'bank_lines', 'filings', 'vintages'
+    Trigger manual execution of a live ingestion job (requires authentication):
+    Available keys: 'filings', 'vintages'.
+    Retired 2026-10-13: 'sukuk', 'macro', 'bank_lines' — the first two run as
+    standalone scripts (scripts/Sukuk&Bonds.py, scripts/SAMA&GaStat.py); the
+    bank-lines verification wrapper was dropped.
     """
-    from app.services.rebh_importers_service import (
-        run_sukuk_importer,
-        run_macro_importer,
-        run_bank_lines_importer,
-        run_filings_importer,
-        run_engine_vintages_job
-    )
+    from app.services.rebh_importers_service import run_filings_importer
+    from app.services.rebh_vintage_service import run_engine_vintages_job
     from app.services.job_tracking import track_job, with_result_handling
 
-    # Each run_* importer catches its own exception and returns
+    # Each runner catches its own exception and returns
     # {"status": "failed", ...}, so with_result_handling() is what turns that
     # dict into a real 'failed' row instead of a false 'success'.
     importers = {
-        "sukuk": ("sukuk_importer", run_sukuk_importer),
-        "macro": ("macro_importer", run_macro_importer),
-        "bank_lines": ("bank_lines_importer", run_bank_lines_importer),
         "filings": ("filings_importer", run_filings_importer),
         "vintages": ("engine_vintages", run_engine_vintages_job),
     }
     if importer_key not in importers:
         raise HTTPException(
             status_code=400,
-            detail=f"Unknown importer key '{importer_key}'. Valid: sukuk, macro, bank_lines, filings, vintages"
+            detail=f"Unknown importer key '{importer_key}'. Valid: filings, vintages "
+                   "(sukuk/macro run via their standalone scripts)"
         )
     job_name, fn = importers[importer_key]
     with track_job(job_name, "manual") as run:

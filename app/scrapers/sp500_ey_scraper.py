@@ -3,7 +3,9 @@ SP500 Earnings Yield Scraper
 Fetches the S&P 500 Earnings Yield (EY) and stores it as indicator_code='SP500_EY'.
 
 Primary source : GuruFocus HTML page (same pattern as existing gurufocus_scraper.py)
-Fallback source: Yahoo Finance PE → EY = 1 / PE
+Fallback 1     : Yahoo Finance PE → EY = 1 / PE (cookie+crumb handshake — plain
+                 quoteSummary calls return 401 since Yahoo enabled crumb auth)
+Fallback 2     : our own sp500_history.pe_ratio (Multpl monthly) → EY = 100 / PE
 """
 
 import logging
@@ -91,7 +93,9 @@ def _fetch_from_gurufocus() -> Optional[float]:
 def _fetch_from_yahoo() -> Optional[float]:
     """
     Fetch S&P 500 trailing P/E from Yahoo Finance and derive EY = 1 / PE.
-    Uses the ^GSPC summary endpoint.
+    Uses the ^GSPC summary endpoint. quoteSummary has required a cookie+crumb
+    pair since 2023 — a plain GET returns 401 (seen live on Render 2026-10-13),
+    so we first warm a session cookie and fetch the crumb, then retry with it.
     """
     url = "https://query1.finance.yahoo.com/v10/finance/quoteSummary/%5EGSPC"
     params = {"modules": "summaryDetail,defaultKeyStatistics"}
@@ -103,7 +107,25 @@ def _fetch_from_yahoo() -> Optional[float]:
     }
 
     try:
-        resp = requests.get(url, params=params, headers=headers, timeout=15)
+        session = requests.Session()
+        session.headers.update(headers)
+        # fc.yahoo.com 404s on purpose but still sets the A3 cookie.
+        try:
+            session.get("https://fc.yahoo.com", timeout=10)
+        except requests.RequestException:
+            pass
+        crumb = ""
+        try:
+            r = session.get(
+                "https://query1.finance.yahoo.com/v1/test/getcrumb", timeout=10)
+            text = r.text.strip()
+            if r.ok and text and "<" not in text:
+                crumb = text
+        except requests.RequestException:
+            pass
+
+        resp = session.get(url, params={**params, "crumb": crumb} if crumb
+                           else params, timeout=15)
         resp.raise_for_status()
         data = resp.json()
 
@@ -122,6 +144,39 @@ def _fetch_from_yahoo() -> Optional[float]:
     except Exception as e:
         logger.warning(f"Yahoo Finance EY fallback failed: {e}")
 
+    return None
+
+
+# ── Source 3: our own DB (Multpl PE already lives in sp500_history) ─────────
+
+def _derive_from_db_pe() -> Optional[float]:
+    """Last-resort, no-network source: EY = 100 / latest non-null pe_ratio in
+    sp500_history (kept monthly by sp500_pe_scraper). Sanity window 0.5–15%
+    mirrors the GuruFocus parser so a corrupt PE cannot poison the series."""
+    from app.models.economic_indicators import SP500History
+
+    db = SessionLocal()
+    try:
+        row = (
+            db.query(SP500History.trade_date, SP500History.pe_ratio)
+              .filter(SP500History.pe_ratio.isnot(None))
+              .order_by(SP500History.trade_date.desc())
+              .first()
+        )
+        if row is None or not row.pe_ratio or float(row.pe_ratio) <= 0:
+            return None
+        ey_pct = 100.0 / float(row.pe_ratio)
+        if 0.5 < ey_pct < 15:
+            logger.info(
+                f"Derived SP500_EY={ey_pct:.3f}% from own DB "
+                f"(PE={float(row.pe_ratio):.2f} @ {row.trade_date})")
+            return ey_pct
+        logger.warning(f"DB PE implies out-of-range EY {ey_pct:.3f}% — skipping")
+    except Exception as e:
+        db.rollback()
+        logger.warning(f"DB-derived EY fallback failed: {e}")
+    finally:
+        db.close()
     return None
 
 
@@ -190,18 +245,25 @@ def scrape_sp500_earnings_yield(force: bool = False) -> dict:
         finally:
             db.close()
 
-    # Try GuruFocus first, then Yahoo fallback
+    # Source chain: GuruFocus → Yahoo (cookie+crumb) → own-DB PE
     ey_value = _fetch_from_gurufocus()
     if ey_value is None:
         logger.info("Falling back to Yahoo Finance for SP500_EY...")
         time.sleep(1)
         ey_value = _fetch_from_yahoo()
+    if ey_value is None:
+        logger.info("Yahoo failed too — deriving SP500_EY from own sp500_history PE...")
+        ey_value = _derive_from_db_pe()
 
     if ey_value is None:
         logger.error("❌ Failed to fetch SP500_EY from all sources")
         return {"ok": False, "rows": 0, "stage_failures": [
-            {"stage": "sp500_ey",
-             "error": "GuruFocus and Yahoo both returned no EY value"}]}
+            {"stage": "sp500_ey_guru",
+             "error": "GuruFocus returned 403/bot-blocked or unparseable"},
+            {"stage": "sp500_ey_yahoo",
+             "error": "Yahoo quoteSummary failed (401 crumb auth or no PE)"},
+            {"stage": "sp500_ey_db",
+             "error": "No usable pe_ratio in sp500_history to derive EY"}]} 
 
     saved = _save_sp500_ey(ey_value, today)
     if not saved:

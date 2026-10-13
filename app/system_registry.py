@@ -517,9 +517,14 @@ SYSTEMS: List[Dict[str, Any]] = [
             _b("scraper", "backend/app/scrapers/gurufocus_scraper.py",
                "SP500_EY / SP500_PE (Selenium) — exists, not scheduled"),
             _b("service", "backend/app/services/rebh_importers_service.py",
-               "run_sukuk_importer / run_macro_importer / run_bank_lines_importer"),
-            _b("script", "backend/scripts/Sukuk&Bonds.py", "CLI twin of the sukuk importer"),
-            _b("script", "backend/scripts/SAMA&GaStat.py", "CLI twin of the macro importer"),
+               "health aggregation only — the sukuk/macro wrapper importers "
+               "were retired 2026-10-13"),
+            _b("script", "backend/scripts/Sukuk&Bonds.py",
+               "THE sukuk ingestion entry point — run manually; records "
+               "job_runs key 'sukuk_importer' (trigger='manual')"),
+            _b("script", "backend/scripts/SAMA&GaStat.py",
+               "THE SAMA/GaStat macro ingestion entry point — run manually; "
+               "records job_runs key 'macro_importer' (trigger='manual')"),
             _b("model", "backend/app/models/economic_indicators.py",
                "5 models in one file: economic_indicators, treasury_yield_curves, "
                "sp500_history, eurodollar_futures, cme_fedwatch"),
@@ -564,17 +569,13 @@ SYSTEMS: List[Dict[str, Any]] = [
                     "subsequent runs use 365-day lookback for revisions."),
             _j("sp500_pe", "backend/app/scrapers/sp500_pe_scraper.py",
                "cron monthly, day 10 at 02:00", _MONTHLY, "cron", ["sp500_history"]),
-            _j("sukuk_importer", "backend/app/services/rebh_importers_service.py",
-               "cron Sun 19:00", _WEEKLY, "cron", ["sukuk_market_data"],
-               note="same key from POST /api/rebh/importers/run/sukuk and from "
-                    "scripts/Sukuk&Bonds.py __main__ (trigger='manual')"),
-            _j("macro_importer", "backend/app/services/rebh_importers_service.py",
-               "cron day 1 at 03:00", _MONTHLY, "cron", ["saudi_economic_indicators"],
-               note="same key from POST /api/rebh/importers/run/macro and from "
-                    "scripts/SAMA&GaStat.py __main__"),
-            _j("bank_lines_importer", "backend/app/services/rebh_importers_service.py",
-               "cron Sun 19:30", _WEEKLY, "cron", [],
-               note="verification importer — see the REBH system for what it checks"),
+            # sukuk_importer / macro_importer / bank_lines_importer wrapper
+            # JOBS RETIRED 2026-10-13. Sukuk & macro ingestion runs manually via
+            # scripts/Sukuk&Bonds.py and scripts/SAMA&GaStat.py — their __main__
+            # blocks still record job_runs under 'sukuk_importer' /
+            # 'macro_importer', so the freshness probes below keep answering
+            # 'when did it last run?' from the tables and the ledger. The
+            # bank_lines verification wrapper wrote nothing and is gone.
             _j("manual:eurodollar", "backend/app/scrapers/eurodollar_scraper.py",
                "manual only — Admin button POST /api/economic-indicators/scrape/eurodollar-futures "
                "or Run Now",
@@ -607,7 +608,10 @@ SYSTEMS: List[Dict[str, Any]] = [
                None, "manual", writes=["economic_indicators"], tracked=True,
                note="key comes from app/services/scraper_service.py:_run(); the same "
                     "prefixing yields scraper:fred:<code>, scraper:sp500_price, "
-                    "scraper:sp500_pe, scraper:treasury_gov"),
+                    "scraper:sp500_pe, scraper:treasury_gov. Source chain since "
+                    "2026-10-13: GuruFocus (403 from datacenter IPs) → Yahoo "
+                    "quoteSummary with cookie+crumb (plain GET = 401) → own "
+                    "sp500_history.pe_ratio (EY=100/PE, sanity 0.5–15%)."),
         ],
         "tables": [
             _t("economic_indicators", "report_date", 7,
@@ -635,11 +639,25 @@ SYSTEMS: List[Dict[str, Any]] = [
             _t("saudi_economic_indicators", "retrieved_at", 35, "macro_importer",
                note="NO business date column: `period` is a String like '2026-03' or "
                     "'2025-Q4'. retrieved_at = when we scraped it, not when SAMA "
-                    "published it — so lag here measures our own run, not the data"),
+                    "published it — so lag here measures our own run, not the data. "
+                    "Written by scripts/SAMA&GaStat.py (manual), not by a cron job"),
             _t("sukuk_market_data", "updated_at", 10, "sukuk_importer",
-               note="`as_of` is a String; updated_at is the only real timestamp"),
+               note="`as_of` is a String; updated_at is the only real timestamp. "
+                    "Written by scripts/Sukuk&Bonds.py (manual), not by a cron job"),
         ],
         "issues": [
+            _i("note", "2026-10-13 · Importer wrappers retired. The cron jobs and "
+                       "admin triggers for sukuk_importer / macro_importer / "
+                       "bank_lines_importer were removed — ingestion runs manually "
+                       "via scripts/Sukuk&Bonds.py and scripts/SAMA&GaStat.py, "
+                       "which still record job_runs under their old keys, so the "
+                       "sukuk_market_data / saudi_economic_indicators freshness "
+                       "probes stay meaningful. POST /api/rebh/importers/run now "
+                       "accepts only 'filings' and 'vintages'; /importers/health "
+                       "reads table freshness from Postgres directly. "
+                       "engine_vintages moved to app/services/rebh_vintage_service.py "
+                       "(same cron key, plus a CLI: python -m "
+                       "app.services.rebh_vintage_service)."),
             _i("note", "2026-10-13 · economy-rates reporting overhaul. Every scraper "
                        "in this system (sp500, treasury_gov, fred, sp500_pe, sp500_ey, "
                        "eurodollar, cmefedwatch, gurufocus) now returns "
@@ -771,7 +789,11 @@ SYSTEMS: List[Dict[str, Any]] = [
             _b("service", "backend/app/services/rebh_classification_service.py",
                "company classification"),
             _b("service", "backend/app/services/rebh_importers_service.py",
-               "sukuk / macro / bank-lines / filings / vintages importers"),
+               "filings check + importers health (sukuk/macro/bank-lines "
+               "wrappers retired 2026-10-13)"),
+            _b("service", "backend/app/services/rebh_vintage_service.py",
+               "run_engine_vintages_job — dedicated snapshot runner "
+               "(cron / admin / CLI)"),
             _b("model", "backend/app/models/rebh_universe_snapshot.py", "rebh_universe_snapshots"),
             _b("model", "backend/app/models/rebh_engine_vintage.py", "rebh_engine_vintages"),
             _b("model", "backend/app/models/rebh_user_data.py",
@@ -790,15 +812,13 @@ SYSTEMS: List[Dict[str, Any]] = [
             "/rebh/course-reports",
         ],
         "jobs": [
-            _j("engine_vintages", "backend/app/services/rebh_importers_service.py",
+            _j("engine_vintages", "backend/app/services/rebh_vintage_service.py",
                "cron Sun–Thu 20:00", _DAILY, "cron", ["rebh_engine_vintages"],
                note="also POST /api/rebh/importers/run/vintages (trigger='manual', "
-                    "same key)"),
+                    "same key) and the module CLI python -m "
+                    "app.services.rebh_vintage_service --limit N"),
             _j("filings_importer", "backend/app/services/rebh_importers_service.py",
                "cron Sun–Thu 19:45", _DAILY, "cron", ["company_official_filings"]),
-            _j("bank_lines_importer", "backend/app/services/rebh_importers_service.py",
-               "cron Sun 19:30", _WEEKLY, "cron", [],
-               note="verification pass over bank financial lines"),
             _j("corporate_actions_watcher", "backend/scripts/corporate_actions_watcher.py",
                "manual only — never scheduled, not wrapped by track_job", None, "manual",
                ["corporate_actions"], tracked=False,
@@ -819,9 +839,11 @@ SYSTEMS: List[Dict[str, Any]] = [
                note="user data. `trade_date` is stored as String, not Date"),
             _t("council_company_checklists", "updated_at", None, None, note="user data"),
             _t("sukuk_market_data", "updated_at", 10, "sukuk_importer",
-               note="shared with economy-rates — /rebh labs read it"),
+               note="shared with economy-rates — /rebh labs read it; written "
+                    "manually via scripts/Sukuk&Bonds.py"),
             _t("saudi_economic_indicators", "retrieved_at", 35, "macro_importer",
-               note="shared with economy-rates; see the market-macro bug below"),
+               note="shared with economy-rates; written manually via "
+                    "scripts/SAMA&GaStat.py; see the market-macro bug below"),
         ],
         "issues": [
             _i("bug", "GET /api/rebh/market-macro silently degrades to hard-coded macro "

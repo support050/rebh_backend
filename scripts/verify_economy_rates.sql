@@ -64,12 +64,14 @@ WHERE status = 'failed'
 ORDER BY started_at DESC;
 
 -- 6) Which economy job keys have NEVER been recorded (these are the tiles that
---    show "Bad / Never recorded" on the System Map):
+--    show "Bad / Never recorded" on the System Map). sukuk_importer /
+--    macro_importer are listed too: the cron tiles were retired 2026-10-13 but
+--    the standalone scripts still record those keys on manual runs.
 SELECT k.job_name AS expected_job, r.last_run, r.last_status
 FROM (VALUES ('sp500'), ('treasury_gov'), ('fred:BAMLC0A3CA'), ('fred:BAMLC0A4CBBB'),
              ('fred:BAMLC0A3CAEY'), ('fred:IC4WSA'), ('fred:UNRATE'), ('fred:PAYEMS'),
              ('fred:SAUCPALTT01GPM'), ('sp500_pe'), ('sukuk_importer'), ('macro_importer'),
-             ('bank_lines_importer'), ('manual:eurodollar'), ('manual:cme_fedwatch'),
+             ('manual:eurodollar'), ('manual:cme_fedwatch'),
              ('manual:gurufocus')) AS k(job_name)
 LEFT JOIN LATERAL (
     SELECT started_at AS last_run, status AS last_status

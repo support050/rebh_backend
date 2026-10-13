@@ -1,34 +1,41 @@
 """
-Unified Importers and Pipeline Orchestrator for REBH & TASI.
-============================================================
-Exposes runnable functions and readiness/health status for:
-1. Daily Market Update (`scripts.daily_market_update`)
-2. Sukuk & Debt Importer (`scripts.Sukuk&Bonds`)
-3. SAMA & GaStat Macro Importer (`scripts.SAMA&GaStat`)
-4. Bank Lines Importer (`app.services.bank_analytics_service`)
-5. Official Filings Importer (`app.services.xbrl_data_service` / official filings)
-6. REBH Engine Vintage Snapshot Service (`app.services.rebh_unified_engine`)
+Importer health & the filings readiness check for REBH & TASI.
+==============================================================
+Retired 2026-10-13: the wrapper importers `run_sukuk_importer`,
+`run_macro_importer` and `run_bank_lines_importer` and the engine-vintage job.
+Why:
+  · Sukuk / SAMA-GaStat ingestion runs MANUALLY via the standalone scripts
+    (scripts/Sukuk&Bonds.py, scripts/SAMA&GaStat.py). Each script's __main__
+    wraps itself in track_job, so job_runs keeps its history under the same
+    keys ('sukuk_importer', 'macro_importer') without any cron wrapper.
+  · The bank-lines "verification importer" wrote nothing and duplicated
+    bank_analytics_service — dropped outright.
+  · The vintage snapshot moved to its own module,
+    app/services/rebh_vintage_service.py (cron key 'engine_vintages' unchanged).
 
-Tracks execution timestamps, statuses, and counts for health reporting.
+What remains here:
+  1. Daily Market Update readiness (UpdateStatus row, manual/admin-triggered)
+  2. Official Filings ingestion check (daily cron, key 'filings_importer')
+  3. get_importers_health_status() — DB-direct freshness for every table the
+     retired wrappers used to proxy, joined with the real last script run
+     read from job_runs. No in-memory-only claims survive a restart anymore.
 """
 import logging
-import os
-import sys
 from datetime import datetime, timezone
-from typing import Dict, Any, Optional
-import importlib.util
+from typing import Dict, Any
 
-from sqlalchemy import text
 from app.core.database import SessionLocal
 from app.models.sukuk_bonds import SukukMarketData
 from app.models.saudi_macro import SaudiEconomicIndicator
 from app.models.market_reports import QFIOwnershipFlow, SubstantialShareholder
 from app.models.official_filings import CompanyOfficialFiling
 from app.models.update_status import UpdateStatus
+from app.models.job_run import JobRun
 
 logger = logging.getLogger(__name__)
 
-# In-memory pipeline health telemetry
+# In-memory telemetry for the jobs that still run inside this process.
+# Everything else is answered from the database (tables + job_runs).
 _IMPORTER_STATUS: Dict[str, Dict[str, Any]] = {
     "daily_market_update": {
         "name": "Daily Market Pipeline (Tadawul Prices & RS)",
@@ -36,31 +43,7 @@ _IMPORTER_STATUS: Dict[str, Dict[str, Any]] = {
         "status": "idle",
         "records_processed": 0,
         "error": None,
-        "frequency": "Daily (Post-Market 18:30 UTC+2)"
-    },
-    "sukuk_importer": {
-        "name": "Saudi Sukuk & Debt Instruments Importer",
-        "last_run": None,
-        "status": "idle",
-        "records_processed": 0,
-        "error": None,
-        "frequency": "Weekly (Sundays 19:00 UTC+2)"
-    },
-    "macro_importer": {
-        "name": "SAMA & GaStat Macroeconomic Importer",
-        "last_run": None,
-        "status": "idle",
-        "records_processed": 0,
-        "error": None,
-        "frequency": "Monthly / Bi-Weekly (1st of Month & Thursdays)"
-    },
-    "bank_lines_importer": {
-        "name": "Bank Financials Lines & NIM Verification",
-        "last_run": None,
-        "status": "idle",
-        "records_processed": 0,
-        "error": None,
-        "frequency": "Quarterly / On-Demand Post-Earnings"
+        "frequency": "Manual / Admin-triggered (Post-Market)"
     },
     "filings_importer": {
         "name": "Official Corporate Filings & XBRL Ingestion",
@@ -70,127 +53,11 @@ _IMPORTER_STATUS: Dict[str, Dict[str, Any]] = {
         "error": None,
         "frequency": "Daily / Continuous Sync"
     },
-    "engine_vintages": {
-        "name": "REBH Unified Engine Vintage Snapshots",
-        "last_run": None,
-        "status": "idle",
-        "records_processed": 0,
-        "error": None,
-        "frequency": "Daily Post-Close (20:00 UTC+2)"
-    }
 }
 
 
-def _load_script_module(script_filename: str):
-    """Dynamically load scripts from backend/scripts folder without path collisions."""
-    script_path = os.path.join(
-        os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
-        "scripts", script_filename
-    )
-    if not os.path.exists(script_path):
-        raise FileNotFoundError(f"Script file not found: {script_path}")
-    mod_name = script_filename.replace(".py", "").replace("&", "_").replace(" ", "_")
-    spec = importlib.util.spec_from_file_location(mod_name, script_path)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
-
-
 # ─────────────────────────────────────────────────────────────
-# 1. Sukuk Importer
-# ─────────────────────────────────────────────────────────────
-def run_sukuk_importer() -> Dict[str, Any]:
-    """Execute Sukuk and Debt instruments import from Tadawul."""
-    _IMPORTER_STATUS["sukuk_importer"]["status"] = "running"
-    try:
-        mod = _load_script_module("Sukuk&Bonds.py")
-        count = mod.run_sukuk_sync()
-        now_str = datetime.now(timezone.utc).isoformat()
-        _IMPORTER_STATUS["sukuk_importer"]["last_run"] = now_str
-        _IMPORTER_STATUS["sukuk_importer"]["status"] = "ok"
-        _IMPORTER_STATUS["sukuk_importer"]["records_processed"] = count
-        _IMPORTER_STATUS["sukuk_importer"]["error"] = None
-        logger.info(f"✅ Sukuk Importer finished successfully. Records: {count}")
-        return {"status": "ok", "records": count, "timestamp": now_str}
-    except Exception as e:
-        now_str = datetime.now(timezone.utc).isoformat()
-        _IMPORTER_STATUS["sukuk_importer"]["last_run"] = now_str
-        _IMPORTER_STATUS["sukuk_importer"]["status"] = "failed"
-        _IMPORTER_STATUS["sukuk_importer"]["error"] = str(e)
-        logger.error(f"❌ Sukuk Importer failed: {e}")
-        return {"status": "failed", "error": str(e), "timestamp": now_str}
-
-
-# ─────────────────────────────────────────────────────────────
-# 2. SAMA & GaStat Macro Importer
-# ─────────────────────────────────────────────────────────────
-def run_macro_importer() -> Dict[str, Any]:
-    """Execute Macro data import from SAMA and GaStat (Repo, SAIBOR, GDP, Unemployment, Buffett)."""
-    _IMPORTER_STATUS["macro_importer"]["status"] = "running"
-    try:
-        mod = _load_script_module("SAMA&GaStat.py")
-        payload = mod.run_economic_sync()
-        count = len(payload) if isinstance(payload, dict) else 0
-        now_str = datetime.now(timezone.utc).isoformat()
-        _IMPORTER_STATUS["macro_importer"]["last_run"] = now_str
-        _IMPORTER_STATUS["macro_importer"]["status"] = "ok"
-        _IMPORTER_STATUS["macro_importer"]["records_processed"] = count
-        _IMPORTER_STATUS["macro_importer"]["error"] = None
-        logger.info(f"✅ Macro Importer finished successfully. Indicators: {count}")
-        return {"status": "ok", "records": count, "timestamp": now_str}
-    except Exception as e:
-        now_str = datetime.now(timezone.utc).isoformat()
-        _IMPORTER_STATUS["macro_importer"]["last_run"] = now_str
-        _IMPORTER_STATUS["macro_importer"]["status"] = "failed"
-        _IMPORTER_STATUS["macro_importer"]["error"] = str(e)
-        logger.error(f"❌ Macro Importer failed: {e}")
-        return {"status": "failed", "error": str(e), "timestamp": now_str}
-
-
-# ─────────────────────────────────────────────────────────────
-# 3. Bank-Lines Importer & Analyzer
-# ─────────────────────────────────────────────────────────────
-def run_bank_lines_importer() -> Dict[str, Any]:
-    """Verify and compute bank specific statement lines (NII, NIM, Provisions, LDR) across listed banks."""
-    _IMPORTER_STATUS["bank_lines_importer"]["status"] = "running"
-    try:
-        from app.services.xbrl_data_service import list_companies
-        from app.services.bank_analytics_service import calculate_bank_metrics
-        
-        companies = list_companies()
-        # Find all banking sector companies (Tadawul sector: Banks or symbol list)
-        bank_symbols = [
-            c.symbol for c in companies 
-            if "bank" in (c.sector or "").lower() or "بنوك" in (c.sector or "") or c.symbol in ["1120", "1180", "1010", "1050", "1060", "1080", "1140", "1150", "1020", "1030"]
-        ]
-        
-        success_count = 0
-        for sym in bank_symbols:
-            try:
-                metrics = calculate_bank_metrics(sym)
-                if metrics and (metrics.nim_pct is not None or metrics.is_bank):
-                    success_count += 1
-            except Exception as b_err:
-                logger.warning(f"Bank calculation warning for {sym}: {b_err}")
-
-        now_str = datetime.now(timezone.utc).isoformat()
-        _IMPORTER_STATUS["bank_lines_importer"]["last_run"] = now_str
-        _IMPORTER_STATUS["bank_lines_importer"]["status"] = "ok"
-        _IMPORTER_STATUS["bank_lines_importer"]["records_processed"] = success_count
-        _IMPORTER_STATUS["bank_lines_importer"]["error"] = None
-        logger.info(f"✅ Bank Lines Importer verified {success_count} banks successfully.")
-        return {"status": "ok", "banks_processed": success_count, "timestamp": now_str}
-    except Exception as e:
-        now_str = datetime.now(timezone.utc).isoformat()
-        _IMPORTER_STATUS["bank_lines_importer"]["last_run"] = now_str
-        _IMPORTER_STATUS["bank_lines_importer"]["status"] = "failed"
-        _IMPORTER_STATUS["bank_lines_importer"]["error"] = str(e)
-        logger.error(f"❌ Bank Lines Importer failed: {e}")
-        return {"status": "failed", "error": str(e), "timestamp": now_str}
-
-
-# ─────────────────────────────────────────────────────────────
-# 4. Filings Importer
+# Filings Importer (daily cron — key 'filings_importer')
 # ─────────────────────────────────────────────────────────────
 def run_filings_importer() -> Dict[str, Any]:
     """Scan and verify availability of official filings and XBRL reports."""
@@ -217,122 +84,41 @@ def run_filings_importer() -> Dict[str, Any]:
 
 
 # ─────────────────────────────────────────────────────────────
-# 5. Engine Vintage Snapshot Job
+# Health & Readiness Status Aggregator (DB-direct)
 # ─────────────────────────────────────────────────────────────
-def run_engine_vintages_job(limit: Optional[int] = None) -> Dict[str, Any]:
-    """
-    Execute point-in-time snapshot of the REBH Universal Engine calculations across covered companies.
-    Validates P0 identity guards and records vintage status.
-    """
-    _IMPORTER_STATUS["engine_vintages"]["status"] = "running"
-    db = SessionLocal()
-    try:
-        from app.services.xbrl_data_service import list_companies
-        from app.services.rebh_unified_engine import calculate_full_company_payload
-        from app.models.rebh_engine_vintage import RebhEngineVintage
-        
-        companies = list_companies()
-        if limit and limit > 0:
-            companies = companies[:limit]
-        processed = 0
-        quarantined = 0
-        persisted = 0
-        now_dt = datetime.now(timezone.utc)
-        batch_id = f"batch_{now_dt.strftime('%Y%m%d_%H%M%S')}"
-        
-        for c in companies:
-            try:
-                payload = calculate_full_company_payload(c.symbol)
-                processed += 1
-                is_q = (not payload.fresh) or bool(payload.quarantine_reason)
-                if is_q:
-                    quarantined += 1
-
-                # Check if identical record exists in this batch
-                exists = db.query(RebhEngineVintage).filter(
-                    RebhEngineVintage.symbol == payload.symbol,
-                    RebhEngineVintage.batch_id == batch_id,
-                    RebhEngineVintage.as_of_period == payload.as_of
-                ).first()
-                if exists:
-                    continue
-
-                # Persist point-in-time snapshot to DB
-                v_record = RebhEngineVintage(
-                    symbol=payload.symbol,
-                    batch_id=batch_id,
-                    vintage_date=now_dt,
-                    as_of_period=payload.as_of,
-                    fresh=payload.fresh,
-                    quarantined=is_q,
-                    quarantine_reason=payload.quarantine_reason,
-                    required_return_r=payload.required_return,
-                    gold_max=payload.zones.gold_max if payload.zones else None,
-                    silver_max=payload.zones.silver_max if payload.zones else None,
-                    bronze_max=payload.zones.bronze_max if payload.zones else None,
-                    piotroski_score=payload.piotroski,
-                    engine_version=payload.provenance.get("engine_version", "REBH-2.0") if payload.provenance else "REBH-2.0",
-                    contract_json=payload.model_dump_json()
-                )
-                db.add(v_record)
-                persisted += 1
-            except Exception as item_err:
-                quarantined += 1
-                logger.debug(f"Skipping vintage snapshot for {c.symbol}: {item_err}")
-
-        db.commit()
-        now_str = now_dt.isoformat()
-        _IMPORTER_STATUS["engine_vintages"]["last_run"] = now_str
-        _IMPORTER_STATUS["engine_vintages"]["status"] = "ok"
-        _IMPORTER_STATUS["engine_vintages"]["records_processed"] = processed
-        _IMPORTER_STATUS["engine_vintages"]["error"] = None
-        logger.info(f"✅ Engine Vintage Snapshot complete: {processed} evaluated, {persisted} persisted to DB, {quarantined} in quarantine.")
-
-        # Rebuild the DB-backed universe snapshot so /peers + /universe reflect the new batch.
-        universe_persisted = None
-        try:
-            from app.services.khurafshi_engine_service import build_universe_snapshot
-            universe_persisted = build_universe_snapshot(snapshot_date=now_dt.date(), batch_id=batch_id)
-            logger.info(f"✅ Universe snapshot refreshed for {universe_persisted} companies.")
-        except Exception as snap_err:
-            logger.warning(f"⚠️ Universe snapshot refresh failed: {snap_err}")
-
-        return {
-            "status": "ok",
-            "evaluated_companies": processed,
-            "persisted_snapshots": persisted,
-            "universe_snapshot": universe_persisted,
-            "quarantined": quarantined,
-            "timestamp": now_str
-        }
-    except Exception as e:
-        db.rollback()
-        now_str = datetime.now(timezone.utc).isoformat()
-        _IMPORTER_STATUS["engine_vintages"]["last_run"] = now_str
-        _IMPORTER_STATUS["engine_vintages"]["status"] = "failed"
-        _IMPORTER_STATUS["engine_vintages"]["error"] = str(e)
-        logger.error(f"❌ Engine Vintage Snapshot job failed: {e}")
-        return {"status": "failed", "error": str(e), "timestamp": now_str}
-    finally:
-        db.close()
+def _latest_job_run(db, job_name: str) -> Dict[str, Any]:
+    """Newest job_runs row for one key — how the manually-run scripts report."""
+    row = (
+        db.query(JobRun)
+          .filter(JobRun.job_name == job_name)
+          .order_by(JobRun.started_at.desc(), JobRun.id.desc())
+          .first()
+    )
+    if row is None:
+        return {"last_run": None, "status": "never", "rows_written": None}
+    return {
+        "last_run": row.started_at.isoformat() if row.started_at else None,
+        "status": row.status,
+        "rows_written": row.rows_written,
+        "triggered_by": row.triggered_by,
+    }
 
 
-# ─────────────────────────────────────────────────────────────
-# Importer Health & Readiness Status Aggregator
-# ─────────────────────────────────────────────────────────────
 def get_importers_health_status() -> Dict[str, Any]:
     """
-    Returns real database-backed and runtime status for each importer.
-    Reads latest record dates from database tables so it remains accurate across restarts.
+    Database-backed health for every ingestion path: freshness read straight
+    from Postgres (tables + job_runs) so it stays accurate across restarts.
     """
+    from app.services.rebh_vintage_service import get_vintage_status
+
     db = SessionLocal()
     try:
-        # 1. Sukuk count and latest update
+        # 1. Sukuk table freshness (written by scripts/Sukuk&Bonds.py)
         sukuk_count = db.query(SukukMarketData).count()
         latest_sukuk = db.query(SukukMarketData).order_by(SukukMarketData.updated_at.desc()).first()
         sukuk_last_date = latest_sukuk.updated_at.isoformat() if latest_sukuk and latest_sukuk.updated_at else None
 
-        # 2. Macro indicators count and latest update
+        # 2. Macro indicators freshness (written by scripts/SAMA&GaStat.py)
         macro_count = db.query(SaudiEconomicIndicator).count()
         latest_macro = db.query(SaudiEconomicIndicator).order_by(SaudiEconomicIndicator.updated_at.desc()).first()
         macro_last_date = latest_macro.updated_at.isoformat() if latest_macro and latest_macro.updated_at else None
@@ -351,18 +137,14 @@ def get_importers_health_status() -> Dict[str, Any]:
         qfi_count = db.query(QFIOwnershipFlow).count()
         shareholders_count = db.query(SubstantialShareholder).count()
 
-        # Build response with persisted fallback if memory state was reset
-        sukuk_stat = dict(_IMPORTER_STATUS["sukuk_importer"])
-        if not sukuk_stat["last_run"] and sukuk_last_date:
-            sukuk_stat["last_run"] = sukuk_last_date
-            sukuk_stat["records_processed"] = sukuk_count
-            sukuk_stat["status"] = "ok" if sukuk_count > 0 else "stale"
+        # 6. Last real run of the standalone ingestion scripts (job_runs ledger)
+        sukuk_run = _latest_job_run(db, "sukuk_importer")
+        macro_run = _latest_job_run(db, "macro_importer")
 
-        macro_stat = dict(_IMPORTER_STATUS["macro_importer"])
-        if not macro_stat["last_run"] and macro_last_date:
-            macro_stat["last_run"] = macro_last_date
-            macro_stat["records_processed"] = macro_count
-            macro_stat["status"] = "ok" if macro_count > 0 else "stale"
+        daily_stat = dict(_IMPORTER_STATUS["daily_market_update"])
+        if not daily_stat["last_run"] and daily_ready_date:
+            daily_stat["last_run"] = daily_ready_date
+            daily_stat["status"] = "running" if daily_updating else "ok"
 
         filings_stat = dict(_IMPORTER_STATUS["filings_importer"])
         if not filings_stat["last_run"] and filing_last_date:
@@ -370,19 +152,12 @@ def get_importers_health_status() -> Dict[str, Any]:
             filings_stat["records_processed"] = filings_count
             filings_stat["status"] = "ok" if filings_count > 0 else "idle"
 
-        daily_stat = dict(_IMPORTER_STATUS["daily_market_update"])
-        if not daily_stat["last_run"] and daily_ready_date:
-            daily_stat["last_run"] = daily_ready_date
-            daily_stat["status"] = "running" if daily_updating else "ok"
+        vintage_stat = get_vintage_status()
 
-        bank_stat = dict(_IMPORTER_STATUS["bank_lines_importer"])
-        if not bank_stat["last_run"]:
-            bank_stat["status"] = "ok"
-            bank_stat["records_processed"] = 10
-
-        vintage_stat = dict(_IMPORTER_STATUS["engine_vintages"])
-
-        all_ok = all(s["status"] in ("ok", "idle") for s in [sukuk_stat, macro_stat, filings_stat, daily_stat])
+        all_ok = all(
+            s["status"] in ("ok", "idle", "running", "success")
+            for s in (daily_stat, filings_stat, vintage_stat)
+        )
 
         return {
             "overall_status": "healthy" if all_ok else "degraded",
@@ -393,16 +168,33 @@ def get_importers_health_status() -> Dict[str, Any]:
                 "official_filings": filings_count,
                 "qfi_flows": qfi_count,
                 "substantial_shareholders": shareholders_count,
-                "pipeline_latest_date": daily_ready_date
+                "pipeline_latest_date": daily_ready_date,
+                "sukuk_latest_update": sukuk_last_date,
+                "macro_latest_update": macro_last_date,
             },
             "importers": {
                 "daily_market_update": daily_stat,
-                "sukuk_importer": sukuk_stat,
-                "macro_importer": macro_stat,
-                "bank_lines_importer": bank_stat,
                 "filings_importer": filings_stat,
-                "engine_vintages": vintage_stat
-            }
+                "engine_vintages": vintage_stat,
+            },
+            # Ingestion that runs as standalone scripts — freshness comes from
+            # the tables themselves and the last script run from job_runs.
+            "manual_ingestion": {
+                "sukuk": {
+                    "script": "backend/scripts/Sukuk&Bonds.py",
+                    "table": "sukuk_market_data",
+                    "records": sukuk_count,
+                    "latest_update": sukuk_last_date,
+                    "last_run": sukuk_run,
+                },
+                "macro": {
+                    "script": "backend/scripts/SAMA&GaStat.py",
+                    "table": "saudi_economic_indicators",
+                    "records": macro_count,
+                    "latest_update": macro_last_date,
+                    "last_run": macro_run,
+                },
+            },
         }
     except Exception as e:
         logger.error(f"Error computing importers health status: {e}")
@@ -410,7 +202,7 @@ def get_importers_health_status() -> Dict[str, Any]:
             "overall_status": "error",
             "error": str(e),
             "timestamp": datetime.now(timezone.utc).isoformat(),
-            "importers": _IMPORTER_STATUS
+            "importers": _IMPORTER_STATUS,
         }
     finally:
         db.close()
