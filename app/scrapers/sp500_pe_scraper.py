@@ -20,8 +20,10 @@ HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
     "Accept": "text/html",
 }
-# Incremental: fetch last N months from Multpl (covers revisions + new data)
-INCREMENTAL_LOOKBACK_MONTHS = 6
+# Incremental: how many recent months to re-cover on a normal run. Multpl
+# restates the current month as earnings season lands, and a month is also
+# re-covered if the job was offline — see _incremental_cutoff().
+INCREMENTAL_LOOKBACK_MONTHS = int(os.getenv("SP500_PE_LOOKBACK_MONTHS", "3"))
 
 
 def _fetch_multpl_pe() -> list:
@@ -55,12 +57,40 @@ def _fetch_multpl_pe() -> list:
     return records
 
 
+def _last_pe_date(db):
+    """Newest trade_date in sp500_history that actually carries a P/E."""
+    from sqlalchemy import func as _func
+    return db.query(_func.max(SP500History.trade_date)).filter(
+        SP500History.pe_ratio.isnot(None)).scalar()
+
+
+def _incremental_cutoff(db) -> date:
+    """Start of the re-upsert window: the routine 3 months, extended backwards
+    to the newest stored P/E whenever the DB is older than that.
+
+    Multpl serves the whole monthly history in one page, so this is purely about
+    how many rows we bother to write — and extending the window when the job has
+    been offline means a manual run at any time closes the missing months.
+    """
+    routine = date.today() - timedelta(days=INCREMENTAL_LOOKBACK_MONTHS * 31)
+    last = _last_pe_date(db)
+    if last is None:
+        logger.info("   📅 No P/E rows in DB — writing the full Multpl history")
+        return date(1871, 1, 1)
+    if last < routine:
+        logger.warning(f"   📅 DB is behind: newest P/E is {last} "
+                       f"(routine window starts {routine}) → backfilling from {last}")
+        return last
+    return routine
+
+
 def scrape_sp500_pe(mode: str = "incremental") -> dict:
     """
     Scrape S&P 500 TTM P/E from Multpl and upsert into sp500_history.pe_ratio.
 
     mode:
-      incremental  - fetch only the last INCREMENTAL_LOOKBACK_MONTHS months (default)
+      incremental  - re-cover the last INCREMENTAL_LOOKBACK_MONTHS months, or
+                     everything since the newest stored P/E if the DB is older
       full         - fetch and upsert all available history
 
     Returns {"ok": bool, "rows": updated+inserted} for job_tracking.
@@ -85,9 +115,9 @@ def scrape_sp500_pe(mode: str = "incremental") -> dict:
             return {"ok": False, "rows": 0, "stage_failures": [
                 {"stage": "sp500_pe", "error": "Multpl returned no P/E rows"}]}
 
-        # Incremental: keep only recent months
+        # Incremental: keep only the window that covers revisions and any gap
         if mode == "incremental":
-            cutoff = date.today() - timedelta(days=INCREMENTAL_LOOKBACK_MONTHS * 31)
+            cutoff = _incremental_cutoff(db)
             all_records = [r for r in all_records if r["date"] >= cutoff]
             logger.info(f"   Incremental: {len(all_records)} records since {cutoff}")
 

@@ -1,0 +1,4520 @@
+[
+  {
+    "raw_label": "accounts payable",
+    "concept_id": "BS-100",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "accounts receivable",
+    "concept_id": "BS-020",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "accrued expenses",
+    "concept_id": "BS-125",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "accrued income",
+    "concept_id": "BS-035",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "accumulated losses",
+    "concept_id": "BS-180",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "addition in cash and cash equivalents due to acquisition and establishment of subsidiaries",
+    "concept_id": "BS-010",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "additions to property and equipment",
+    "concept_id": "CF-070",
+    "direction": -1,
+    "sector": "ALL",
+    "statement": "cash_flow",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "adjustment for inventory written-off",
+    "concept_id": "CF-030",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "cash_flow",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "adjustment for provision for slow moving items and inventory shortage",
+    "concept_id": "CF-030",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "cash_flow",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "adjustment for provision of employees' terminal benefit",
+    "concept_id": "CF-030",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "cash_flow",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "adjustment for provision, pension and government grants, net movements",
+    "concept_id": "CF-030",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "cash_flow",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "adjustments for amortization and impairment (reversal of impairment) of intangible assets",
+    "concept_id": "CF-020",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "cash_flow",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "adjustments for decrease (increase) in accrued income",
+    "concept_id": "CF-040",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "cash_flow",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "adjustments for decrease (increase) in due from related parties",
+    "concept_id": "CF-040",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "cash_flow",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "adjustments for decrease (increase) in inventories",
+    "concept_id": "CF-040",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "cash_flow",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "adjustments for decrease (increase) in other current assets",
+    "concept_id": "CF-040",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "cash_flow",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "adjustments for decrease (increase) in other receivables",
+    "concept_id": "CF-040",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "cash_flow",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "adjustments for decrease (increase) in prepayment",
+    "concept_id": "CF-040",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "cash_flow",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "adjustments for decrease (increase) in trade accounts receivable, net",
+    "concept_id": "CF-040",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "cash_flow",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "adjustments for deferred revenues",
+    "concept_id": "CF-030",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "cash_flow",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "adjustments for depreciation and impairment (reversal of impairment) of property, plant and equipments",
+    "concept_id": "CF-020",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "cash_flow",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "adjustments for fair value adjustment of a contingent consideration",
+    "concept_id": "CF-030",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "cash_flow",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "adjustments for finance costs",
+    "concept_id": "CF-030",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "cash_flow",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "adjustments for finance income",
+    "concept_id": "CF-030",
+    "direction": -1,
+    "sector": "ALL",
+    "statement": "cash_flow",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "adjustments for gain (loss) on disposal of property, plant and equipment",
+    "concept_id": "CF-030",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "cash_flow",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "adjustments for gains on disposal of investment property",
+    "concept_id": "CF-030",
+    "direction": -1,
+    "sector": "ALL",
+    "statement": "cash_flow",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "adjustments for impairment loss (reversal of impairment loss) recognized in statement of income",
+    "concept_id": "CF-030",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "cash_flow",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "adjustments for increase (decrease) in accrued expenses",
+    "concept_id": "CF-040",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "cash_flow",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "adjustments for increase (decrease) in advances from customers",
+    "concept_id": "CF-040",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "cash_flow",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "adjustments for increase (decrease) in due to related parties",
+    "concept_id": "CF-040",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "cash_flow",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "adjustments for increase (decrease) in other accounts payable",
+    "concept_id": "CF-040",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "cash_flow",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "adjustments for increase (decrease) in provisions",
+    "concept_id": "CF-040",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "cash_flow",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "adjustments for increase (decrease) in trade accounts payable",
+    "concept_id": "CF-040",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "cash_flow",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "adjustments for other current liabilities",
+    "concept_id": "CF-040",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "cash_flow",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "adjustments for other non-cash expenses",
+    "concept_id": "CF-030",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "cash_flow",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "adjustments for other non-cash income",
+    "concept_id": "CF-030",
+    "direction": -1,
+    "sector": "ALL",
+    "statement": "cash_flow",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "adjustments for other non-cash items",
+    "concept_id": "CF-030",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "cash_flow",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "adjustments for share of profit of an associate and joint venture",
+    "concept_id": "CF-030",
+    "direction": -1,
+    "sector": "ALL",
+    "statement": "cash_flow",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "adjustments for share-based payments expense",
+    "concept_id": "CF-030",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "cash_flow",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "adjustments for unrealised gain on derivative financial instruments",
+    "concept_id": "CF-030",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "cash_flow",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "adjustments for valuation gains on investment property",
+    "concept_id": "CF-030",
+    "direction": -1,
+    "sector": "ALL",
+    "statement": "cash_flow",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "administrative expenses",
+    "concept_id": "IS-050",
+    "direction": -1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "advances from customers",
+    "concept_id": "BS-125",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "assets subject to finance lease",
+    "concept_id": "BS-050",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "bank balances and cash",
+    "concept_id": "BS-010",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "bank overdraft",
+    "concept_id": "BS-110",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "basic earnings (loss) per share from continuing operations",
+    "concept_id": "IS-160",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "basic earnings per share",
+    "concept_id": "IS-160",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "board of directors' remunerations",
+    "concept_id": "IS-060",
+    "direction": -1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "business acquisition, net of cash and cash equivalents",
+    "concept_id": "BS-010",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "capital expenditures",
+    "concept_id": "CF-070",
+    "direction": -1,
+    "sector": "ALL",
+    "statement": "cash_flow",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "capitalisation of retained earnings and statutory reserve",
+    "concept_id": "BS-180",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "cash advances and loans made to other parties, classified as investing activities",
+    "concept_id": "CF-080",
+    "direction": -1,
+    "sector": "ALL",
+    "statement": "cash_flow",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "cash and balances with banks",
+    "concept_id": "BS-010",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "cash and balances with central banks",
+    "concept_id": "BS-010",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "cash and balances with saudi arabian monetary authority",
+    "concept_id": "BS-010",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "cash and bank balances",
+    "concept_id": "BS-010",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "cash and cash equivalents",
+    "concept_id": "BS-010",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "cash and cash equivalents at begining of period",
+    "concept_id": "CF-150",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "cash_flow",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "cash and cash equivalents at beginning of period",
+    "concept_id": "CF-150",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "cash_flow",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "cash and cash equivalents at beginning of the period",
+    "concept_id": "CF-150",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "cash_flow",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "cash and cash equivalents at end of period",
+    "concept_id": "CF-160",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "cash_flow",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "cash and cash equivalents at end of the period",
+    "concept_id": "CF-160",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "cash_flow",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "cash and cash equivalents at the beginning of the period",
+    "concept_id": "CF-150",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "cash_flow",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "cash and cash equivalents at the beginning of the period attributable to discounted operations",
+    "concept_id": "CF-150",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "cash_flow",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "cash and cash equivalents at the beginning of the year",
+    "concept_id": "CF-150",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "cash_flow",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "cash and cash equivalents at the end of the period",
+    "concept_id": "CF-160",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "cash_flow",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "cash and cash equivalents at the end of the year",
+    "concept_id": "CF-160",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "cash_flow",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "cash and cash equivalents disposed off related to a subsidiary",
+    "concept_id": "BS-010",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "cash and cash equivalents in relation to assets classified as held for sale",
+    "concept_id": "BS-010",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "cash and cash equivalents of disposal group classified",
+    "concept_id": "BS-010",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "cash and cash equivalents of disposal group classified as held for sale",
+    "concept_id": "BS-010",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "cash and cash equivalents related to unconsolidated subsidiary",
+    "concept_id": "BS-010",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "cash and cash equivalents through business combination",
+    "concept_id": "BS-010",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "cash and cash equivalents, insurance operations assets",
+    "concept_id": "BS-010",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "cash and cash equivalents, insurance operations' assets at beginning of period",
+    "concept_id": "BS-010",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "cash and cash equivalents, insurance operations' assets at end of period",
+    "concept_id": "BS-010",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "cash and cash equivalents, insurance/ takaful operations assets",
+    "concept_id": "BS-010",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "cash and cash equivalents, shareholders assets",
+    "concept_id": "BS-010",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "cash and cash equivalents, shareholders' assets",
+    "concept_id": "BS-010",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "cash and cash equivalents.2",
+    "concept_id": "BS-010",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "cash at banks and on hand",
+    "concept_id": "BS-010",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "cash flows from investing activities",
+    "concept_id": "CF-090",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "cash_flow",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "commission/ profit on deposits",
+    "concept_id": "IS-090",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "cost of goods sold",
+    "concept_id": "IS-020",
+    "direction": -1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "cost of raising share capital",
+    "concept_id": "CF-120",
+    "direction": -1,
+    "sector": "ALL",
+    "statement": "cash_flow",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "cost of revenue",
+    "concept_id": "IS-020",
+    "direction": -1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "cost of revenues",
+    "concept_id": "IS-020",
+    "direction": -1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "cost of sales",
+    "concept_id": "IS-020",
+    "direction": -1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "current portion of long term loans",
+    "concept_id": "BS-115",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "current portion of long-term debt",
+    "concept_id": "BS-115",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "current portion of long-term loans",
+    "concept_id": "BS-115",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "custody fees",
+    "concept_id": "IS-050",
+    "direction": -1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "customer deposits",
+    "concept_id": "BS-100",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "customer's deposits",
+    "concept_id": "BS-100",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "customers' deposits",
+    "concept_id": "BS-100",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "debt securities, term loan, borrowings and sukuk in issue",
+    "concept_id": "BS-140",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "debt securities, term loans, borrowings and sukuks in issue",
+    "concept_id": "BS-140",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "decrease (increase) in operating assets",
+    "concept_id": "CF-040",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "cash_flow",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "deferred revenue, current",
+    "concept_id": "BS-125",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "deferred revenue, non-current",
+    "concept_id": "BS-155",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "deferred tax assets",
+    "concept_id": "BS-080",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "deferred tax liabilities",
+    "concept_id": "BS-155",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "deposits from customers",
+    "concept_id": "BS-100",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "depreciation and amortisation",
+    "concept_id": "CF-020",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "cash_flow",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "depreciation and amortisation expense",
+    "concept_id": "IS-050",
+    "direction": -1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "depreciation and amortization",
+    "concept_id": "CF-020",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "cash_flow",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "derivative financial instruments/ assets, current",
+    "concept_id": "BS-035",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "derivative financial instruments/ assets, non-current",
+    "concept_id": "BS-080",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "derivative financial instruments/ liabilities, current",
+    "concept_id": "BS-125",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "derivative financial instruments/ liabilities, non-current",
+    "concept_id": "BS-155",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "derivatives assets",
+    "concept_id": "BS-035",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "derivatives liabilities",
+    "concept_id": "BS-125",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "description of accounting policy for cost of revenue",
+    "concept_id": "IS-020",
+    "direction": -1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "disclosure of cash and cash equivalents",
+    "concept_id": "BS-010",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "disclosure of cost of revenue",
+    "concept_id": "IS-020",
+    "direction": -1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "disclousre of cash and cash equivalents",
+    "concept_id": "BS-010",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "disclousre of cost of revenuess",
+    "concept_id": "IS-020",
+    "direction": -1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "distribution expenses",
+    "concept_id": "IS-040",
+    "direction": -1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "dividend income",
+    "concept_id": "IS-090",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "dividends paid",
+    "concept_id": "CF-100",
+    "direction": -1,
+    "sector": "ALL",
+    "statement": "cash_flow",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "dividends paid (other than to non-controlling interest), classified as financing activities",
+    "concept_id": "CF-100",
+    "direction": -1,
+    "sector": "ALL",
+    "statement": "cash_flow",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "dividends payable",
+    "concept_id": "BS-125",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "dividends received, classified as investing activities",
+    "concept_id": "CF-080",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "cash_flow",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "dividends received, classified as operating activities",
+    "concept_id": "CF-080",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "cash_flow",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "due from banks and other financial institutions",
+    "concept_id": "BS-015",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "due from related parties",
+    "concept_id": "BS-035",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "due from related parties - non-current portion",
+    "concept_id": "BS-080",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "due from related parties -non-current portion",
+    "concept_id": "BS-080",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "due to banks and other financial institutions",
+    "concept_id": "BS-100",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "due to related parties",
+    "concept_id": "BS-125",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "effect of exchange rate changes on cash and cash equivalents",
+    "concept_id": "BS-010",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "effect of exchange rate changes on cash and cash equivalents, net",
+    "concept_id": "BS-010",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "employee end-of-service benefits",
+    "concept_id": "BS-150",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "employees end of service benefits",
+    "concept_id": "BS-150",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "employees' terminal benefits",
+    "concept_id": "BS-150",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "equity attributable to owners of parent",
+    "concept_id": "BS-185",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "exchange income, net",
+    "concept_id": "IS-010",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "expenditure on other intangible assets",
+    "concept_id": "CF-070",
+    "direction": -1,
+    "sector": "ALL",
+    "statement": "cash_flow",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "fee and commission income",
+    "concept_id": "IS-010",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "fee and commission income (expense)",
+    "concept_id": "IS-060",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "finance cost",
+    "concept_id": "IS-080",
+    "direction": -1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "finance costs",
+    "concept_id": "IS-080",
+    "direction": -1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "finance income",
+    "concept_id": "IS-090",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "finance income from investing activities",
+    "concept_id": "CF-080",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "cash_flow",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "finance lease, current",
+    "concept_id": "BS-125",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "financial assets, current",
+    "concept_id": "BS-015",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "financial assets, non-current",
+    "concept_id": "BS-060",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "financing charges",
+    "concept_id": "IS-080",
+    "direction": -1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "financing costs",
+    "concept_id": "IS-080",
+    "direction": -1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "financing income",
+    "concept_id": "IS-090",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "foreign exchange income (expense)",
+    "concept_id": "IS-060",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "fund management fees",
+    "concept_id": "IS-050",
+    "direction": -1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "gain (loss) on fair value of investment properties",
+    "concept_id": "IS-060",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "gains (losses) on non-trading investments, net",
+    "concept_id": "IS-060",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "general and administration expenses",
+    "concept_id": "IS-050",
+    "direction": -1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "general and administrative expenses",
+    "concept_id": "IS-050",
+    "direction": -1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "general and administrative expenses, insurance operations",
+    "concept_id": "IS-050",
+    "direction": -1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "general and administrative expenses, insurance/ takaful operations",
+    "concept_id": "IS-050",
+    "direction": -1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "general and administrative expenses, shareholder's operations",
+    "concept_id": "IS-050",
+    "direction": -1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "general and administrative expenses, shareholders operations",
+    "concept_id": "IS-050",
+    "direction": -1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "goodwill",
+    "concept_id": "BS-070",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "government grants",
+    "concept_id": "BS-155",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "gross income",
+    "concept_id": "IS-030",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "gross premiums written",
+    "concept_id": "IS-010",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "gross premiums/ contributions written",
+    "concept_id": "IS-010",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "gross profit",
+    "concept_id": "IS-030",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "gross profit (loss)",
+    "concept_id": "IS-030",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "ijara financing",
+    "concept_id": "BS-140",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "impairment (reversal of impairment) charge for credit losses/ loans, financing and advances",
+    "concept_id": "IS-060",
+    "direction": -1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "impairment (reversal of impairment) charge for investments, net",
+    "concept_id": "IS-060",
+    "direction": -1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "impairment (reversal of impairment) charge for other financial assets",
+    "concept_id": "IS-060",
+    "direction": -1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "impairment loss on financial assets",
+    "concept_id": "IS-060",
+    "direction": -1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "impairment loss on trade receivables",
+    "concept_id": "IS-060",
+    "direction": -1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "impairment losses on financial assets",
+    "concept_id": "IS-060",
+    "direction": -1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "impairment of goodwill",
+    "concept_id": "IS-060",
+    "direction": -1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "income (loss) from continuing operations before zakat and tax",
+    "concept_id": "IS-110",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "income from investments held at fair value through income statement",
+    "concept_id": "IS-010",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "income from operations",
+    "concept_id": "IS-070",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "income tax",
+    "concept_id": "IS-125",
+    "direction": -1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "income tax expense",
+    "concept_id": "IS-125",
+    "direction": -1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "income tax expenses",
+    "concept_id": "IS-125",
+    "direction": -1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "income tax on continuing operations for period",
+    "concept_id": "IS-125",
+    "direction": -1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "income tax payable",
+    "concept_id": "BS-120",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "income taxes and zakat",
+    "concept_id": "IS-120",
+    "direction": -1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "income taxes paid (refund), classified as operating activities",
+    "concept_id": "CF-050",
+    "direction": -1,
+    "sector": "ALL",
+    "statement": "cash_flow",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "increase (decrease) in cash and cash equivalents before effect of exchange rate changes",
+    "concept_id": "CF-140",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "cash_flow",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "increase (decrease) in operating liabilities",
+    "concept_id": "CF-040",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "cash_flow",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "insurance contract assets",
+    "concept_id": "BS-035",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "insurance contract liabilities",
+    "concept_id": "BS-125",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "insurance finance income (expenses)",
+    "concept_id": "IS-080",
+    "direction": -1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "insurance revenue",
+    "concept_id": "IS-010",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "insurance service expense",
+    "concept_id": "IS-020",
+    "direction": -1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "insurance service result",
+    "concept_id": "IS-030",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "intangible assets",
+    "concept_id": "BS-070",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "intangible assets other than goodwill, net",
+    "concept_id": "BS-070",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "intangible assets, net",
+    "concept_id": "BS-070",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "interest expense",
+    "concept_id": "IS-080",
+    "direction": -1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "interest income",
+    "concept_id": "IS-090",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "interest received, classified as investing activities",
+    "concept_id": "CF-080",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "cash_flow",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "interest received, classified as operating activities",
+    "concept_id": "CF-080",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "cash_flow",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "inventories",
+    "concept_id": "BS-030",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "inventories, net",
+    "concept_id": "BS-030",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "inventory",
+    "concept_id": "BS-030",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "inventory real estate properties",
+    "concept_id": "BS-060",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "investment in associates",
+    "concept_id": "BS-075",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "investment in joint ventures",
+    "concept_id": "BS-075",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "investment income",
+    "concept_id": "IS-090",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "investment properties",
+    "concept_id": "BS-060",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "investment properties, at cost",
+    "concept_id": "BS-060",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "investment properties, at fair value",
+    "concept_id": "BS-060",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "investment property",
+    "concept_id": "BS-060",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "investments in associates and joint ventures",
+    "concept_id": "BS-075",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "investments in joint ventures and associates",
+    "concept_id": "BS-075",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "investments income",
+    "concept_id": "IS-090",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "investments, net",
+    "concept_id": "BS-060",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "islamic financing, current",
+    "concept_id": "BS-110",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "islamic financing, non-current",
+    "concept_id": "BS-140",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "lease receivable, non current",
+    "concept_id": "BS-080",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "loans, financing and advances, net",
+    "concept_id": "BS-020",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "loans,financing and advances, net",
+    "concept_id": "BS-020",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "long term accounts payable",
+    "concept_id": "BS-140",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "long-term borrowings",
+    "concept_id": "BS-140",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "long-term debt",
+    "concept_id": "BS-140",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "management fee",
+    "concept_id": "IS-050",
+    "direction": -1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "management fee, insurance operations",
+    "concept_id": "IS-050",
+    "direction": -1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "management fees",
+    "concept_id": "IS-050",
+    "direction": -1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "marketing expenses",
+    "concept_id": "IS-040",
+    "direction": -1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "murabaha and sukuk",
+    "concept_id": "BS-140",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "murabaha financing, current",
+    "concept_id": "BS-110",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "murabaha financing, non-current",
+    "concept_id": "BS-140",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "murabahas, current",
+    "concept_id": "BS-110",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "murabahas, non-current",
+    "concept_id": "BS-140",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "net amount transferred to retained earnings on disposal of equity investments held at fair value through other comprehensive income",
+    "concept_id": "BS-180",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "net asset value per unit",
+    "concept_id": "IS-160",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "net assets attributable to unitholders",
+    "concept_id": "BS-190",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "net cash flows from (used in) financing activities",
+    "concept_id": "CF-130",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "cash_flow",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "net cash flows from (used in) financing activities, insurance operations",
+    "concept_id": "CF-130",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "cash_flow",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "net cash flows from (used in) financing activities, insurance/ takaful operations",
+    "concept_id": "CF-130",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "cash_flow",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "net cash flows from (used in) investing activities",
+    "concept_id": "CF-090",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "cash_flow",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "net cash flows from (used in) investing activities, insurance operations",
+    "concept_id": "CF-090",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "cash_flow",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "net cash flows from (used in) investing activities, insurance/ takaful operations",
+    "concept_id": "CF-090",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "cash_flow",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "net cash flows from (used in) operating activities",
+    "concept_id": "CF-060",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "cash_flow",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "net cash flows from (used in) operating activities, insurance operations",
+    "concept_id": "CF-060",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "cash_flow",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "net cash flows from (used in) operating activities, insurance/ takaful operations",
+    "concept_id": "CF-060",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "cash_flow",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "net cash flows from (used in) operations",
+    "concept_id": "CF-060",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "cash_flow",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "net cash flows from financing activities",
+    "concept_id": "CF-130",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "cash_flow",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "net cash flows from investing activities",
+    "concept_id": "CF-090",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "cash_flow",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "net cash flows from operating activities",
+    "concept_id": "CF-060",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "cash_flow",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "net cash from financing activities",
+    "concept_id": "CF-130",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "cash_flow",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "net cash from investing activities",
+    "concept_id": "CF-090",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "cash_flow",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "net cash from operating activities",
+    "concept_id": "CF-060",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "cash_flow",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "net cash from operating activities before changes in working capital",
+    "concept_id": "CF-030",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "cash_flow",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "net change in cash and cash equivalents",
+    "concept_id": "CF-140",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "cash_flow",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "net change in working capital",
+    "concept_id": "CF-040",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "cash_flow",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "net claims/ benefits incurred",
+    "concept_id": "IS-020",
+    "direction": -1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "net claims/ benefits paid",
+    "concept_id": "IS-020",
+    "direction": -1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "net expenses from reinsurance contracts held",
+    "concept_id": "IS-060",
+    "direction": -1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "net financing and investment income",
+    "concept_id": "IS-010",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "net income",
+    "concept_id": "IS-140",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "net income (loss)",
+    "concept_id": "IS-140",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "net increase (decrease) due to working capital changes",
+    "concept_id": "CF-040",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "cash_flow",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "net increase (decrease) in cash and cash equivalents",
+    "concept_id": "CF-140",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "cash_flow",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "net increase (decrease) in cash and cash equivalents, insurance operations cash flow",
+    "concept_id": "CF-140",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "cash_flow",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "net interest income",
+    "concept_id": "IS-010",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "net premiums earned",
+    "concept_id": "IS-010",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "net premiums/ contributions earned",
+    "concept_id": "IS-010",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "net premiums/ contributions written",
+    "concept_id": "IS-010",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "net profit",
+    "concept_id": "IS-140",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "net profit (loss)",
+    "concept_id": "IS-140",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "net profit (loss) attributable to shareholders of parent",
+    "concept_id": "IS-150",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "net revenue",
+    "concept_id": "IS-010",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "net sales",
+    "concept_id": "IS-010",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "net special commission income is calculated by applying the discount rate to the net defined benefit liability. the company recognises the following changes in the net defined benefit obligation in the statement of income under general and administrative expenses:",
+    "concept_id": "IS-050",
+    "direction": -1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "non-controlling interest",
+    "concept_id": "BS-188",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "non-controlling interests",
+    "concept_id": "BS-188",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "operating cash flow before working capital changes",
+    "concept_id": "CF-030",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "cash_flow",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "operating income",
+    "concept_id": "IS-070",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "operating profit",
+    "concept_id": "IS-070",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "operating profit (loss)",
+    "concept_id": "IS-070",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "operating revenue",
+    "concept_id": "IS-010",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "other accounts payables",
+    "concept_id": "BS-100",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "other adjustments for working capital changes",
+    "concept_id": "CF-040",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "cash_flow",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "other adjustments to reconcile profit (loss) before tax to net cash flows",
+    "concept_id": "CF-030",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "cash_flow",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "other assets",
+    "concept_id": "BS-035",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "other current assets",
+    "concept_id": "BS-035",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "other current liabilities",
+    "concept_id": "BS-125",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "other expenses",
+    "concept_id": "IS-060",
+    "direction": -1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "other general and administrative expenses",
+    "concept_id": "IS-050",
+    "direction": -1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "other income",
+    "concept_id": "IS-060",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "other income (expenses), net",
+    "concept_id": "IS-060",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "other income from non operating activities, net",
+    "concept_id": "IS-060",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "other income, net",
+    "concept_id": "IS-060",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "other inflows (outflows) of cash, classified as financing activities",
+    "concept_id": "CF-120",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "cash_flow",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "other inflows (outflows) of cash, classified as investing activities",
+    "concept_id": "CF-080",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "cash_flow",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "other investment income",
+    "concept_id": "IS-090",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "other liabilities",
+    "concept_id": "BS-125",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "other non-current assets",
+    "concept_id": "BS-080",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "other non-current liabilities",
+    "concept_id": "BS-155",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "other operating expense",
+    "concept_id": "IS-060",
+    "direction": -1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "other operating expenses",
+    "concept_id": "IS-060",
+    "direction": -1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "other operating income",
+    "concept_id": "IS-060",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "other operating income (expenses), net",
+    "concept_id": "IS-060",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "other real estate, net",
+    "concept_id": "BS-035",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "other receivables",
+    "concept_id": "BS-035",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "other reserves",
+    "concept_id": "BS-182",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "payment for acquisition of associates and joint ventures",
+    "concept_id": "CF-080",
+    "direction": -1,
+    "sector": "ALL",
+    "statement": "cash_flow",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "payments of other equity instruments",
+    "concept_id": "CF-120",
+    "direction": -1,
+    "sector": "ALL",
+    "statement": "cash_flow",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "payments to acquire or redeem treasury shares",
+    "concept_id": "CF-120",
+    "direction": -1,
+    "sector": "ALL",
+    "statement": "cash_flow",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "prepayments",
+    "concept_id": "BS-035",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "prepayments and other receivables",
+    "concept_id": "BS-035",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "proceed from sales of property, plant and equipment",
+    "concept_id": "CF-080",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "cash_flow",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "proceeds from debt securities, term loans, borrowings, sukuks and murabahas",
+    "concept_id": "CF-110",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "cash_flow",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "proceeds from disposal of associates and joint ventures",
+    "concept_id": "CF-080",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "cash_flow",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "proceeds from disposal of investment properties",
+    "concept_id": "CF-080",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "cash_flow",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "proceeds from issuing other equity instruments",
+    "concept_id": "CF-120",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "cash_flow",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "proceeds from issuing shares",
+    "concept_id": "CF-120",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "cash_flow",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "proceeds from long-term borrowings",
+    "concept_id": "CF-110",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "cash_flow",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "proceeds from sale of financial assets",
+    "concept_id": "CF-080",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "cash_flow",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "proceeds from sale of property and equipment",
+    "concept_id": "CF-080",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "cash_flow",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "profit (loss) attributable to owners of parent",
+    "concept_id": "IS-150",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "profit (loss) attributable to saudi shareholders",
+    "concept_id": "IS-150",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "profit (loss) attributable to saudi shareholders in company",
+    "concept_id": "IS-150",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "profit (loss) before zakat and income tax",
+    "concept_id": "IS-110",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "profit (loss) before zakat and income tax from continuing operations",
+    "concept_id": "IS-110",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "profit (loss) before zakat and tax",
+    "concept_id": "IS-110",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "profit (loss) before zakat and tax from continuing operations",
+    "concept_id": "IS-110",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "profit (loss) for period",
+    "concept_id": "IS-140",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "profit (loss) for period from continuing operations",
+    "concept_id": "IS-130",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "profit (loss) for period from discontinued operations",
+    "concept_id": "IS-135",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "profit (loss) from continuing operations",
+    "concept_id": "IS-130",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "profit (loss) from discontinued operations",
+    "concept_id": "IS-135",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "profit (loss) from operations",
+    "concept_id": "IS-070",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "profit (loss) of discontinued operations",
+    "concept_id": "IS-135",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "profit (loss), attributable to equity holders of parent company",
+    "concept_id": "IS-150",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "profit (loss), attributable to saudi shareholders in company",
+    "concept_id": "IS-150",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "profit before zakat",
+    "concept_id": "IS-110",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "profit before zakat and income tax",
+    "concept_id": "IS-110",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "profit before zakat and tax",
+    "concept_id": "IS-110",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "profit for period",
+    "concept_id": "IS-140",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "profit for the period",
+    "concept_id": "IS-140",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "profit from operations",
+    "concept_id": "IS-070",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "property and equipment, net",
+    "concept_id": "BS-050",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "property operating expenses",
+    "concept_id": "IS-020",
+    "direction": -1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "property, plant and equipment",
+    "concept_id": "BS-050",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "property, plant and equipment, net",
+    "concept_id": "BS-050",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "proposed dividend",
+    "concept_id": "BS-125",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "provision for employees' end of service benefits",
+    "concept_id": "BS-150",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "provision for employees' terminal benefits",
+    "concept_id": "BS-150",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "provision for expected credit losses",
+    "concept_id": "IS-060",
+    "direction": -1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "provisions, current",
+    "concept_id": "BS-125",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "provisions, non-current",
+    "concept_id": "BS-155",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "purchase of financial assets",
+    "concept_id": "CF-080",
+    "direction": -1,
+    "sector": "ALL",
+    "statement": "cash_flow",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "purchase of investment properties",
+    "concept_id": "CF-080",
+    "direction": -1,
+    "sector": "ALL",
+    "statement": "cash_flow",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "purchase of property and equipment",
+    "concept_id": "CF-070",
+    "direction": -1,
+    "sector": "ALL",
+    "statement": "cash_flow",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "purchase of property, plant and equipment",
+    "concept_id": "CF-070",
+    "direction": -1,
+    "sector": "ALL",
+    "statement": "cash_flow",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "realized gain on disposal of equity instruments designated at fair value through other comprehensive income transferred to retained earnings",
+    "concept_id": "BS-180",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "realized gain ondisposal of equity instruments designated at fair value through other comprehensive income transferred to retained earnings",
+    "concept_id": "BS-180",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "reinsurance contract assets",
+    "concept_id": "BS-035",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "reinsurance contract liabilities",
+    "concept_id": "BS-125",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "reinsurance finance income (expenses)",
+    "concept_id": "IS-090",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "rent and premises related expenses",
+    "concept_id": "IS-050",
+    "direction": -1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "rent receivables",
+    "concept_id": "BS-035",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "rental income",
+    "concept_id": "IS-010",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "repayment of debt securities, term loans, borrowings, sukuks and murabahas",
+    "concept_id": "CF-110",
+    "direction": -1,
+    "sector": "ALL",
+    "statement": "cash_flow",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "repayment of long-term borrowings",
+    "concept_id": "CF-110",
+    "direction": -1,
+    "sector": "ALL",
+    "statement": "cash_flow",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "repayments of finance lease liabilities",
+    "concept_id": "CF-110",
+    "direction": -1,
+    "sector": "ALL",
+    "statement": "cash_flow",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "retained earnings",
+    "concept_id": "BS-180",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "retained earnings (accumulated losses)",
+    "concept_id": "BS-180",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "retained earnings - appropriated",
+    "concept_id": "BS-180",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "retained earnings - unappropriated",
+    "concept_id": "BS-180",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "revenue",
+    "concept_id": "IS-010",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "revenue from contracts with customers",
+    "concept_id": "IS-010",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "revenues",
+    "concept_id": "IS-010",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "reversal of impairment loss on property, plant and equipment",
+    "concept_id": "IS-060",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "salaries and employee related expenses",
+    "concept_id": "IS-050",
+    "direction": -1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "sales",
+    "concept_id": "IS-010",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "sales revenue",
+    "concept_id": "IS-010",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "selling and distribution expenses",
+    "concept_id": "IS-040",
+    "direction": -1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "selling and marketing expenses",
+    "concept_id": "IS-040",
+    "direction": -1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "selling and marketing expenses, insurance/ takaful operations",
+    "concept_id": "IS-040",
+    "direction": -1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "selling expenses",
+    "concept_id": "IS-040",
+    "direction": -1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "selling, distribution and marketing expenses",
+    "concept_id": "IS-040",
+    "direction": -1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "severance fees cost of revenue",
+    "concept_id": "IS-020",
+    "direction": -1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "share capital",
+    "concept_id": "BS-170",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "share of profit (loss) of associates",
+    "concept_id": "IS-100",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "share of profit (loss) of associates and joint ventures",
+    "concept_id": "IS-100",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "share of profit (loss) of joint ventures and associates",
+    "concept_id": "IS-100",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "share of profit of associates",
+    "concept_id": "IS-100",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "share of results of associates and joint ventures",
+    "concept_id": "IS-100",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "shareholders appropriation of surplus from insurance operations",
+    "concept_id": "IS-060",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "shareholders appropriation of surplus/ deficit from insurance/ takaful operations",
+    "concept_id": "IS-060",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "short term borrowings",
+    "concept_id": "BS-110",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "short-term borrowings",
+    "concept_id": "BS-110",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "short-term deposits",
+    "concept_id": "BS-015",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "short-term investments",
+    "concept_id": "BS-015",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "special commission expenses / return on deposits",
+    "concept_id": "IS-020",
+    "direction": -1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "special commission income/ gross financing and investment income",
+    "concept_id": "IS-010",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "statutory reserve",
+    "concept_id": "BS-175",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "sukuk, current",
+    "concept_id": "BS-110",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "sukuk, non-current",
+    "concept_id": "BS-140",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "sukuks, current",
+    "concept_id": "BS-110",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "sukuks, non-current",
+    "concept_id": "BS-140",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "tawarruq, current",
+    "concept_id": "BS-110",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "tawarruq, non-current",
+    "concept_id": "BS-140",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "the general and administrative expenses",
+    "concept_id": "IS-050",
+    "direction": -1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "the selling and marketing expenses",
+    "concept_id": "IS-040",
+    "direction": -1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "time deposits",
+    "concept_id": "BS-015",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "total adjustments to reconcile profit (loss)",
+    "concept_id": "CF-030",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "cash_flow",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "total adjustments to reconcile profit (loss) before tax to net cash flows",
+    "concept_id": "CF-030",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "cash_flow",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "total assets",
+    "concept_id": "BS-090",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "total basic earnings (loss) per share",
+    "concept_id": "IS-160",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "total current assets",
+    "concept_id": "BS-040",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "total current liabilities",
+    "concept_id": "BS-130",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "total equity",
+    "concept_id": "BS-190",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "total equity attributable to equity holders of bank",
+    "concept_id": "BS-185",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "total equity attributable to equity holders of company",
+    "concept_id": "BS-185",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "total equity attributable to equity holders of parent company",
+    "concept_id": "BS-185",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "total equity attributable to owners of parent",
+    "concept_id": "BS-185",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "total equity attributable to shareholders of parent",
+    "concept_id": "BS-185",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "total insurance operations' liabilities, surplus (deficit) and shareholders' liabilities and equity",
+    "concept_id": "BS-200",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "total insurance/ takaful operations assets",
+    "concept_id": "CONCEPT.TAKAFUL_OPS_ASSETS",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "total insurance/ takaful operations liabilities",
+    "concept_id": "CONCEPT.TAKAFUL_OPS_LIABILITIES",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "total insurance/ takaful operations liabilities and surplus (deficit)",
+    "concept_id": "CONCEPT.TAKAFUL_OPS_LIAB_SURPLUS",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "total insurance/ takaful operations liabilities, surplus (deficit) and shareholders liabilities and equity",
+    "concept_id": "BS-200",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "total liabilities",
+    "concept_id": "BS-160",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "total liabilities and equity",
+    "concept_id": "BS-200",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "total non current assets",
+    "concept_id": "CONCEPT.TOTAL_NON_CURRENT_ASSETS",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "total non current liabilities",
+    "concept_id": "CONCEPT.TOTAL_NON_CURRENT_LIABILITIES",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "total non-current assets",
+    "concept_id": "CONCEPT.TOTAL_NON_CURRENT_ASSETS",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "total non-current liabilities",
+    "concept_id": "CONCEPT.TOTAL_NON_CURRENT_LIABILITIES",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "total operating expenses",
+    "concept_id": "CONCEPT.TOTAL_OPERATING_EXPENSES",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "total operating revenue",
+    "concept_id": "IS-010",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "total other reserves",
+    "concept_id": "BS-182",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "total revenue",
+    "concept_id": "IS-010",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "total shareholders assets",
+    "concept_id": "CONCEPT.TAKAFUL_SHAREHOLDERS_ASSETS",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "total shareholders liabilities",
+    "concept_id": "CONCEPT.TAKAFUL_SHAREHOLDERS_LIABILITIES",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "total shareholders liabilities and equity",
+    "concept_id": "CONCEPT.TL_E_SHAREHOLDERS",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "trade accounts payables",
+    "concept_id": "BS-100",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "trade accounts receivable",
+    "concept_id": "BS-020",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "trade and other payables",
+    "concept_id": "BS-100",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "trade and other receivables",
+    "concept_id": "BS-020",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "trade payables",
+    "concept_id": "BS-100",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "trade receivables",
+    "concept_id": "BS-020",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "trade receivables, net",
+    "concept_id": "BS-020",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "trading income (expense)",
+    "concept_id": "IS-060",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "trading income, net",
+    "concept_id": "IS-010",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "transfer from proposed reserve to retained earnings",
+    "concept_id": "BS-180",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "transfer from retained earnings",
+    "concept_id": "BS-180",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "transfer from statutory reserve to retained earnings",
+    "concept_id": "BS-180",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "transfer from voluntary reserve to reserve retained earnings",
+    "concept_id": "BS-180",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "transfer of gains from the exclusion of equity investments at fair value through other comprehensive income to retained earnings",
+    "concept_id": "BS-180",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "transfer of realised gains from finanical assets held at fvtoci to retained earnings",
+    "concept_id": "BS-180",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "transfer to retained earnings",
+    "concept_id": "BS-180",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "transferred to retained earnings",
+    "concept_id": "BS-180",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "transfers to retained earnings on disposal of fvoci equity investments",
+    "concept_id": "BS-180",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "weighted average number of equity shares outstanding",
+    "concept_id": "IS-170",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "weighted average number of ordinary shares outstanding",
+    "concept_id": "IS-170",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "weighted average number of shares",
+    "concept_id": "IS-170",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "zakat",
+    "concept_id": "IS-120",
+    "direction": -1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "zakat and income tax",
+    "concept_id": "IS-120",
+    "direction": -1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "zakat and income tax expenses",
+    "concept_id": "IS-120",
+    "direction": -1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "zakat and income tax liabilities",
+    "concept_id": "BS-120",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "zakat and income tax paid",
+    "concept_id": "CF-050",
+    "direction": -1,
+    "sector": "ALL",
+    "statement": "cash_flow",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "zakat expense",
+    "concept_id": "IS-120",
+    "direction": -1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "zakat expenses",
+    "concept_id": "IS-120",
+    "direction": -1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "zakat expenses on continuing operations for period",
+    "concept_id": "IS-120",
+    "direction": -1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "zakat paid",
+    "concept_id": "CF-050",
+    "direction": -1,
+    "sector": "ALL",
+    "statement": "cash_flow",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "zakat paid, classified as operating activities",
+    "concept_id": "CF-050",
+    "direction": -1,
+    "sector": "ALL",
+    "statement": "cash_flow",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "zakat payable",
+    "concept_id": "BS-120",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "borrowings",
+    "concept_id": "BS-140",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "borrowings - current",
+    "concept_id": "BS-110",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "borrowings - non-current",
+    "concept_id": "BS-140",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "current portion of borrowings",
+    "concept_id": "BS-115",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "current portion of islamic loan facilities",
+    "concept_id": "BS-115",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "current portion of lease liabilities",
+    "concept_id": "BS-115",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "current portion of lease liability",
+    "concept_id": "BS-115",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "current portion of long-term borrowings.2",
+    "concept_id": "BS-115",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "debt securities, term loans, borrowings and sukuks in issue",
+    "concept_id": "BS-140",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "finance lease liabilities",
+    "concept_id": "BS-140",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "finance leases, non-current",
+    "concept_id": "BS-140",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "islamic loan facilities",
+    "concept_id": "BS-140",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "lease liabilities",
+    "concept_id": "BS-140",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "lease liability - current",
+    "concept_id": "BS-115",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "lease liability - non current",
+    "concept_id": "BS-140",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "lease liabilities2",
+    "concept_id": "BS-140",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "lease liabilities3",
+    "concept_id": "BS-140",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "loans and borrowings",
+    "concept_id": "BS-140",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "loans and lease liabilities",
+    "concept_id": "BS-140",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "loans and lease liablities",
+    "concept_id": "BS-140",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "long term murabaha loans",
+    "concept_id": "BS-140",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "long-term borrowings.3",
+    "concept_id": "BS-140",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "non-current portion of lease liability",
+    "concept_id": "BS-140",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "short term murabaha loans",
+    "concept_id": "BS-110",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "sidf loan",
+    "concept_id": "BS-140",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "subordinated debt",
+    "concept_id": "BS-140",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "tier 1 sukuk",
+    "concept_id": "BS-140",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "tier i sukuk",
+    "concept_id": "BS-140",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "cost of sale",
+    "concept_id": "IS-020",
+    "direction": -1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "profit (loss) from operating activities",
+    "concept_id": "IS-070",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "revenuee",
+    "concept_id": "IS-010",
+    "direction": 1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  },
+  {
+    "raw_label": "sales cost",
+    "concept_id": "IS-020",
+    "direction": -1,
+    "sector": "ALL",
+    "statement": "income_statement",
+    "tier": "exact",
+    "reviewed": true
+  }
+]

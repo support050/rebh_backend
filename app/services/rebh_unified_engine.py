@@ -10,16 +10,23 @@ from app.services.rebh_data_guard_service import (
     verify_net_income_plausibility,
     verify_fcf_yield_bound,
     discrete_quarters,
+    derive_discrete_quarter_series,
+    detect_scale_factor,
+    scale_monetary_items,
+    resolve_total_equity,
+    _pick_basic_eps,
     ttm_series,
     yoy_series,
     evaluate_red_flags
 )
 from app.services.bank_analytics_service import calculate_bank_metrics
+from app.services.rebh_health_service import evaluate_health
 from app.services.rebh_production_helper_service import (
     compute_strict_piotroski_f_score,
     evaluate_statement_freshness,
     extract_cyclical_cycle_bounds,
     extract_nine_box_inputs,
+    derive_cash_dps,
     evaluate_ps_kill_switch,
     compute_peer_relative_grades,
     get_sector_porter_forces,
@@ -28,6 +35,7 @@ from app.services.rebh_production_helper_service import (
 from app.schemas.rebh_contract import (
     RebhUniversalContract,
     BalanceIdentityStatus,
+    HealthAssessment,
     DiscreteQuarterSeries,
     TTMData,
     FactorGrade,
@@ -224,6 +232,99 @@ def calculate_nine_box(
     return {"v1": v1, "v2": v2, "v3": v3}
 
 
+def _period_months(label: object) -> Optional[int]:
+    """Months covered by a cumulative XBRL window label ('2025-01_2025-12' -> 12)."""
+    s = str(label or "").strip()
+    if "_" not in s:
+        return None
+    start, _, end = s.partition("_")
+    try:
+        sy, sm = int(start[:4]), int(start[5:7])
+        ey, em = int(end[:4]), int(end[5:7])
+    except (TypeError, ValueError):
+        return None
+    span = (ey * 12 + em) - (sy * 12 + sm) + 1
+    return span if span > 0 else None
+
+
+def _inconsistent_fiscal_year(values: Optional[Dict[str, Optional[float]]]) -> Optional[str]:
+    """A fiscal year whose 12-month window reports LESS than its own sub-window.
+
+    Tadawul interim statements are cumulative from the fiscal-year start, so
+    full-year REVENUE can never be below the 3/6/9-month window inside it — a
+    revenue flow only grows within a year. When it does (observed on 2060,
+    full-year revenue 2,488.7M against its own disclosed 2,531.2M nine-month
+    figure), the annual row of that filing is corrupt at source and anything
+    de-cumulated from it — the derived Q4 = annual - 9M — inherits the corruption
+    as a phantom negative quarter. Net profit is deliberately NOT tested here:
+    a full-year profit below its nine-month figure is legitimate (a Q4 loss or
+    impairment), so it cannot distinguish corruption from real performance.
+    Returns the offending year ('YYYY'), or None when the series is consistent.
+    """
+    vals = values or {}
+    years = sorted({
+        k[:4] for k, v in vals.items()
+        if v is not None and _period_months(k) == 12 and k[5:7] == "01"
+    })
+    if not years:
+        return None
+    y = years[-1]
+    fy = vals.get(f"{y}-01_{y}-12")
+    if fy is None:
+        return None
+    for shorter in (f"{y}-01_{y}-09", f"{y}-01_{y}-06", f"{y}-01_{y}-03"):
+        sv = vals.get(shorter)
+        # Non-negative sub-window: a shrinking (or negative) revenue is impossible.
+        if sv is not None and sv >= 0 and fy < sv:
+            return y
+    return None
+
+
+def _twelve_month_profit(
+    net_vals: Dict[str, Optional[float]],
+    rev_vals: Optional[Dict[str, Optional[float]]],
+    ttm_net: Optional[float],
+    ttm_net_complete: bool,
+    ni: Optional[float],
+) -> tuple:
+    """A 12-month profit figure for the stock/flow ratios — never an extrapolation.
+
+    ROE and ROA divide a period FLOW by a balance-sheet STOCK, so the numerator
+    must cover a year. The primary `ni` is simply the latest reported income-
+    statement window, which between filing cycles is a 3-month stub: feeding it
+    into ROE understates it about fourfold (Al Othaim read 4.5% where the
+    trailing year gives 15.8%), and every ROE-anchored grade — Profitability,
+    the Growth proxy and the financial-sector Safety rule — moves with it.
+
+    Preference order, all of them disclosed figures:
+      1. a complete trailing-twelve-month sum of discrete quarters ('ttm_4q');
+      2. the latest reported 12-month statement ('annual_fy');
+      3. the latest figure as-is, labelled 'partial_window' so the consumer can
+         say so — multiplying a stub by 12/months would invent earnings.
+
+    A fourth outcome takes precedence over all three: when the newest fiscal
+    year's REVENUE fails the cumulative-consistency check AND its fourth quarter
+    had to be derived rather than being disclosed explicitly, every candidate
+    numerator above is built on the same broken annual row, so the ratio is
+    refused (value None) and the basis says why. Guessing here would print an
+    ROE off a phantom negative quarter — 2060 read -39% against a disclosed
+    +5.5%. Returns (value_sar, basis).
+    """
+    bad_year = _inconsistent_fiscal_year(rev_vals)
+    if bad_year and (net_vals or {}).get(f"{bad_year}-10_{bad_year}-12") is None:
+        return None, f"rejected-corrupt-fy-{bad_year}-revenue"
+    if ttm_net is not None and ttm_net_complete:
+        return ttm_net, "ttm_4q"
+    annual = sorted(
+        (k for k, v in (net_vals or {}).items()
+         if v is not None and _period_months(k) == 12),
+        key=lambda k: str(k),
+    )
+    if annual:
+        return net_vals[annual[-1]], "annual_fy"
+    return ni, "partial_window"
+
+
 def calculate_full_company_payload(
     symbol: str,
     price_override: Optional[float] = None,
@@ -283,24 +384,58 @@ def calculate_full_company_payload(
     latest_is_p = is_periods[-1] if is_periods else None
     latest_cf_p = cf_periods[-1] if cf_periods else None
 
+    # 2c. Canonical monetary-unit normalization (Error 2). Stored XBRL artifacts
+    # reach us in MIXED units — some files are in millions (Aramco), others in full
+    # SAR (Almarai, banks) — and the source 'rounding' attribute is usually absent,
+    # so per-share and P/B math collapses when read raw. Detect each file's scale
+    # from the market SAR anchor (implied shares = market_cap / price; reported EPS
+    # vs net is the exact, par-independent primary basis, share-capital/par a
+    # fallback) and rescale every IS/BS/CF monetary value to ACTUAL SAR. Full SAR
+    # is the correct canonical for the engine internals: EPS, DPS, FCF/share and
+    # net-debt/share are all (full-SAR numerator) / (actual share count), and P/B,
+    # P/E are ratios of two same-unit figures. Published artifacts are ALREADY
+    # compiled to actual SAR by the parser (per-filing declared rounding, see
+    # backend/docs/XBRL_OUTPUT_POLICY.md) and stamp meta.rounding='normalized_sar',
+    # so the branch below is SKIPPED for them. It survives only as a fallback for
+    # unstamped input (a raw upload in the same request). The former
+    # scripts/normalize_xbrl_units.py persistence step was deleted with Milestone D.
+    NORM_FLAG = "normalized_sar"
+    scale_basis = "pre-normalized"
+    if getattr(meta, "rounding", None) != NORM_FLAG:
+        sar_factor, scale_basis = detect_scale_factor(
+            bs_items, is_items, mc_sar, px, latest_bs_p, latest_is_p
+        )
+        if sar_factor != 1.0:
+            scale_monetary_items(bs_items, sar_factor)
+            scale_monetary_items(is_items, sar_factor)
+            scale_monetary_items(cf_items, sar_factor)
+
+    implied_shares = (mc_sar / px) if (mc_sar and px and px > 0) else None
+
     # Balance sheet primary items
     ta = bs_items.get("Total Assets", {}).get(latest_bs_p)
     tl = bs_items.get("Total Liabilities", {}).get(latest_bs_p)
-    te = bs_items.get("Total Equity", {}).get(latest_bs_p) or bs_items.get("Total Equity Attributable to Shareholders", {}).get(latest_bs_p)
+    te = resolve_total_equity(bs_items, latest_bs_p)
     ca = bs_items.get("Total Current Assets", {}).get(latest_bs_p)
     cl = bs_items.get("Total Current Liabilities", {}).get(latest_bs_p)
     cash = bs_items.get("Cash and Cash Equivalents", {}).get(latest_bs_p) or 0.0
 
-    st_debt = (
+    # Borrowings. Only the canonical lines count as debt, but the engine must NOT
+    # collapse "no borrowing line disclosed" with "a disclosed balance of zero" —
+    # conflating them is what made Total Debt render a dash next to a real
+    # Debt/Equity and a real negative Net Debt. The flag keeps the distinction
+    # visible to the UI without changing any computed figure.
+    st_debt_raw = (
         bs_items.get("Short-term Borrowings & Debt", {}).get(latest_bs_p)
         or bs_items.get("Current Portion of Long-term Debt", {}).get(latest_bs_p)
-        or 0.0
     )
-    lt_debt = (
+    lt_debt_raw = (
         bs_items.get("Long-term Borrowings & Debt", {}).get(latest_bs_p)
         or bs_items.get("Debt securities, term loan, borrowings and sukuk in issue", {}).get(latest_bs_p)
-        or 0.0
     )
+    borrowings_disclosed = st_debt_raw is not None or lt_debt_raw is not None
+    st_debt = st_debt_raw or 0.0
+    lt_debt = lt_debt_raw or 0.0
     tot_debt = st_debt + lt_debt
 
     # Income statement primary items
@@ -317,16 +452,84 @@ def calculate_full_company_payload(
     cff = cf_items.get("Net Cash from Financing Activities (CFF)", {}).get(latest_cf_p)
     fcf = (cfo - abs(capex)) if (cfo is not None) else None
 
-    # Shares
+    # 2b. De-cumulate flow items (income statement + cash flow) into DISCRETE
+    # quarters before any trailing-twelve-month roll-up. Tadawul/XBRL quarterly
+    # statements are cumulative from the fiscal-year start (Q2 = 6M, Q3 = 9M,
+    # annual = 12M); summing the last four raw windows double-counts revenue and
+    # earnings (~2x). Balance-sheet lines are snapshots and are never differenced.
+    net_vals = is_items.get("Net Profit for the Period") or is_items.get("Net Profit Attributable to Shareholders of Parent") or {}
+    rev_vals = is_items.get("Revenue / Turnover") or {}
+    gp_vals = dict(is_items.get("Gross Profit") or {})
+    op_vals = is_items.get("Operating Income (EBIT)") or {}
+    cfo_vals = cf_items.get("Net Cash from Operating Activities (CFO)") or cf_items.get("Net Cash Flows from Operating Activities") or {}
+    capex_vals = cf_items.get("Capital Expenditures (CapEx)") or cf_items.get("Purchase of Property, Plant and Equipment") or {}
+
+    # Gross Profit is a disclosed subtotal (IS-030) for only 165 of the 257
+    # issuers; the rest disclose Revenue and Cost of Sales and no subtotal, so
+    # the missing periods are completed arithmetically. Expenses are stored
+    # NEGATIVE, hence the sum. Verified issuer-by-issuer on the ingested XBRL:
+    # 4,506 of 4,512 period checks reproduce the disclosed subtotal within 2%, so
+    # this is arithmetic on disclosed components, not estimation — and it never
+    # overwrites a subtotal the issuer did publish. Operating profit is
+    # deliberately NOT derived the same way: Gross Profit + Selling &
+    # Distribution + G&A + Other Operating reproduced the disclosed EBIT in only
+    # 54% of checks (2,148 of 4,010 — sign conventions differ per issuer), and
+    # guessing it would corrupt interest coverage, the safety score, the required
+    # return and every valuation built on them. Those stay a dash.
+    cogs_vals = is_items.get("Cost of Sales") or {}
+    gp_derived_periods = []
+    for _p in set(rev_vals) | set(cogs_vals):
+        if gp_vals.get(_p) is not None:
+            continue
+        _rev, _cogs = rev_vals.get(_p), cogs_vals.get(_p)
+        if _rev is not None and _cogs is not None and _cogs <= 0:
+            gp_vals[_p] = _rev + _cogs
+            gp_derived_periods.append(_p)
+    if gp is not None:
+        gp_basis = "° disclosed subtotal"
+    elif gp_derived_periods:
+        gp = gp_vals.get(latest_is_p)
+        gp_basis = "≈ derived from Revenue + Cost of Sales (no subtotal disclosed)"
+    else:
+        gp_basis = "🔌 no source: neither a Gross Profit subtotal nor a Cost of Sales line"
+
+    net_disc = derive_discrete_quarter_series(net_vals)
+    rev_disc = derive_discrete_quarter_series(rev_vals)
+    gp_disc = derive_discrete_quarter_series(gp_vals)
+    op_disc = derive_discrete_quarter_series(op_vals)
+    cfo_disc = derive_discrete_quarter_series(cfo_vals)
+    capex_disc = derive_discrete_quarter_series(capex_vals)
+
+    def _ttm4(pairs, fallback):
+        present = [x for x in [v for _, v in pairs][-4:] if x is not None]
+        return (sum(present), True) if len(present) == 4 else (fallback, False)
+
+    ttm_net, ttm_net_complete = _ttm4(net_disc, ni)
+    ttm_rev, ttm_rev_complete = _ttm4(rev_disc, rev)
+    ttm_gp, _ = _ttm4(gp_disc, gp)
+    ttm_op, _ = _ttm4(op_disc, ebit)
+    ttm_cfo, ttm_cfo_complete = _ttm4(cfo_disc, cfo)
+    ttm_capex, ttm_capex_complete = _ttm4(capex_disc, capex)
+
+    if ttm_cfo_complete:
+        cfo = ttm_cfo
+    if ttm_capex_complete:
+        capex = ttm_capex
+    fcf = (cfo - abs(capex)) if (cfo is not None) else None
+
+    # Shares — the actual share count, used as the EPS/per-share denominator.
+    # The market anchor is authoritative: shares = market_cap_SAR / price. The
+    # share-capital/par route is only a fallback for names with no live price, and
+    # breaks for non-10 SAR par (e.g. Aramco 0.5), so it is never preferred.
     shares_raw = (
         bs_items.get("Share Capital", {}).get(latest_bs_p)
         or bs_items.get("Issued Capital", {}).get(latest_bs_p)
         or bs_items.get("Paid-up Capital", {}).get(latest_bs_p)
         or bs_items.get("Capital", {}).get(latest_bs_p)
     )
-    shares = (shares_raw / 10.0) if (shares_raw and shares_raw > 0) else None
-    if not shares and mc and px and px > 0:
-        shares = (mc * 1_000_000) / px
+    shares = implied_shares if (implied_shares and implied_shares > 0) else None
+    if not shares and shares_raw and shares_raw > 0:
+        shares = shares_raw / 10.0
 
     # 3. Guards Verification
     bs_identity = verify_balance_sheet_identity(ta, tl, te)
@@ -336,26 +539,59 @@ def calculate_full_company_payload(
     has_valid_bs = bool(std_bs and bs_identity["is_valid"])
     has_valid_is = bool(std_is and len(is_periods) > 0 and ni is not None and ni_plausibility["is_plausible"])
 
-    quarantine_reasons = []
-    if not has_valid_bs:
-        quarantine_reasons.append("فشل مطابقة الميزانية العمومية A != L + E")
-    if not has_valid_is:
-        quarantine_reasons.append("قائمة دخل غير مكتملة أو غير معقولة محاسبياً")
-    if not ni_plausibility["is_plausible"]:
-        quarantine_reasons.append(ni_plausibility["reason"])
+    # Sukuk signal feeds both the G5 health gate below and the Build-Up R in
+    # section 5, so resolve it once here and reuse.
+    sukuk_info = _get_buildup_sukuk_yield_safe(symbol)
+    has_sukuk = bool(sukuk_info.get("symbol")) and not sukuk_info.get("is_fallback", True)
 
-    is_quarantined = len(quarantine_reasons) > 0
+    # 3b. Unified data-health gate (Errors 1b & 5). The engine feeds the SAME
+    # canonical evaluator (rebh_health_service.evaluate_health) the quarantine
+    # endpoint calls, so pricing and the rejection page can never diverge. A
+    # CORRUPTION/SCALE verdict means the data itself is untrustworthy -> hard-block
+    # pricing (no nine-box, zones or IRR). STALE is surfaced through the buy-gate
+    # and stale_reason (the approved degradation) without hiding the model, since
+    # the whole market reads as stale between filing cycles.
+    eps_reported = _pick_basic_eps(is_items, latest_is_p)
+    health = evaluate_health(
+        ta=ta, tl=tl, te=te, tot_debt=tot_debt,
+        rev=rev, net=ni, eps_reported=eps_reported,
+        shares=shares, px=px, mc_sar=mc_sar,
+        latest_period=latest_is_p or latest_bs_p,
+        is_financial=is_bank_sector, has_sukuk=has_sukuk,
+    )
+    is_quarantined = health["bucket"] in ("CORRUPTION", "SCALE")
+    quarantine_reasons = (
+        [s["label"] for s in health["structured"] if s["code"] != "STALE"]
+        if is_quarantined else []
+    )
     quarantine_text = " | ".join(quarantine_reasons) if is_quarantined else None
 
     # 4. Ratios
-    roe = round(ni / te * 100.0, 1) if (ni and te and te > 0) else None
-    roa = round(ni / ta * 100.0, 1) if (ni and ta and ta > 0) else None
+    # Stock/flow ratios need a twelve-month numerator (see _twelve_month_profit);
+    # margins below stay on the raw `ni`/`rev` pair because both come from the
+    # SAME window, so they are period-matched already and scale-invariant.
+    net_12, net_12_basis = _twelve_month_profit(net_vals, rev_vals, ttm_net, ttm_net_complete, ni)
+    roe = round(net_12 / te * 100.0, 1) if (net_12 and te and te > 0) else None
+    roa = round(net_12 / ta * 100.0, 1) if (net_12 and ta and ta > 0) else None
     cur_r = round(ca / cl, 2) if (ca and cl and cl > 0) else None
     de_assets = round(tot_debt / ta * 100.0, 1) if (tot_debt and ta and ta > 0) else 0.0
-    int_cov = round(ebit / abs(fin_costs), 1) if (ebit and fin_costs and abs(fin_costs) > 0) else (15.0 if ebit and ebit > 0 else None)
+    # Interest coverage — EBIT ÷ disclosed finance costs. When an issuer reports a
+    # positive operating result but tags no finance-cost line (the normal IFRS
+    # presentation for a company without borrowings), the documented default band
+    # of 15x applies; it is now stamped with its provenance so no surface has to
+    # invent a source for the number, and no score changes (the band was already
+    # what fed the safety cluster).
+    if ebit and fin_costs and abs(fin_costs) > 0:
+        int_cov = round(ebit / abs(fin_costs), 1)
+        int_cov_basis = "° verified: EBIT ÷ disclosed finance costs"
+    elif ebit and ebit > 0:
+        int_cov = 15.0
+        int_cov_basis = "≈ default band 15x: positive operating result, no finance-cost line disclosed"
+    else:
+        int_cov = None
+        int_cov_basis = "🔌 no source: operating result not disclosed"
 
-    # 5. Sukuk Yield and Build-Up R (Phase 4: company sukuk outranks generic grade curve)
-    sukuk_info = _get_buildup_sukuk_yield_safe(symbol)
+    # 5. Build-Up R (sukuk_info resolved earlier for the G5 health gate)
     bond_yield = sukuk_info["yield_pct"]
     rate_source = sukuk_info["source"]
     sukuk_sym   = sukuk_info.get("symbol")
@@ -373,6 +609,7 @@ def calculate_full_company_payload(
         "debt_to_assets": de_assets,
         "de": de_ratio,
         "interest_coverage": int_cov,
+        "interest_coverage_basis": int_cov_basis,
     })
     build_up_res = calculate_build_up_r(
         bond_yield=bond_yield,
@@ -382,8 +619,20 @@ def calculate_full_company_payload(
     )
     r_final = build_up_res["r_pct"]
 
+    # 5b. Cash-dividend evidence — computed BEFORE and OUTSIDE the valuation
+    # quarantine gate. The CFF 'Dividends Paid' line is independent, auditable
+    # cash evidence: a corrupted EPS cell in the issuer's filing (e.g. 1321
+    # repeats net income inside its EPS line) must never blank the dividend
+    # pages. Pricing (nine-box/DCF/IRR) stays hard-blocked below; only this
+    # verified cash fact survives quarantine.
+    cash_dps = derive_cash_dps(cf_items, latest_cf_p or latest_is_p, shares)
+    cash_dps_source = "cff_dividends_paid_actual" if cash_dps else "🔌 missing-source"
+
     # 6. Nine-Box Valuation & Zones
-    eps_latest = (ni / shares) if (ni and shares and shares > 0) else (ni / 100_000 if ni else None)
+    # Price on TRAILING-TWELVE-MONTH earnings when a complete discrete-quarter
+    # TTM exists; fall back to the latest reported window otherwise.
+    eps_basis = ttm_net if (ttm_net_complete and ttm_net) else ni
+    eps_latest = (eps_basis / shares) if (eps_basis and shares and shares > 0) else (eps_basis / 100_000 if eps_basis else None)
     nine_box_payload = None
     zones_payload = None
     if not is_quarantined and eps_latest and eps_latest > 0:
@@ -396,7 +645,7 @@ def calculate_full_company_payload(
             cash=cash,
             shares=shares
         )
-        div_val = nb_inputs["dps"]
+        div_val = cash_dps  # same CFF-verified figure the dividend pages read
         fcf_per_share = nb_inputs["fcf_net_debt_per_share"]
         
         # Sector-aligned growth targets
@@ -421,7 +670,7 @@ def calculate_full_company_payload(
                 gl_pct=gl_rate,
                 gs_pct=gs_rate,
                 n_years=5,
-                source_status="° verified" if nb_inputs["dps_source"] == "cff_dividends_paid_actual" else "≈ declared_proxy",
+                source_status="° verified" if cash_dps_source == "cff_dividends_paid_actual" else "≈ declared_proxy",
                 **nb_div
             ),
             earnings=NineBoxCell(
@@ -452,17 +701,30 @@ def calculate_full_company_payload(
 
         v1_anchor = nb_earn["v1"] or 0.0
         v3_anchor = nb_earn["v3"] or (v1_anchor * 1.3)
+        silver_mid = round((v1_anchor + v3_anchor) / 2.0, 2)
+        if not px:
+            zone_label = None
+        elif px <= v1_anchor:
+            zone_label = "Golden"
+        elif px <= silver_mid:
+            zone_label = "Silver"
+        elif px <= v3_anchor:
+            zone_label = "Bronze"
+        else:
+            # Price is above every fair-value band — never label it 'Bronze'.
+            zone_label = "Above Fair"
         zones_payload = PriceZones(
             gold_max=v1_anchor,
-            silver_max=round((v1_anchor + v3_anchor) / 2.0, 2),
+            silver_max=silver_mid,
             bronze_max=v3_anchor,
-            current_zone="Golden" if (px and px <= v1_anchor) else ("Silver" if (px and px <= (v1_anchor + v3_anchor)/2.0) else "Bronze")
+            current_zone=zone_label
         )
 
-    # 7. Reverse DCF & IRR
+    # 7. Reverse DCF & IRR — withheld whenever the health gate hard-blocks pricing
+    # (CORRUPTION/SCALE), so no implied-growth or IRR survives on untrustworthy data.
     reverse_dcf_payload = {}
     irr_payload = {}
-    if px and px > 0 and eps_latest and eps_latest > 0:
+    if (not is_quarantined) and px and px > 0 and eps_latest and eps_latest > 0:
         r_dec = r_final / 100.0
         # Reverse DCF Growth = (Price * R - EPS) / (Price + EPS)
         implied_g = round(((px * r_dec - eps_latest) / (px + eps_latest)) * 100.0, 2)
@@ -485,12 +747,14 @@ def calculate_full_company_payload(
                 "fair_value_anchor": fair_v
             }
 
-    # 12. Quarterly Series (computed prior to Cyclical & P/S for true historical inputs)
-    q_periods = is_periods[-9:] if is_periods else []
-    q_rev = [is_items.get("Revenue / Turnover", {}).get(p) for p in q_periods]
-    q_gp = [is_items.get("Gross Profit", {}).get(p) for p in q_periods]
-    q_op = [is_items.get("Operating Income (EBIT)", {}).get(p) for p in q_periods]
-    q_net = [is_items.get("Net Profit for the Period", {}).get(p) for p in q_periods]
+    # 12. Quarterly Series — DISCRETE quarters de-cumulated from the cumulative
+    # statements (revenue/gross/operating/net aligned on a shared quarter grid).
+    _rev_by, _gp_by, _op_by, _net_by = dict(rev_disc), dict(gp_disc), dict(op_disc), dict(net_disc)
+    q_periods = sorted(set(_net_by) | set(_rev_by) | set(_gp_by) | set(_op_by))
+    q_net = [_net_by.get(p) for p in q_periods]
+    q_rev = [_rev_by.get(p) for p in q_periods]
+    q_gp = [_gp_by.get(p) for p in q_periods]
+    q_op = [_op_by.get(p) for p in q_periods]
     q_eps = [(n / shares) if (n and shares) else None for n in q_net]
 
     quarterly_payload = DiscreteQuarterSeries(
@@ -507,19 +771,17 @@ def calculate_full_company_payload(
         missing_reasons={}
     )
 
-    ttm_net = sum([q for q in q_net[-4:] if q is not None]) if len([q for q in q_net[-4:] if q is not None]) == 4 else ni
-    ttm_rev = sum([q for q in q_rev[-4:] if q is not None]) if len([q for q in q_rev[-4:] if q is not None]) == 4 else rev
     ttm_payload = TTMData(
         revenue=ttm_rev,
-        gross_profit=gp,
-        operating_profit=ebit,
+        gross_profit=ttm_gp,
+        operating_profit=ttm_op,
         net_profit=ttm_net,
         cfo=cfo,
         capex=capex,
         fcf=fcf,
         eps=(ttm_net / shares) if (ttm_net and shares) else None,
-        discrete_quarters_count=len([q for q in q_net[-4:] if q is not None]),
-        is_complete=len([q for q in q_net[-4:] if q is not None]) == 4
+        discrete_quarters_count=len([x for x in q_net[-4:] if x is not None]),
+        is_complete=ttm_net_complete
     )
 
     # 8. Cyclical Bands & Loss P/S
@@ -558,6 +820,14 @@ def calculate_full_company_payload(
                 danger_ps=round(sales_per_sh * fair_ps * 3.0, 2)
             )
 
+    # 8b. Strict Regulatory Statement Freshness Evaluation (computed early: the
+    # buy-gate below and the contract assembly both depend on it).
+    freshness_eval = evaluate_statement_freshness(latest_is_p or latest_bs_p, is_financial_sector=is_bank_sector)
+    is_statement_fresh = freshness_eval["is_fresh"] and (not is_quarantined)
+    stale_explanation = freshness_eval.get("stale_reason") if not freshness_eval["is_fresh"] else (
+        "Missing/Incomplete periods" if is_quarantined else None
+    )
+
     # 9. Red flags & Buy Gate
     red_flags_list = evaluate_red_flags(
         revenue_series=[rev],
@@ -570,10 +840,17 @@ def calculate_full_company_payload(
     )
     red_flag_items = [RedFlagItem(**rf) for rf in red_flags_list]
 
-    buy_gate_passed = (not is_quarantined) and (len([f for f in red_flag_items if f.severity == "critical"]) == 0)
+    # A stale filing is a hard gate failure, not a side banner: freshness, a
+    # clean accounting-identity/is plausibility pass, and zero critical flags
+    # are ALL required before the buy-gate can show 'Passed'.
+    critical_flags = [f for f in red_flag_items if f.severity == "critical"]
+    buy_gate_reasons = list(quarantine_reasons)
+    if not freshness_eval["is_fresh"]:
+        buy_gate_reasons.append(freshness_eval.get("stale_reason") or "قوائم متأخرة — تجاوزت حد الحداثة المسموح")
+    buy_gate_passed = (not is_quarantined) and is_statement_fresh and (len(critical_flags) == 0)
     buy_gate_payload = BuyGateEvaluation(
         gate_passed=buy_gate_passed,
-        fail_reasons=quarantine_reasons,
+        fail_reasons=buy_gate_reasons,
         pass_conditions=["اجتياز الفحص المحاسبي", "عدم وجود رايات حمراء حرجة", "قوائم حديثة نشطة"]
     )
 
@@ -611,12 +888,7 @@ def calculate_full_company_payload(
         illiquid_assets_pct=None
     )
 
-    # 13. Strict Regulatory Statement Freshness Evaluation
-    freshness_eval = evaluate_statement_freshness(latest_is_p or latest_bs_p, is_financial_sector=is_bank_sector)
-    is_statement_fresh = freshness_eval["is_fresh"] and (not is_quarantined)
-    stale_explanation = freshness_eval.get("stale_reason") if not freshness_eval["is_fresh"] else (
-        "Missing/Incomplete periods" if is_quarantined else None
-    )
+    # (Statement freshness is computed earlier — see section 8b.)
 
     # 14. Peer-Relative Dynamic Factor Grades (Anchored to Sector Medians)
     pe_ratio = (px / eps_latest) if (px and eps_latest and eps_latest > 0) else None
@@ -657,7 +929,8 @@ def calculate_full_company_payload(
         enterprise_value=ev_val,
         debt_to_equity_pct=de_pct,
         net_debt=net_debt_val,
-        source_status="° verified"
+        borrowings_disclosed=borrowings_disclosed,
+        source_status="° verified" if borrowings_disclosed else "🔌 no borrowing line disclosed"
     )
 
     # 17. GF Business Predictability Stars (Stability of TTM Revenue over quarters)
@@ -707,6 +980,11 @@ def calculate_full_company_payload(
         fresh=is_statement_fresh,
         stale_reason=stale_explanation,
         quarantine_reason=quarantine_text,
+        # Dividend cash evidence survives every valuation quarantine — see 5b.
+        dps=cash_dps,
+        dps_source=cash_dps_source,
+        diluted_shares=round(shares, 2) if shares else None,
+        health=HealthAssessment(**health),
         balance_identity=BalanceIdentityStatus(**bs_identity),
         income_statement_status="VERIFIED" if has_valid_is else "UNVERIFIED",
         quarterly=quarterly_payload,
@@ -754,6 +1032,15 @@ def calculate_full_company_payload(
             "audit_gate": "PASSED" if not is_quarantined else "BLOCKED",
             "porter_provenance": sector_porter["status"],
             "piotroski_audit": piotroski_audit["status"],
-            "freshness_days": freshness_eval.get("days_elapsed")
+            "freshness_days": freshness_eval.get("days_elapsed"),
+            # Provenance of the ROE/ROA numerator, so a grade can be read
+            # against the window it was actually computed from.
+            "profit_12m_basis": net_12_basis,
+            "profit_12m_sar": net_12,
+            # How the two figures the summary cards show as Gross Profit and
+            # Interest Coverage were obtained, so a completed subtotal and a
+            # default band are never read as disclosed numbers.
+            "gross_profit_basis": gp_basis,
+            "interest_coverage_basis": int_cov_basis,
         }
     )

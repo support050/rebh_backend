@@ -2,15 +2,22 @@
 SP500 Earnings Yield Scraper
 Fetches the S&P 500 Earnings Yield (EY) and stores it as indicator_code='SP500_EY'.
 
-Primary source : GuruFocus HTML page (same pattern as existing gurufocus_scraper.py)
-Fallback 1     : Yahoo Finance PE → EY = 1 / PE (cookie+crumb handshake — plain
+Primary source : GuruFocus. The page ships its FULL daily history inside the
+                 Nuxt payload (`datas:{"151":[["YYYY-MM-DD",v],…]}`), decoded in
+                 pure Python by app.scrapers.gurufocus_scraper — one HTTP GET
+                 with a browser TLS fingerprint yields ~17.5k points, 1957→today.
+                 That turns this scraper from a one-value snapshot into a
+                 gap-closing series (Smart Incremental Backfill).
+Fallback 1     : the page's headline value only (same HTML, current figure)
+Fallback 2     : Yahoo Finance PE → EY = 1 / PE (cookie+crumb handshake — plain
                  quoteSummary calls return 401 since Yahoo enabled crumb auth)
-Fallback 2     : our own sp500_history.pe_ratio (Multpl monthly) → EY = 100 / PE
+Fallback 3     : our own sp500_history.pe_ratio (Multpl monthly) → EY = 100 / PE
 """
 
 import logging
+import os
 import time
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from typing import Optional
 
 import requests
@@ -19,14 +26,38 @@ from sqlalchemy import func
 
 from app.core.database import SessionLocal
 from app.models.economic_indicators import EconomicIndicator
+from app.scrapers.gurufocus_scraper import extract_nuxt_series, series_id_from_url
+from app.scrapers.scrapling_fetch import http_get, page_title, source_is_expected
 
 logger = logging.getLogger(__name__)
 
 INDICATOR_CODE = "SP500_EY"
 
+# How far behind the newest stored date a normal run re-covers. GuruFocus
+# restates recent sessions, and the day-10 / monthly cron can be missed; the
+# window means the next run patches both. Gaps LONGER than this are covered too
+# — see _backfill_window_start(), which widens the window to the newest row.
+EY_LOOKBACK_DAYS = int(os.getenv("SP500_EY_LOOKBACK_DAYS", "90"))
+# First-run ceiling: the payload goes back to 1957 (~17.5k points), but seeding
+# that into economic_indicators from a scheduled job is a surprise write storm.
+# 10 years (~2.5k daily points) is plenty for the charts; run the module with
+# --full-history (or raise this env) to seed deeper.
+EY_INITIAL_BACKFILL_YEARS = int(os.getenv("SP500_EY_INITIAL_BACKFILL_YEARS", "10"))
+# Series sanity bounds: reject junk a single-value parse could also reject, but
+# keep the historical extremes (measured range on the live page: 0.761–15.425).
+EY_PLAUSIBLE_MIN, EY_PLAUSIBLE_MAX = 0.05, 60.0
+
+# 2026-10-23 DATA-INTEGRITY FIX. This pointed at economic_indicators/1031/, which
+# answers HTTP 200 but redirects to 1031/quits-total-nonfarm — "Quits: Total
+# Nonfarm: 1.9". 1.9 clears the 0.5–15% sanity window below, so a successful
+# scrape silently stored a labour statistic as the S&P 500 Earnings Yield. The
+# correct series id is 151 (verified: "S&P 500 Earnings Yield: 3.861% (Oct 2026)"),
+# the same id app/core/scheduler.py:_GURUFOCUS_URLS and the admin endpoints use.
+# TITLE_TOKENS is the guard that makes a future redirect impossible to miss.
 GURUFOCUS_URL = (
-    "https://www.gurufocus.com/economic_indicators/1031/us-sp-500-earnings-yield"
+    "https://www.gurufocus.com/economic_indicators/151/sp-500-earnings-yield"
 )
+TITLE_TOKENS = ("earnings yield",)
 
 HEADERS = {
     "User-Agent": (
@@ -41,18 +72,43 @@ HEADERS = {
 
 # ── Source 1: GuruFocus ───────────────────────────────────────────────────────
 
-def _fetch_from_gurufocus() -> Optional[float]:
-    """
-    Scrape the latest S&P 500 Earnings Yield from GuruFocus.
-    Returns the value as a decimal fraction (e.g. 0.039 for 3.9%).
-    """
+def _page_html() -> Optional[str]:
+    """HTML of the EY page, Scrapling first (TLS impersonation cleared the
+    Gurufocus bot-check where plain requests needed Selenium), requests as the
+    fallback so the scraper still runs if scrapling is not installed."""
+    res = http_get(GURUFOCUS_URL, referer="https://www.gurufocus.com/")
+    if res is not None:
+        # Never trust a 200: confirm the page is about Earnings Yield.
+        if not source_is_expected(res.text, TITLE_TOKENS, url=res.url):
+            logger.error(
+                f"GuruFocus answered 200 but is NOT the EY series "
+                f"(title={page_title(res.text)[:70]!r} url={res.url[-60:]!r}) "
+                f"— refusing to parse, falling through to Yahoo/DB")
+            return None
+        return res.text
+
     try:
         session = requests.Session()
         session.headers.update(HEADERS)
         resp = session.get(GURUFOCUS_URL, timeout=30)
         resp.raise_for_status()
+        return resp.text
+    except Exception as e:
+        logger.warning(f"GuruFocus fetch failed (requests path): {e}")
+        return None
 
-        soup = BeautifulSoup(resp.text, "lxml")
+
+def _fetch_from_gurufocus() -> Optional[float]:
+    """
+    Scrape the latest S&P 500 Earnings Yield from GuruFocus.
+    Returns the value as a percentage (e.g. 3.861 for 3.861%).
+    """
+    try:
+        html = _page_html()
+        if html is None:
+            return None
+
+        soup = BeautifulSoup(html, "lxml")
 
         # Look for specific structural elements that hold the value
         main_value_text = None
@@ -77,6 +133,7 @@ def _fetch_from_gurufocus() -> Optional[float]:
                 if 0.5 < val < 15:
                     logger.info(f"GuruFocus SP500_EY: {val}%")
                     return val   # Standardized: store as percentage e.g. 4.107% matching DB history
+                logger.warning(f"GuruFocus EY {val} outside 0.5–15% sanity window — rejecting")
             except ValueError:
                 pass
 
@@ -86,6 +143,93 @@ def _fetch_from_gurufocus() -> Optional[float]:
     except Exception as e:
         logger.warning(f"GuruFocus fetch failed: {e}")
         return None
+
+
+# ── Source 1b: the same page's FULL history (preferred over one snapshot) ────
+
+def _fetch_series_from_gurufocus() -> list:
+    """[(date, pct)] for the whole EY series, [] when the payload is unavailable.
+
+    Decoding the Nuxt payload costs the same single HTTP request as reading the
+    headline number, but it also closes any date the DB is missing.
+    """
+    html = _page_html()
+    if not html:
+        return []
+    sid = series_id_from_url(GURUFOCUS_URL)
+    rows = extract_nuxt_series(html, sid) if sid else []
+    clean = [(d, v) for d, v in rows
+             if EY_PLAUSIBLE_MIN < v < EY_PLAUSIBLE_MAX]
+    dropped = len(rows) - len(clean)
+    if dropped:
+        logger.warning(f"GuruFocus EY series: dropped {dropped} implausible values "
+                       f"(outside {EY_PLAUSIBLE_MIN}–{EY_PLAUSIBLE_MAX}%)")
+    if clean:
+        logger.info(f"GuruFocus EY series decoded: {len(clean)} points "
+                    f"({clean[0][0]} … {clean[-1][0]}, last={clean[-1][1]}%)")
+    return clean
+
+
+def _last_ey_date(db) -> Optional[date]:
+    return (db.query(func.max(EconomicIndicator.report_date))
+              .filter(EconomicIndicator.indicator_code == INDICATOR_CODE)
+              .scalar())
+
+
+def _backfill_window_start(db) -> date:
+    """Routine window, widened to the newest stored date when the DB is behind,
+    and bounded by EY_INITIAL_BACKFILL_YEARS when the table is empty. This is
+    what makes "run it whenever" safe: a two-month outage backfills two months,
+    not 90 days."""
+    last = _last_ey_date(db)
+    if last is None:
+        seed_from = date.today().replace(year=date.today().year - EY_INITIAL_BACKFILL_YEARS)
+        logger.info(f"No SP500_EY rows in DB — seeding from {seed_from} "
+                    f"({EY_INITIAL_BACKFILL_YEARS}y; raise "
+                    f"SP500_EY_INITIAL_BACKFILL_YEARS for deeper history)")
+        return seed_from
+    routine = date.today() - timedelta(days=EY_LOOKBACK_DAYS)
+    if last < routine:
+        logger.warning(f"SP500_EY is stale (newest {last}) — backfilling from {last}")
+        return last
+    return routine
+
+
+def _upsert_ey_series(rows: list) -> int:
+    """Atomic upsert on the (report_date, indicator_code) composite key.
+
+    Chunked because a first run writes ~17.5k rows and a single VALUES list that
+    large is close to Postgres' 65k-parameter ceiling.
+    """
+    from sqlalchemy.dialects.postgresql import insert as pg_insert
+
+    if not rows:
+        return 0
+    db = SessionLocal()
+    written = 0
+    try:
+        for i in range(0, len(rows), 1000):
+            chunk = [{
+                "report_date": d,
+                "indicator_code": INDICATOR_CODE,
+                "value": float(v),
+            } for d, v in rows[i:i + 1000]]
+            stmt = pg_insert(EconomicIndicator).values(chunk)
+            stmt = stmt.on_conflict_do_update(
+                index_elements=["report_date", "indicator_code"],
+                set_={"value": stmt.excluded.value},
+            )
+            db.execute(stmt)
+            written += len(chunk)
+        db.commit()
+        logger.info(f"SP500_EY: upserted {written} points")
+        return written
+    except Exception as e:
+        db.rollback()
+        logger.error(f"DB error upserting SP500_EY series: {e}")
+        return 0
+    finally:
+        db.close()
 
 
 # ── Source 2: Yahoo Finance (fallback via P/E) ────────────────────────────────
@@ -220,13 +364,36 @@ def _save_sp500_ey(value: float, report_date: date) -> bool:
 
 # ── Main entry point ──────────────────────────────────────────────────────────
 
-def scrape_sp500_earnings_yield(force: bool = False) -> dict:
+def scrape_sp500_earnings_yield(force: bool = False, full_history: bool = False) -> dict:
     """
-    Fetch and store today's S&P 500 Earnings Yield.
-    Skips if a value already exists for today unless force=True.
-    Returns {"ok": bool, "rows": 0|1} for job_tracking.
+    Store the S&P 500 Earnings Yield.
+
+    Preferred path: decode GuruFocus's full history and upsert the window from
+    (newest stored date − EY_LOOKBACK_DAYS) to today — so a run at any time
+    closes gaps and picks up revisions instead of writing a single row.
+    full_history=True ignores any window and writes every decoded point (the
+    deeper backfill a first run deliberately does not do).
+    Only when that series is unavailable does it fall back to the point-in-time
+    chain (headline value → Yahoo → own DB PE), which keeps the old
+    "already scraped today" skip.
+    Returns {"ok": bool, "rows": n_written} for job_tracking.
     """
     today = date.today()
+
+    series = _fetch_series_from_gurufocus()
+    if series:
+        db = SessionLocal()
+        try:
+            start = date.min if full_history else _backfill_window_start(db)
+        finally:
+            db.close()
+        window = [r for r in series if r[0] >= start]
+        written = _upsert_ey_series(window)
+        if written:
+            return {"ok": True, "rows": written,
+                    "window_from": str(start), "series_last": str(series[-1][0])}
+        logger.warning("EY series decoded but the upsert failed — "
+                       "falling back to the single-value chain")
 
     if not force:
         db = SessionLocal()
@@ -279,6 +446,8 @@ if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser(description="SP500 Earnings Yield Scraper")
     parser.add_argument("--force", action="store_true", help="Re-fetch even if today already has data")
+    parser.add_argument("--full-history", action="store_true",
+                        help="Upsert every decoded GuruFocus point (1957 → today)")
     args = parser.parse_args()
-    ok = scrape_sp500_earnings_yield(force=args.force)
+    ok = scrape_sp500_earnings_yield(force=args.force, full_history=args.full_history)
     sys.exit(0 if ok.get("ok") else 1)

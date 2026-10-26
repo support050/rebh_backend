@@ -76,10 +76,20 @@ def calculate_tasi_index_lab(
     if bond_yield_pct is not None:
         active_bond_yield = float(bond_yield_pct)
     else:
-        # Fetch live SAMA / Sukuk rate if available
+        # Newest live SAMA observation (repo first, SAIBOR 3M as the alternate).
+        # Ordered by period DESC: an unordered .first() used to hand back an
+        # arbitrary row of the table, which is whatever id happened to be first.
         db = SessionLocal()
         try:
-            ind = db.query(SaudiEconomicIndicator).filter(SaudiEconomicIndicator.indicator_key.in_(["repo_rate", "saibor_3m"])).first()
+            ind = (
+                db.query(SaudiEconomicIndicator)
+                .filter(
+                    SaudiEconomicIndicator.indicator_key.in_(["repo_rate", "saibor_3m"]),
+                    SaudiEconomicIndicator.value.isnot(None),
+                )
+                .order_by(SaudiEconomicIndicator.period.desc())
+                .first()
+            )
             active_bond_yield = float(ind.value) if ind and ind.value else 4.75
         except Exception:
             active_bond_yield = 4.75
@@ -666,6 +676,9 @@ def calculate_economy_scorecard(
     bbb_oas = _find_val("bbb-rated") or 1.15
     credit_spread = credit_spread_override if credit_spread_override is not None else round(float(bbb_oas), 2)
 
+    # Data-honesty notes assembled along the way (Saudi panel, FRED reads).
+    warnings: List[str] = []
+
     # Course Rules Evaluation
     unrate_pos = bool(unrate < 4.5)
     payems_pos = bool(payems > 60.0)  # > 60k
@@ -727,25 +740,79 @@ def calculate_economy_scorecard(
     )
 
     # 2. Local Saudi Macro Panel (SAMA & GaStat)
-    db_values: Dict[str, float] = {}
+    #    Newest observation per key, ordered by period DESC. The old code read
+    #    db.query(...).all() and let the LAST row win — unordered, so a GDP
+    #    level in M SAR could land in the unemployment slot — and it looked up
+    #    'gdp_growth' / 'cpi_inflation' / 'unemployment_saudi', keys this table
+    #    has never contained, so the hard-coded defaults were served while the
+    #    lab claimed "verified (Market Machine & SAMA Live)".
+    def _latest_key(db, key):
+        row = (
+            db.query(SaudiEconomicIndicator)
+              .filter(SaudiEconomicIndicator.indicator_key == key,
+                      SaudiEconomicIndicator.value.isnot(None))
+              .order_by(SaudiEconomicIndicator.period.desc())
+              .first()
+        )
+        return float(row.value) if row else None
+
+    def _gdp_yoy_derived(db):
+        """YoY % from two saudi_gdp_annual TTM observations exactly 1 year apart
+        (same quarter) — the same rule GET /api/rebh/market-macro uses."""
+        rows = (
+            db.query(SaudiEconomicIndicator)
+              .filter(SaudiEconomicIndicator.indicator_key == "saudi_gdp_annual",
+                      SaudiEconomicIndicator.value.isnot(None),
+                      SaudiEconomicIndicator.basis == "TTM")
+              .order_by(SaudiEconomicIndicator.period.desc())
+              .limit(8)
+              .all()
+        )
+        pts = {(r.period.year, (r.period.month - 1) // 3 + 1): float(r.value)
+               for r in rows}
+        for (y, q), v0 in sorted(pts.items(), reverse=True):
+            v1 = pts.get((y - 1, q))
+            if v1 and v1 > 0:
+                return round((v0 - v1) / v1 * 100.0, 2)
+        return None
+
     db = SessionLocal()
+    db_values: Dict[str, Optional[float]] = {}
     try:
-        indicators = db.query(SaudiEconomicIndicator).all()
-        for ind in indicators:
-            if ind.value is not None:
-                db_values[ind.indicator_key] = ind.value
+        db_values["repo_rate"] = _latest_key(db, "repo_rate")
+        db_values["saibor_3m"] = _latest_key(db, "saibor_3m")
+        db_values["unemployment"] = _latest_key(db, "saudi_unemployment")
+        db_values["inflation"] = _latest_key(db, "saudi_inflation_cpi")
+        db_values["gdp_growth"] = _gdp_yoy_derived(db)
     except Exception:
         pass
     finally:
         db.close()
-        
-    actual_repo = repo_rate if repo_rate is not None else db_values.get("repo_rate", 5.50)
-    actual_saibor = saibor_3m if saibor_3m is not None else db_values.get("saibor_3m", 5.80)
-    actual_gdp = gdp_growth_pct if gdp_growth_pct is not None else db_values.get("gdp_growth", 4.2)
-    actual_inflation = inflation_pct if inflation_pct is not None else db_values.get("cpi_inflation", 1.6)
-    actual_unemployment = unemployment_pct if unemployment_pct is not None else db_values.get("unemployment_saudi", 7.8)
 
-    local_regime = "توسعي / صحي" if (actual_gdp >= 3.0 and actual_inflation <= 3.0) else "انكماشي / ضاغط"
+    actual_repo = repo_rate if repo_rate is not None else db_values.get("repo_rate")
+    actual_saibor = saibor_3m if saibor_3m is not None else db_values.get("saibor_3m")
+    actual_gdp = gdp_growth_pct if gdp_growth_pct is not None else db_values.get("gdp_growth")
+    actual_inflation = inflation_pct if inflation_pct is not None else db_values.get("inflation")
+    actual_unemployment = unemployment_pct if unemployment_pct is not None else db_values.get("unemployment")
+
+    # Honest labelling instead of a fabricated constant: say what is missing.
+    _panel_labels = {
+        "repo_rate": actual_repo, "saibor_3m": actual_saibor,
+        "gdp_growth_pct": actual_gdp, "inflation_pct": actual_inflation,
+        "unemployment_pct": actual_unemployment,
+    }
+    _panel_missing = [k for k, v in _panel_labels.items() if v is None]
+    if _panel_missing:
+        warnings.append(
+            "saudi_panel: no live observation for " + ", ".join(_panel_missing) +
+            " — run scripts/SAMA&GaStat.py --execute (nulls are shown, not "
+            "guesses)"
+        )
+
+    if actual_gdp is not None and actual_inflation is not None:
+        local_regime = "توسعي / صحي" if (actual_gdp >= 3.0 and actual_inflation <= 3.0) else "انكماشي / ضاغط"
+    else:
+        local_regime = None
 
     return {
         "formula": "Scorecard = MarketMachine(UNRATE, PAYEMS, IC4WSA, T10Y2Y, OAS) + SaudiPanel(SAMA, GaStat)",
@@ -772,13 +839,18 @@ def calculate_economy_scorecard(
                 "inflation_pct": actual_inflation,
                 "unemployment_pct": actual_unemployment,
                 "macro_regime": local_regime,
-                "liquidity_condition": "مشددة" if actual_saibor > 5.5 else "ميسرة"
+                "liquidity_condition": (
+                    "مشددة" if actual_saibor > 5.5 else "ميسرة"
+                    if actual_saibor is not None else None
+                )
             }
         },
-        "status": "° verified (Market Machine & SAMA Live)",
+        "status": ("° verified (Market Machine & SAMA Live)" if not _panel_missing
+                   else f"≈ partially_live (Saudi panel missing: "
+                        f"{', '.join(_panel_missing)})"),
         "source": "Course Package Market Machine Standard (FRED 5 Gauges) + SAMA/GaStat",
         "assumptions": "NFP threshold 60k, Claims 260k, Curve spread +20 bps, OAS < 130 bps",
-        "warnings": []
+        "warnings": warnings
     }
 
 

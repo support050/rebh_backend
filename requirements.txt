@@ -83,6 +83,25 @@ playwright
 openpyxl
 xlrd
 
+# Scrapling — anti-bot fetch layer used by app/scrapers/scrapling_fetch.py
+# (eurodollar, gurufocus, SAMA bulletin, sukuk grid). Verified 2026-10-23 with
+# this exact venv: `pip check` clean on anyio 3.7.1, because scrapling 0.5's own
+# requirements are cssselect/lxml/orjson/tld/typing_extensions/w3lib — no anyio.
+# The pin above (anyio==3.7.1) must stay: a bare `pip install scrapling[fetchers]`
+# in a fresh resolver can still drag anyio to 4.x, and fastapi 0.104.1 requires
+# anyio<4.0.0. Re-run `pip check` after any change here.
+# No `scrapling install` step is needed: the browser paths reuse the image's
+# google-chrome-stable (see Dockerfile GOOGLE_CHROME_BIN / CHROME_BIN).
+scrapling[fetchers]==0.5
+curl_cffi==0.16.3
+patchright==1.64.2
+browserforge==1.2.4
+apify-fingerprint-datapoints==0.15.0
+orjson==3.13.0
+tld==0.13.2
+w3lib==2.5.0
+cssselect==1.6.0
+
 boto3
 python-json-logger
 opentelemetry-api

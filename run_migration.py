@@ -397,7 +397,7 @@ def run_migration(conn):
     if failed == 0:
         print("\n🎉 Migration اتنفذت بنجاح كامل!")
         print("\n📌 الخطوة الجاية:")
-        print("   python batch_extract_xbrl_v2.py --mode raw --workers 8")
+        print("   python scripts/generate_all_companies_json.py")
     else:
         print("\n⚠️  بعض الـ steps فشلت.")
         print("   ممكن تكون بعض الـ objects موجودة بالفعل (IF NOT EXISTS بيتعامل معاها تلقائياً).")

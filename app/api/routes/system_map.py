@@ -56,6 +56,13 @@ PROBE_TIMEOUT_MS = 2500
 # column) costs a chunk, not the whole map.
 _MAX_UNION_BRANCHES = 12
 
+# Staleness budget per cadence, in trading days, for the integrity scan. The
+# scanner is the safety net now that sukuk/macro are off the daily pipeline: a
+# weekly snapshot must be caught stale in ~2 weeks, not 3 months, so the old
+# flat non-daily threshold (60) was far too loose for sukuk_market_data.
+_STALE_LAG_BY_CADENCE = {"daily": 1, "weekly": 10, "monthly": 40,
+                         "quarterly": 100, "manual": 40}
+
 # daily_market_update is deliberately NOT dispatched here: it has its own
 # endpoint with a DB mutex and a 409 on concurrent runs. The UI calls that.
 _PIPELINE_RUN_ENDPOINT = "/api/admin/pipeline/daily-market-update/run"
@@ -682,6 +689,147 @@ def get_pipelines(all_tables: bool = False) -> List[Dict[str, Any]]:
         if row.get("warn") is None:
             row.pop("warn", None)
     return rows
+
+
+# ════════════════════════════════════════════════════════════════════════════
+#  Schedule tab + gap scanner (both read-only)
+# ════════════════════════════════════════════════════════════════════════════
+def _scan_one_table(db: Session, t: Dict[str, Any], window_days: int) -> Dict[str, Any]:
+    """One table → newest date, trading-day lag, and (daily tables only) an
+    approximate missing-trading-day count inside the recent window.
+
+    Two bounded, indexed SELECTs (MAX on the date column; COUNT(DISTINCT) over a
+    date range). Any failure degrades to 'unknown'/'missing' with a message — this
+    never raises, so one absent table cannot 500 the whole scan. Holidays are NOT
+    excluded (registry note), so the gap count is approximate and only flagged past
+    a small threshold.
+    """
+    table, col = t["table"], t["date_column"]
+    finding: Dict[str, Any] = {
+        "table": table, "date_column": col, "cadence": t["cadence"],
+        "responsible_job": t["responsible_job"], "responsible_file": t["responsible_file"],
+        "fix_commands": t["fix_commands"], "latest": None, "lag_trading_days": None,
+        "distinct_days": None, "missing_days": None, "status": "unknown", "message": "",
+    }
+    rows = _probe(db, "SELECT MAX(%s) FROM %s" % (_quote(col), _quote(table)))
+    if rows is None:
+        finding["message"] = "probe failed — table/column missing or timed out"
+        return finding
+    latest = _as_date(rows[0][0]) if rows and rows[0] else None
+    if latest is None:
+        finding["status"] = "missing"
+        finding["message"] = "no readable date rows — the table is empty"
+        return finding
+    finding["latest"] = latest.isoformat()
+    today = date.today()
+    finding["lag_trading_days"] = registry.age_in_trading_days(latest, today)
+
+    if t["cadence"] == "daily" and t.get("count_gaps", True):
+        window_start = today - timedelta(days=window_days)
+        crows = _probe(
+            db,
+            "SELECT COUNT(DISTINCT %s) FROM %s WHERE %s >= :start"
+            % (_quote(col), _quote(table), _quote(col)),
+            start=window_start,
+        )
+        if crows and crows[0][0] is not None:
+            distinct = int(crows[0][0])
+            finding["distinct_days"] = distinct
+            expected = registry.trading_days_between(window_start, latest) + 1
+            finding["missing_days"] = max(0, expected - distinct)
+
+    lag = finding["lag_trading_days"] or 0
+    missing = finding["missing_days"]
+    if t["cadence"] == "daily" and missing is not None and missing >= 3:
+        finding["status"] = "gap"
+        finding["message"] = (
+            f"\u2248{missing} trading days missing in the last {window_days} days "
+            f"(holidays not excluded). Newest row {latest.isoformat()}.")
+    elif lag > _STALE_LAG_BY_CADENCE.get(t["cadence"], 60):
+        finding["status"] = "late"
+        finding["message"] = (f"Newest {col} is {latest.isoformat()} — "
+                              f"{lag} trading days behind (budget "
+                              f"{_STALE_LAG_BY_CADENCE.get(t['cadence'], 60)}).")
+    else:
+        finding["status"] = "ok"
+        finding["message"] = f"Fresh — newest {latest.isoformat()}."
+    return finding
+
+
+@router.get("/schedule", summary="Schedule tab — every job with cadence/role/storage/commands")
+def get_schedule() -> Dict[str, Any]:
+    """The /admin 'What to Run & When' catalog, derived from the registry so it can
+    never drift from the Runbook. Layers two live signals per job: the Run Now
+    capability (job_runner) and the newest job_runs row (one SELECT for all jobs).
+
+    Cadence/role/storage/commands come straight from the registry; ``runnable`` is
+    the ONLY gate for a working Run Now — heavy scripts without a registered
+    callable render as Copy-command only on the frontend."""
+    jobs = registry.schedule_jobs()
+    db = SessionLocal()
+    try:
+        last_runs = _fetch_last_runs(db)
+    finally:
+        db.close()
+    ledger_missing = last_runs is None
+    last_runs = last_runs or {}
+    now = datetime.now(timezone.utc)
+    out: List[Dict[str, Any]] = []
+    for job in jobs:
+        cap = _run_capability(job["job_name"])
+        last = last_runs.get(job["job_name"])
+        age_hours = None
+        if last and last.get("started_at"):
+            age_hours = round((now - last["started_at"]).total_seconds() / 3600, 1)
+        out.append({
+            **job,
+            "runnable": cap["runnable"],
+            "delegated_to": cap.get("delegated_to"),
+            "run_reason": cap.get("reason"),
+            "last_run": None if last is None else {
+                "status": last["status"],
+                "started_at": _iso(last["started_at"]),
+                "rows_written": last["rows_written"],
+                "error_message": last["error_message"],
+                "triggered_by": last["triggered_by"],
+                "age_hours": age_hours,
+            },
+        })
+    return {
+        "jobs": out,
+        "cadences": list(registry.CADENCES),
+        "roles": list(registry.ROLES),
+        "storages": list(registry.STORAGES),
+        "ledger_missing": ledger_missing,
+        "generated_at": now.isoformat(),
+        "registry_file": REGISTRY_FILE,
+    }
+
+
+@router.get("/integrity/scan", summary="Gap scanner — read-only freshness + missing-day count")
+def scan_integrity(window_days: int = 90) -> Dict[str, Any]:
+    """'Check Data Integrity & Scan Gaps'. Read-only over the vital tables; each
+    finding names the responsible job + its exact fix command (from the registry).
+    Runs ZERO writes and never 500s — a dead table degrades to one 'unknown' row."""
+    try:
+        window_days = max(7, min(365, int(window_days)))
+    except (TypeError, ValueError):
+        window_days = 90
+    targets = registry.integrity_targets()
+    findings: List[Dict[str, Any]] = []
+    db = SessionLocal()
+    try:
+        for t in targets:
+            findings.append(_scan_one_table(db, t, window_days))
+    finally:
+        db.close()
+    return {
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "window_days": window_days,
+        "findings": findings,
+        "gaps": sum(1 for f in findings if f["status"] in ("gap", "late", "missing")),
+        "registry_file": REGISTRY_FILE,
+    }
 
 
 # ── Run Now (Phase 5) ─────────────────────────────────────────────────────────

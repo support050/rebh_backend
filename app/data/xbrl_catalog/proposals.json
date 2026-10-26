@@ -1,0 +1,751 @@
+[
+  {
+    "raw_label": "Proceeds from sales of property, plant and equipment",
+    "concept_id": "CF-080",
+    "score": 0.9901,
+    "tier": "fuzzy",
+    "reviewed": false
+  },
+  {
+    "raw_label": "Provision for employees end of service benefits",
+    "concept_id": "BS-150",
+    "score": 0.9895,
+    "tier": "fuzzy",
+    "reviewed": false
+  },
+  {
+    "raw_label": "Proceeds from sale of property and equipments",
+    "concept_id": "CF-080",
+    "score": 0.9888,
+    "tier": "fuzzy",
+    "reviewed": false
+  },
+  {
+    "raw_label": "Total shareholders' liabilities and equity",
+    "concept_id": "CONCEPT.TL_E_SHAREHOLDERS",
+    "score": 0.988,
+    "tier": "fuzzy",
+    "reviewed": false
+  },
+  {
+    "raw_label": "Impairment losss on financial assets",
+    "concept_id": "IS-060",
+    "score": 0.9863,
+    "tier": "fuzzy",
+    "reviewed": false
+  },
+  {
+    "raw_label": "Fees and commission income (expense)",
+    "concept_id": "IS-060",
+    "score": 0.9859,
+    "tier": "fuzzy",
+    "reviewed": false
+  },
+  {
+    "raw_label": "Repayments of long-term borrowings",
+    "concept_id": "CF-110",
+    "score": 0.9851,
+    "tier": "fuzzy",
+    "reviewed": false
+  },
+  {
+    "raw_label": "employees end of services benefits",
+    "concept_id": "BS-150",
+    "score": 0.9851,
+    "tier": "fuzzy",
+    "reviewed": false
+  },
+  {
+    "raw_label": "Board of directors' remuneration",
+    "concept_id": "IS-060",
+    "score": 0.9846,
+    "tier": "fuzzy",
+    "reviewed": false
+  },
+  {
+    "raw_label": "Employee end of service benefits",
+    "concept_id": "BS-150",
+    "score": 0.9846,
+    "tier": "fuzzy",
+    "reviewed": false
+  },
+  {
+    "raw_label": "Total shareholders' liabilities",
+    "concept_id": "CONCEPT.TAKAFUL_SHAREHOLDERS_LIABILITIES",
+    "score": 0.9836,
+    "tier": "fuzzy",
+    "reviewed": false
+  },
+  {
+    "raw_label": "Zakat and income tax expense",
+    "concept_id": "IS-120",
+    "score": 0.9825,
+    "tier": "fuzzy",
+    "reviewed": false
+  },
+  {
+    "raw_label": "Weighted-average number of equity shares outstanding",
+    "concept_id": "IS-170",
+    "score": 0.9808,
+    "tier": "fuzzy",
+    "reviewed": false
+  },
+  {
+    "raw_label": "Total shareholder's assets",
+    "concept_id": "CONCEPT.TAKAFUL_SHAREHOLDERS_ASSETS",
+    "score": 0.9804,
+    "tier": "fuzzy",
+    "reviewed": false
+  },
+  {
+    "raw_label": "Proceeds from sale of property, plant and equipment",
+    "concept_id": "CF-080",
+    "score": 0.98,
+    "tier": "fuzzy",
+    "reviewed": false
+  },
+  {
+    "raw_label": "Cash and cash equivalent",
+    "concept_id": "BS-010",
+    "score": 0.9796,
+    "tier": "fuzzy",
+    "reviewed": false
+  },
+  {
+    "raw_label": "Investments in associates",
+    "concept_id": "BS-075",
+    "score": 0.9796,
+    "tier": "fuzzy",
+    "reviewed": false
+  },
+  {
+    "raw_label": "Trade Account Receivable",
+    "concept_id": "BS-020",
+    "score": 0.9796,
+    "tier": "fuzzy",
+    "reviewed": false
+  },
+  {
+    "raw_label": "Investment in associate",
+    "concept_id": "BS-075",
+    "score": 0.9787,
+    "tier": "fuzzy",
+    "reviewed": false
+  },
+  {
+    "raw_label": "Adminstrative Expenses",
+    "concept_id": "IS-050",
+    "score": 0.9778,
+    "tier": "fuzzy",
+    "reviewed": false
+  },
+  {
+    "raw_label": "Gains (losses) on non trading investments, net",
+    "concept_id": "IS-060",
+    "score": 0.9778,
+    "tier": "fuzzy",
+    "reviewed": false
+  },
+  {
+    "raw_label": "Adjustments for share based payments expense",
+    "concept_id": "CF-030",
+    "score": 0.9773,
+    "tier": "fuzzy",
+    "reviewed": false
+  },
+  {
+    "raw_label": "Payments of finance lease liabilities",
+    "concept_id": "CF-110",
+    "score": 0.9737,
+    "tier": "fuzzy",
+    "reviewed": false
+  },
+  {
+    "raw_label": "Deferred Tax Asset",
+    "concept_id": "BS-080",
+    "score": 0.973,
+    "tier": "fuzzy",
+    "reviewed": false
+  },
+  {
+    "raw_label": "Depreciation and amortization expense",
+    "concept_id": "IS-050",
+    "score": 0.973,
+    "tier": "fuzzy",
+    "reviewed": false
+  },
+  {
+    "raw_label": "Net premium earned",
+    "concept_id": "IS-010",
+    "score": 0.973,
+    "tier": "fuzzy",
+    "reviewed": false
+  },
+  {
+    "raw_label": "short-term deposit",
+    "concept_id": "BS-015",
+    "score": 0.973,
+    "tier": "fuzzy",
+    "reviewed": false
+  },
+  {
+    "raw_label": "General and administartive expenses",
+    "concept_id": "IS-050",
+    "score": 0.9714,
+    "tier": "fuzzy",
+    "reviewed": false
+  },
+  {
+    "raw_label": "General and administrative expences",
+    "concept_id": "IS-050",
+    "score": 0.9714,
+    "tier": "fuzzy",
+    "reviewed": false
+  },
+  {
+    "raw_label": "Proposed Dividends",
+    "concept_id": "BS-125",
+    "score": 0.9714,
+    "tier": "fuzzy",
+    "reviewed": false
+  },
+  {
+    "raw_label": "Provision for expected credit loss",
+    "concept_id": "IS-060",
+    "score": 0.9714,
+    "tier": "fuzzy",
+    "reviewed": false
+  },
+  {
+    "raw_label": "Adjustments for depreciation and impairment (reversal of impairment) of other property, plant and equipments",
+    "concept_id": "CF-020",
+    "score": 0.9712,
+    "tier": "fuzzy",
+    "reviewed": false
+  },
+  {
+    "raw_label": "Proceeds from long term borrowings",
+    "concept_id": "CF-110",
+    "score": 0.9706,
+    "tier": "fuzzy",
+    "reviewed": false
+  },
+  {
+    "raw_label": "Dividend payable",
+    "concept_id": "BS-125",
+    "score": 0.9697,
+    "tier": "fuzzy",
+    "reviewed": false
+  },
+  {
+    "raw_label": "Intangible Asset",
+    "concept_id": "BS-070",
+    "score": 0.9697,
+    "tier": "fuzzy",
+    "reviewed": false
+  },
+  {
+    "raw_label": "Invesment Income",
+    "concept_id": "IS-090",
+    "score": 0.9697,
+    "tier": "fuzzy",
+    "reviewed": false
+  },
+  {
+    "raw_label": "Selling and distribution expences",
+    "concept_id": "IS-040",
+    "score": 0.9697,
+    "tier": "fuzzy",
+    "reviewed": false
+  },
+  {
+    "raw_label": "selling and distirbution expenses",
+    "concept_id": "IS-040",
+    "score": 0.9697,
+    "tier": "fuzzy",
+    "reviewed": false
+  },
+  {
+    "raw_label": "trade receivable",
+    "concept_id": "BS-020",
+    "score": 0.9697,
+    "tier": "fuzzy",
+    "reviewed": false
+  },
+  {
+    "raw_label": "Dividends income",
+    "concept_id": "IS-090",
+    "score": 0.9677,
+    "tier": "fuzzy",
+    "reviewed": false
+  },
+  {
+    "raw_label": "Adjustments for depreciation and impairment (reversal of impairment) of Other property plant and equipment",
+    "concept_id": "CF-020",
+    "score": 0.9662,
+    "tier": "fuzzy",
+    "reviewed": false
+  },
+  {
+    "raw_label": "Profit (loss), attributable to saudi shareholders of company",
+    "concept_id": "IS-150",
+    "score": 0.9661,
+    "tier": "fuzzy",
+    "reviewed": false
+  },
+  {
+    "raw_label": "Adjustments for decrease (increase) in other receivables, net",
+    "concept_id": "CF-040",
+    "score": 0.9655,
+    "tier": "fuzzy",
+    "reviewed": false
+  },
+  {
+    "raw_label": "Investment in joint ventures.1",
+    "concept_id": "BS-075",
+    "score": 0.9655,
+    "tier": "fuzzy",
+    "reviewed": false
+  },
+  {
+    "raw_label": "Property, plant and equipment.1",
+    "concept_id": "BS-050",
+    "score": 0.9655,
+    "tier": "fuzzy",
+    "reviewed": false
+  },
+  {
+    "raw_label": "Adjustment for finance cost",
+    "concept_id": "CF-030",
+    "score": 0.9643,
+    "tier": "fuzzy",
+    "reviewed": false
+  },
+  {
+    "raw_label": "Investments in Joint Venture",
+    "concept_id": "BS-075",
+    "score": 0.9643,
+    "tier": "fuzzy",
+    "reviewed": false
+  },
+  {
+    "raw_label": "Trade and other receivables.2",
+    "concept_id": "BS-020",
+    "score": 0.9643,
+    "tier": "fuzzy",
+    "reviewed": false
+  },
+  {
+    "raw_label": "Dividend paid",
+    "concept_id": "CF-100",
+    "score": 0.963,
+    "tier": "fuzzy",
+    "reviewed": false
+  },
+  {
+    "raw_label": "Other expense",
+    "concept_id": "IS-060",
+    "score": 0.963,
+    "tier": "fuzzy",
+    "reviewed": false
+  },
+  {
+    "raw_label": "Other reserve",
+    "concept_id": "BS-182",
+    "score": 0.963,
+    "tier": "fuzzy",
+    "reviewed": false
+  },
+  {
+    "raw_label": "Trade Paybles",
+    "concept_id": "BS-100",
+    "score": 0.963,
+    "tier": "fuzzy",
+    "reviewed": false
+  },
+  {
+    "raw_label": "Cost of sale",
+    "concept_id": "IS-020",
+    "score": 0.96,
+    "tier": "fuzzy",
+    "reviewed": false
+  },
+  {
+    "raw_label": "Deferred tax liabilities.1",
+    "concept_id": "BS-155",
+    "score": 0.96,
+    "tier": "fuzzy",
+    "reviewed": false
+  },
+  {
+    "raw_label": "Depreciation and amortization expenses",
+    "concept_id": "IS-050",
+    "score": 0.96,
+    "tier": "fuzzy",
+    "reviewed": false
+  },
+  {
+    "raw_label": "Time deposit",
+    "concept_id": "BS-015",
+    "score": 0.96,
+    "tier": "fuzzy",
+    "reviewed": false
+  },
+  {
+    "raw_label": "Adjustments for decrease (increase) in inventory",
+    "concept_id": "CF-040",
+    "score": 0.9592,
+    "tier": "fuzzy",
+    "reviewed": false
+  },
+  {
+    "raw_label": "Provision for employees' end-of-service benefits",
+    "concept_id": "BS-150",
+    "score": 0.9583,
+    "tier": "fuzzy",
+    "reviewed": false
+  },
+  {
+    "raw_label": "Net increase (decrease) in operating liabilities",
+    "concept_id": "CF-040",
+    "score": 0.9565,
+    "tier": "fuzzy",
+    "reviewed": false
+  },
+  {
+    "raw_label": "Advance from customer",
+    "concept_id": "BS-125",
+    "score": 0.9545,
+    "tier": "fuzzy",
+    "reviewed": false
+  },
+  {
+    "raw_label": "Adjustments for Other non-current liabilities",
+    "concept_id": "CF-040",
+    "score": 0.9535,
+    "tier": "fuzzy",
+    "reviewed": false
+  },
+  {
+    "raw_label": "Long-term borrowings.3",
+    "concept_id": "BS-140",
+    "score": 0.9524,
+    "tier": "fuzzy",
+    "reviewed": false
+  },
+  {
+    "raw_label": "Net decrease (increase) in operating assets",
+    "concept_id": "CF-040",
+    "score": 0.9512,
+    "tier": "fuzzy",
+    "reviewed": false
+  },
+  {
+    "raw_label": "Deferred tax assets.1",
+    "concept_id": "BS-080",
+    "score": 0.95,
+    "tier": "fuzzy",
+    "reviewed": false
+  },
+  {
+    "raw_label": "Long term borrowings",
+    "concept_id": "BS-140",
+    "score": 0.95,
+    "tier": "fuzzy",
+    "reviewed": false
+  },
+  {
+    "raw_label": "Adjustment for decrease (increase) in inventory",
+    "concept_id": "CF-040",
+    "score": 0.9485,
+    "tier": "fuzzy",
+    "reviewed": false
+  },
+  {
+    "raw_label": "Due to banks, SAMA and other financial institutions",
+    "concept_id": "BS-100",
+    "score": 0.9474,
+    "tier": "fuzzy",
+    "reviewed": false
+  },
+  {
+    "raw_label": "Short term deposits",
+    "concept_id": "BS-015",
+    "score": 0.9474,
+    "tier": "fuzzy",
+    "reviewed": false
+  },
+  {
+    "raw_label": "Adjustments for increase (decrease) in due from/to related parties",
+    "concept_id": "CF-040",
+    "score": 0.9457,
+    "tier": "fuzzy",
+    "reviewed": false
+  },
+  {
+    "raw_label": "Income (loss) from continuing operations before zakat and income tax",
+    "concept_id": "IS-110",
+    "score": 0.9457,
+    "tier": "fuzzy",
+    "reviewed": false
+  },
+  {
+    "raw_label": "Intangible assets.1",
+    "concept_id": "BS-070",
+    "score": 0.9444,
+    "tier": "fuzzy",
+    "reviewed": false
+  },
+  {
+    "raw_label": "Accrued expenses.2",
+    "concept_id": "BS-125",
+    "score": 0.9412,
+    "tier": "fuzzy",
+    "reviewed": false
+  },
+  {
+    "raw_label": "Adjustment for other non-current liabilities",
+    "concept_id": "CF-040",
+    "score": 0.9412,
+    "tier": "fuzzy",
+    "reviewed": false
+  },
+  {
+    "raw_label": "Statutory resreve",
+    "concept_id": "BS-175",
+    "score": 0.9412,
+    "tier": "fuzzy",
+    "reviewed": false
+  },
+  {
+    "raw_label": "Adjustment for loss on disposal of property, plant and equipment",
+    "concept_id": "CF-030",
+    "score": 0.9403,
+    "tier": "fuzzy",
+    "reviewed": false
+  },
+  {
+    "raw_label": "Adjustment for increase (decrease) in accounts payable",
+    "concept_id": "CF-040",
+    "score": 0.9391,
+    "tier": "fuzzy",
+    "reviewed": false
+  },
+  {
+    "raw_label": "Reversal of Impairment in Property,plant and Equipment",
+    "concept_id": "IS-060",
+    "score": 0.9381,
+    "tier": "fuzzy",
+    "reviewed": false
+  },
+  {
+    "raw_label": "Other income-net",
+    "concept_id": "IS-060",
+    "score": 0.9375,
+    "tier": "fuzzy",
+    "reviewed": false
+  },
+  {
+    "raw_label": "Adjustments for decrease (increase) in rent receivables",
+    "concept_id": "CF-040",
+    "score": 0.9369,
+    "tier": "fuzzy",
+    "reviewed": false
+  },
+  {
+    "raw_label": "Proceeds from disposal of property and equipment",
+    "concept_id": "CF-080",
+    "score": 0.9348,
+    "tier": "fuzzy",
+    "reviewed": false
+  },
+  {
+    "raw_label": "Profit (loss), attributable to non-saudi shareholders of company",
+    "concept_id": "IS-150",
+    "score": 0.9344,
+    "tier": "fuzzy",
+    "reviewed": false
+  },
+  {
+    "raw_label": "Dividends unpaid",
+    "concept_id": "CF-100",
+    "score": 0.9333,
+    "tier": "fuzzy",
+    "reviewed": false
+  },
+  {
+    "raw_label": "Revenuee",
+    "concept_id": "IS-010",
+    "score": 0.9333,
+    "tier": "fuzzy",
+    "reviewed": false
+  },
+  {
+    "raw_label": "Other adjustments to reconcile profit (loss)",
+    "concept_id": "CF-030",
+    "score": 0.9318,
+    "tier": "fuzzy",
+    "reviewed": false
+  },
+  {
+    "raw_label": "Total equity attributable to owners of bank",
+    "concept_id": "BS-185",
+    "score": 0.9318,
+    "tier": "fuzzy",
+    "reviewed": false
+  },
+  {
+    "raw_label": "Adjustments for decrease (increase) in lease receivables",
+    "concept_id": "CF-040",
+    "score": 0.9286,
+    "tier": "fuzzy",
+    "reviewed": false
+  },
+  {
+    "raw_label": "Dividend paid1",
+    "concept_id": "CF-100",
+    "score": 0.9286,
+    "tier": "fuzzy",
+    "reviewed": false
+  },
+  {
+    "raw_label": "Time deposits.2",
+    "concept_id": "BS-015",
+    "score": 0.9286,
+    "tier": "fuzzy",
+    "reviewed": false
+  },
+  {
+    "raw_label": "Zakat payable.3",
+    "concept_id": "BS-120",
+    "score": 0.9286,
+    "tier": "fuzzy",
+    "reviewed": false
+  },
+  {
+    "raw_label": "depreciation and amortazion",
+    "concept_id": "CF-020",
+    "score": 0.9286,
+    "tier": "fuzzy",
+    "reviewed": false
+  },
+  {
+    "raw_label": "Adjustment for decrease (increase ) in invetory",
+    "concept_id": "CF-040",
+    "score": 0.9278,
+    "tier": "fuzzy",
+    "reviewed": false
+  },
+  {
+    "raw_label": "Provision of expected credit loss",
+    "concept_id": "IS-060",
+    "score": 0.9275,
+    "tier": "fuzzy",
+    "reviewed": false
+  },
+  {
+    "raw_label": "Adjustments for decrease (increase) in other assets",
+    "concept_id": "CF-040",
+    "score": 0.9273,
+    "tier": "fuzzy",
+    "reviewed": false
+  },
+  {
+    "raw_label": "Trade accounts receivable, net",
+    "concept_id": "BS-020",
+    "score": 0.9259,
+    "tier": "fuzzy",
+    "reviewed": false
+  },
+  {
+    "raw_label": "Dividends received, classified as financing activities",
+    "concept_id": "CF-080",
+    "score": 0.9245,
+    "tier": "fuzzy",
+    "reviewed": false
+  },
+  {
+    "raw_label": "Cost of salse",
+    "concept_id": "IS-020",
+    "score": 0.9231,
+    "tier": "fuzzy",
+    "reviewed": false
+  },
+  {
+    "raw_label": "Finance Cost 2",
+    "concept_id": "IS-080",
+    "score": 0.9231,
+    "tier": "fuzzy",
+    "reviewed": false
+  },
+  {
+    "raw_label": "Lease receivable, current",
+    "concept_id": "BS-080",
+    "score": 0.9231,
+    "tier": "fuzzy",
+    "reviewed": false
+  },
+  {
+    "raw_label": "Net profit (loss) for period",
+    "concept_id": "IS-140",
+    "score": 0.9231,
+    "tier": "fuzzy",
+    "reviewed": false
+  },
+  {
+    "raw_label": "Proceeds from disposal of property, plant and equipment",
+    "concept_id": "CF-080",
+    "score": 0.9231,
+    "tier": "fuzzy",
+    "reviewed": false
+  },
+  {
+    "raw_label": "Profit (loss) for the period",
+    "concept_id": "IS-140",
+    "score": 0.9231,
+    "tier": "fuzzy",
+    "reviewed": false
+  },
+  {
+    "raw_label": "Provision for expected credit loss expense",
+    "concept_id": "IS-060",
+    "score": 0.9231,
+    "tier": "fuzzy",
+    "reviewed": false
+  },
+  {
+    "raw_label": "Zakat expence",
+    "concept_id": "IS-120",
+    "score": 0.9231,
+    "tier": "fuzzy",
+    "reviewed": false
+  },
+  {
+    "raw_label": "Dividends paid, classified as operating activities",
+    "concept_id": "CF-080",
+    "score": 0.9216,
+    "tier": "fuzzy",
+    "reviewed": false
+  },
+  {
+    "raw_label": "Additions to property, plant and equipment",
+    "concept_id": "CF-070",
+    "score": 0.9211,
+    "tier": "fuzzy",
+    "reviewed": false
+  },
+  {
+    "raw_label": "Adjustments for decrease (increase) in investments",
+    "concept_id": "CF-040",
+    "score": 0.92,
+    "tier": "fuzzy",
+    "reviewed": false
+  },
+  {
+    "raw_label": "Investment in an associate",
+    "concept_id": "BS-075",
+    "score": 0.92,
+    "tier": "fuzzy",
+    "reviewed": false
+  }
+]

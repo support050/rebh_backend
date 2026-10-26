@@ -143,7 +143,7 @@ def get_company(symbol: str) -> CompanyFinancials | None:
                 raw["meta"]["symbol"] = symbol
             if not raw["meta"].get("company_name"):
                 raw["meta"]["company_name"] = symbol
-            return CompanyFinancials(**raw)
+            return _with_catalog_repair(CompanyFinancials(**raw))
         except Exception:
             pass
 
@@ -154,7 +154,7 @@ def get_company(symbol: str) -> CompanyFinancials | None:
             key = f"xbrl/{symbol}_financials.json"
             obj = client.get_object(Bucket=R2_BUCKET_NAME, Key=key)
             raw = json.loads(obj["Body"].read().decode("utf-8"))
-            return CompanyFinancials(**raw)
+            return _with_catalog_repair(CompanyFinancials(**raw))
         except Exception:
             pass
 
@@ -167,4 +167,91 @@ def save_company(symbol: str, data: dict) -> Path:
     with open(fp, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
     return fp
+
+
+# ── read-time catalog repair ─────────────────────────────────────────────────
+
+_SECTION_STATEMENTS = {
+    "standardized_balance_sheet": "balance_sheet",
+    "standardized_income_statement": "income_statement",
+    "standardized_cash_flow": "cash_flow",
+}
+
+
+def _with_catalog_repair(company: CompanyFinancials) -> CompanyFinancials:
+    """Bind items the ingest-time parser left UNMAPPED against the CURRENT concept
+    catalog, so a curated synonym takes effect on every page immediately instead
+    of waiting for a 257-company re-ingest.
+
+    Compiled artifacts freeze the mapping decisions made when they were parsed,
+    while ``app/data/xbrl_catalog/synonyms.json`` is living, hand-edited data.
+    Before this pass the divergence was invisible and expensive: borrowing and
+    lease-liability labels that are curated TODAY still reached the engine
+    discarded, so Almarai's 13.1M finance-lease liability and Rajhi's 379.5B of
+    borrowings vanished and Total Debt printed a dash next to Debt/Equity 0.00.
+
+    Strictly additive and exact-match only:
+      * one normalized-label lookup (never the fuzzy cascade, which is a human
+        review queue by design);
+      * a blocklisted label stays unbound;
+      * a canonical line that already discloses a period is NEVER overwritten —
+        only its empty periods are completed from the raw line;
+      * the concept's sign (direction) is applied exactly as the parser would,
+        so expenses keep their negative convention;
+      * any failure leaves the payload untouched — a page never breaks because
+        of a mapping repair.
+    """
+    try:
+        from app.services import xbrl_catalog
+        from app.services.xbrl_mapping import STANDARD_TEMPLATE
+
+        xbrl_catalog.load()
+    except Exception:                                        # pragma: no cover
+        return company
+
+    try:
+        for key, statement in _SECTION_STATEMENTS.items():
+            section = (company.sections or {}).get(key)
+            if not section or not section.items:
+                continue
+            bound = {}
+            for it in section.items:
+                if it.is_header or it.is_unmapped or not it.label:
+                    continue
+                cid = getattr(it, "concept_id", None)
+                if cid and cid in STANDARD_TEMPLATE:
+                    bound.setdefault(cid, it)
+            for it in section.items:
+                if not it.is_unmapped or it.is_header or not it.label:
+                    continue
+                if xbrl_catalog.is_blocklisted(it.label):
+                    continue
+                hit = xbrl_catalog.NORM_MAP.get(xbrl_catalog.normalize_label(it.label))
+                if not hit:
+                    continue
+                cid, direction = hit[0], int(hit[1] or 1)
+                tmpl = STANDARD_TEMPLATE.get(cid)
+                if not tmpl or tmpl.get("statement") != statement:
+                    continue
+                target = bound.get(cid)
+                if target is None:
+                    if direction != 1:
+                        it.values = {
+                            p: (v * direction if isinstance(v, (int, float)) else v)
+                            for p, v in (it.values or {}).items()
+                        }
+                    it.is_unmapped = False
+                    it.status = "rebound@read"
+                    it.concept_id = cid
+                    it.label = tmpl["line_en"]
+                    it.label_ar = it.label_ar or tmpl.get("line_ar")
+                    bound[cid] = it
+                else:
+                    for p, v in (it.values or {}).items():
+                        if v is None or target.values.get(p) is not None:
+                            continue
+                        target.values[p] = v * direction if isinstance(v, (int, float)) else v
+    except Exception:                                        # pragma: no cover
+        logger.debug("catalog repair skipped for %s", getattr(company.meta, "symbol", "?"), exc_info=True)
+    return company
 

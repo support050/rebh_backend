@@ -98,18 +98,5 @@ class HistoricalReportResponse(BaseModel):
     class Config:
         from_attributes = True
 
-class QFIOwnershipFlowResponse(BaseModel):
-    id: int
-    report_date: date
-    symbol: str
-    normalized_symbol: str
-    company_name: Optional[str] = None
-    qfi_holding_percent: Optional[Decimal] = None
-    total_foreign_percent: Optional[Decimal] = None
-    net_inflow_shares: Optional[Decimal] = None
-    net_inflow_sar: Optional[Decimal] = None
-    source_url: Optional[str] = None
-    retrieval_timestamp: Optional[datetime] = None
-
-    class Config:
-        from_attributes = True
+# 2026-10-25: QFIOwnershipFlowResponse removed together with the
+# qfi_ownership_flows model and the /api/market-reports/qfi-flows endpoint.

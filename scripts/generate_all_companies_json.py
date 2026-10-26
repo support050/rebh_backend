@@ -15,6 +15,7 @@ sys.path.append(str(Path(__file__).resolve().parent.parent))
 
 from app.services.xbrl_parser import parse_and_merge_xbrl_files
 from app.services.xbrl_data_service import save_company
+from app.services import xbrl_catalog
 
 DATA_DIR = Path(__file__).resolve().parent.parent / "data" / "downloads"
 
@@ -72,6 +73,11 @@ def main():
             print(f"  Error processing {symbol}: {e}")
             
     print(f"\nCompleted! Successfully processed {success_count}/{len(symbols)} companies.")
+
+    # C1: fuzzy >=0.92 matches were recorded as *proposals* while parsing —
+    # persist them for human review (never auto-applied to synonyms.json).
+    xbrl_catalog.flush_proposals()
+    print(f"Proposals on disk: {len(xbrl_catalog.get_proposals())}")
 
 if __name__ == "__main__":
     main()

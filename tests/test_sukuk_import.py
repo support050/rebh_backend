@@ -21,6 +21,11 @@ from scripts.Sukuk_and_Bonds import (  # noqa: F401  (import alias used below)
     _parse_date,
     _classify_bond_type,
     _normalize_item,
+    _sukuk_key,
+    _deactivate_retired,
+    _header_map,
+    MIN_DEACTIVATE_COVERAGE,
+    MAX_RETIRE_PER_RUN,
 )
 
 # ─── Fixtures ─────────────────────────────────────────────────────────────────
@@ -275,3 +280,161 @@ class TestBuildUpSukukYield:
         assert result.get("is_fallback") is True, (
             "Fallback sukuk yield must set is_fallback=True — never show as live"
         )
+
+
+# ─── bondType codes as the live grid spells them (measured 2026-10-25) ────────
+
+class TestClassifyBondTypeLiveCodes:
+    def test_s_is_the_corporate_sukuk_class_not_sovereign(self):
+        """bondType carries only 'G' and 'S' in the live payload, and every 'S' row
+        sits in 'Corporate Sukuk/Bonds Index' (parents 1010 / 9579 / 5025). Reading
+        'S' as Sovereign would move Build-Up R's government benchmark onto
+        corporate paper."""
+        assert _classify_bond_type("S") == "C"
+
+    def test_sector_name_resolves_a_missing_code(self):
+        assert _classify_bond_type(
+            None, sector_name="Government Sukuk/Bonds Index") == "G"
+        assert _classify_bond_type(
+            None, sector_name="Corporate Sukuk/Bonds Index") == "C"
+
+    def test_issuer_name_resolves_the_dom_path(self):
+        """The rendered grid exposes neither bondType nor sectorName."""
+        assert _classify_bond_type(None, issuer_name="KSA Sukuk 2026-07-15") == "G"
+        assert _classify_bond_type(None, issuer_name="RIYAD SUKUK PERP") == "C"
+
+
+# ─── Composite upsert key (uq_sukuk_symbol_parent) ────────────────────────────
+
+class TestSukukKey:
+    """The constraint is (symbol, parent_company_symbol) and Postgres treats NULLs
+    as DISTINCT inside it: a lookup keyed on None would miss the stored row and
+    insert a permitted duplicate on every single run."""
+
+    def test_null_parent_normalises_to_empty_string(self):
+        assert _sukuk_key("5389", None) == ("5389", "")
+
+    def test_empty_string_parent_matches_null_parent(self):
+        assert _sukuk_key("5389", "") == _sukuk_key("5389", None)
+
+    def test_whitespace_is_stripped(self):
+        assert _sukuk_key(" 5389 ", " 5200 ") == ("5389", "5200")
+
+    def test_one_symbol_two_parents_are_two_distinct_rows(self):
+        """The pre-fix dict was keyed on symbol alone, so a second listing under a
+        different parent silently re-parented (and hid) the first one."""
+        assert _sukuk_key("5025", "5025") != _sukuk_key("5025", "1010")
+
+
+# ─── Retirement guard: real delisting vs a partial grid ───────────────────────
+
+class _FakeQuery:
+    def __init__(self, rows): self._rows = rows
+    def filter(self, *a, **k): return self
+    def all(self): return self._rows
+
+
+class _FakeDB:
+    """Serves only the one query `_deactivate_retired` makes — no DB, no commit."""
+    def __init__(self, rows): self._rows = rows
+    def query(self, *a, **k): return _FakeQuery(self._rows)
+
+
+def _active_rows(specs):
+    from types import SimpleNamespace
+    return [SimpleNamespace(symbol=s, parent_company_symbol=p, is_active=True)
+            for s, p in specs]
+
+
+class TestRetirementGuard:
+    def test_delisted_instrument_is_flagged_inactive(self):
+        rows = _active_rows([("5389", "5200"), ("5388", "5200"), ("5027", "1010")])
+        retired = _deactivate_retired(
+            _FakeDB(rows), {("5389", "5200"), ("5388", "5200")})
+        assert retired == 1
+        assert rows[2].is_active is False
+        assert rows[0].is_active is True
+
+    def test_full_coverage_retires_nothing(self):
+        rows = _active_rows([("5389", None), ("5388", None)])
+        assert _deactivate_retired(_FakeDB(rows), {("5389", ""), ("5388", "")}) == 0
+        assert all(r.is_active for r in rows)
+
+    def test_a_few_absences_pass_even_on_a_small_table(self):
+        """A percentage floor alone would refuse here (1 of 4 is 25%) and leave a
+        matured sukuk pricing companies forever."""
+        rows = _active_rows([(str(i), "5200") for i in range(4)])
+        assert _deactivate_retired(
+            _FakeDB(rows), {(str(i), "5200") for i in range(3)}) == 1
+
+    def test_half_the_table_missing_is_refused(self):
+        """More than MAX_RETIRE_PER_RUN absent AND under the coverage floor means a
+        partial/paginated grid, not delisting — nothing may be flipped."""
+        rows = _active_rows([(str(i), "5200") for i in range(62)])
+        seen = {(str(i), "5200") for i in range(30)}
+        assert len(seen) < 62 * MIN_DEACTIVATE_COVERAGE
+        assert (62 - len(seen)) > MAX_RETIRE_PER_RUN
+        assert _deactivate_retired(_FakeDB(rows), seen) == 0
+        assert all(r.is_active for r in rows)
+
+
+# ─── DOM fallback maps columns by HEADER NAME, not position ───────────────────
+
+class TestDomHeaderMap:
+    """Header row measured live on 2026-10-23. Fixed cell positions used to read
+    couponRate out of the ISIN column, so a re-order must stay survivable."""
+
+    HEADERS = ['TadawulCode', 'Name', 'ISIN', 'Coupon Type', 'CouponRate (%)',
+               'Maturity Date', 'Instrument  Yield', 'Bid Yield', 'Ask Yield',
+               'Par Value', 'Last Traded Price', 'Bid Price', 'Ask Price',
+               'Issuance Amount(Outstanding)', 'Issuance Currency',
+               'Coupon Frequency', 'Day Count Convention', 'Watchlist']
+
+    def test_key_columns_land_on_their_own_headers(self):
+        cm = _header_map(self.HEADERS)
+        assert cm[0] == "symbol"
+        assert cm[1] == "issuerName"
+        assert cm[4] == "couponRate"
+        assert cm[5] == "maturityDateStr"
+        assert cm[13] == "outstandingAmountModified"
+        assert cm[14] == "currency"
+
+    def test_instrument_yield_feeds_the_json_yield_key(self):
+        """The same raw key the JSON path uses, so _normalize_item needs no branch."""
+        assert _header_map(self.HEADERS)[6] == "lastTadeYield"
+
+    def test_bid_and_ask_yields_do_not_hijack_the_traded_yield(self):
+        cm = _header_map(self.HEADERS)
+        assert cm.get(7) is None and cm.get(8) is None
+
+
+# ─── Normalisation against the live payload's field names ─────────────────────
+
+class TestNormalizeLiveShape:
+    def test_lasttade_yield_is_the_traded_yield(self):
+        """`lastTadeYield` is the source's own typo and the only instrument-level
+        market yield it publishes (non-null on 53 of the 62 live items)."""
+        norm = _normalize_item({"symbol": "5379", "couponRate": "5.69",
+                                "lastTadeYield": 6.1758,
+                                "maturityDateStr": "2041-07-20"}, source_url="t")
+        assert norm["yield_to_maturity"] == Decimal("6.1758")
+
+    def test_zero_yields_count_as_absent_not_measured(self):
+        """Untraded rows carry 0.0; a 0% YTM would be a fabricated number."""
+        norm = _normalize_item({"symbol": "5389", "couponRate": "5.20",
+                                "lastTadeYield": 0.0, "bidYield": 0.0,
+                                "askYield": 0.0}, source_url="t")
+        assert norm["yield_to_maturity"] is None
+
+    def test_issue_currency_is_honoured(self):
+        norm = _normalize_item({"symbol": "5389", "issueCurrency": "USD",
+                                "bondType": "G"}, source_url="t")
+        assert norm["currency"] == "USD"
+
+    def test_yield_flag_separates_traded_from_coupon(self):
+        """Build-Up R labels is_ytm from this column, so a coupon-only row must not
+        claim to be a market yield."""
+        traded = _normalize_item({"symbol": "1", "lastTadeYield": 5.9}, source_url="t")
+        coupon_only = _normalize_item({"symbol": "2", "couponRate": 5.2}, source_url="t")
+        assert traded["yield_to_maturity"] is not None
+        assert coupon_only["yield_to_maturity"] is None

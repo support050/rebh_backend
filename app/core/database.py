@@ -41,7 +41,6 @@ from app.models.valuation_zones import ValuationZone  # noqa: E402,F401
 from app.models.tasi_components import TasiComponent  # noqa: E402,F401
 from app.models.user import User  # noqa: E402,F401
 from app.models.contact import ContactMessage  # noqa: E402,F401
-from app.models.aporia import AporiaAnalytics  # noqa: E402,F401
 from app.models.Corporate_actions import CorporateAction  # noqa: E402,F401
 from app.models.stock_indicators import StockIndicator  # noqa: E402,F401
 from app.models.scraped_reports import Company, FinancialReport  # noqa: E402,F401
@@ -55,7 +54,6 @@ from app.models.market_reports import (  # noqa: E402,F401
     ShareBuyback,
     SBLPosition,
     HistoricalReport,
-    QFIOwnershipFlow,
 )
 from app.models.sukuk_bonds import SukukMarketData  # noqa: E402,F401
 from app.models.saudi_macro import SaudiEconomicIndicator  # noqa: E402,F401
@@ -63,9 +61,6 @@ from app.models.update_status import UpdateStatus  # noqa: E402,F401
 from app.models.rebh_engine_vintage import RebhEngineVintage  # noqa: E402,F401
 from app.models.rebh_universe_snapshot import RebhUniverseSnapshot  # noqa: E402,F401
 from app.models.job_run import JobRun  # noqa: E402,F401
-# 2026-10-12: was invisible to Base.metadata (imported only by its router and
-# services), so create_all() and Alembic autogenerate never saw it.
-from app.models.weekly_market_report import WeeklyMarketReport  # noqa: E402,F401
 
 
 def create_tables():

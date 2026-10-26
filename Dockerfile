@@ -7,6 +7,12 @@ ENV PYTHONUNBUFFERED=1
 ENV CHROME_BIN=/usr/bin/google-chrome-stable
 ENV GOOGLE_CHROME_BIN=/usr/bin/google-chrome-stable
 
+# Scrapling's browser paths (app/scrapers/scrapling_fetch.py) reuse this Chrome
+# via real_chrome + executable_path instead of downloading a private build, so
+# `scrapling install` is NOT part of the image. Behaviour stays tunable without
+# a redeploy through: SCRAPLING_IMPERSONATE_ORDER,
+# SCRAPLING_BROWSER_TIMEOUT_MS, SCRAPLING_ADAPTIVE=1.
+
 # Install Chrome and dependencies
 RUN apt-get update && apt-get install -y \
     wget \

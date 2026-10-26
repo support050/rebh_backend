@@ -201,27 +201,27 @@ def update_financial_indicators():
     """
     try:
         logger.info("💰 Starting Daily Financial Indicators Scraper...")
-        run_financial_indicators_scraper()
-        logger.info("✅ Daily Financial Indicators completed successfully!")
+        result = run_financial_indicators_scraper() or {}
+        if not result.get("ok"):
+            # The scraper traps its own errors, so a failed run comes back as a
+            # dict — turn it into a stage failure instead of a green stage.
+            failures = result.get("stage_failures") or []
+            msg = ("; ".join(f"[{f.get('stage')}] {f.get('error')}" for f in failures)
+                   or "run_scraper_and_save_to_db() returned ok=False")
+            _record_stage_failure("0.3 daily financial indicators", msg, critical=True)
+            return False
+        if result.get("partial"):
+            _record_stage_failure(
+                "0.3 daily financial indicators",
+                f"partial page: only {result.get('companies')} company rows",
+                advisory=True)
+        logger.info(f"✅ Daily Financial Indicators completed — "
+                    f"{result.get('rows', 0)} rows written!")
         return True
     except Exception as e:
         _record_stage_failure("0.3 daily financial indicators", e)
         return False
 
-def update_aporia_analytics():
-    """
-    تشغيل سكريبت Aporia Saudi Analytics لسحب جدول التحليلات وتحديثه في DB
-    """
-    try:
-        logger.info("📊 Starting Aporia Analytics Scraper...")
-        from scripts.Scrape_aporia_saudi import main as run_aporia_scraper
-        run_aporia_scraper()
-        logger.info("✅ Aporia Analytics completed successfully!")
-        return True
-    except Exception as e:
-        logger.error(f"⚠️ Aporia Analytics encountered an error: {e}")
-        logger.error(traceback.format_exc())
-        return False
 
 # def update_tadawul_market_reports():
 #     """
@@ -1186,34 +1186,14 @@ def update_daily(target_date_str=None):
 
         # 8.7 Export RS Hub cached JSON data
         # -------------------------------------------------------------------
-        # 7. Sukuk & Bonds Market Data
-        logger.info("\n--- [7/8] Updating Sukuk & Bonds Market Data ---")
-        try:
-            import importlib.util
-            sukuk_path = os.path.join(os.path.dirname(__file__), "Sukuk&Bonds.py")
-            spec = importlib.util.spec_from_file_location("sukuk_module", sukuk_path)
-            sukuk_module = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(sukuk_module)
-            sukuk_count = sukuk_module.run_sukuk_sync()
-            if sukuk_count > 0:
-                logger.info(f"✅ Sukuk & Bonds Market Data updated successfully ({sukuk_count} instruments).")
-            else:
-                logger.warning("⚠️ Sukuk & Bonds live sync fetched 0 instruments (relying on existing database sukuk).")
-        except Exception as e:
-            _record_stage_failure("7. Sukuk & Bonds sync", e)
-
-        # 8. SAMA & GaStat Macroeconomic Indicators & Buffett Index
-        logger.info("\n--- [8/8] Updating SAMA & GaStat Macroeconomic Data ---")
-        try:
-            import importlib.util
-            sama_path = os.path.join(os.path.dirname(__file__), "SAMA&GaStat.py")
-            spec = importlib.util.spec_from_file_location("sama_module", sama_path)
-            sama_module = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(sama_module)
-            sama_module.run_economic_sync()
-            logger.info("✅ SAMA & GaStat Macro Indicators updated successfully.")
-        except Exception as e:
-            _record_stage_failure("8. SAMA & GaStat sync", e)
+        # ── Sukuk & SAMA/Macro sync REMOVED from the daily pipeline (2026-10-26) ──
+        # Neither is a daily-cadence source, and run_economic_sync() defaults to
+        # write_db=True/history=True, so firing them on every daily run re-pulled
+        # the whole SAMA bulletin + sukuk grid (and the inline call bypassed the
+        # __main__ track_job wrapper, so those writes never showed in job_runs).
+        # They now run on their own cadence from the Admin Schedule tab
+        # (sukuk_importer weekly / macro_importer monthly, Run Now) or via the
+        # scripts/Sukuk&Bonds.py & scripts/SAMA&GaStat.py __main__ directly.
 
         try:
             logger.info("📦 Exporting unified RS Hub data to JSON...")

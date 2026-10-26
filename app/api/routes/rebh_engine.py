@@ -515,9 +515,10 @@ def get_rebh_stats() -> Dict[str, Any]:
     return khurafshi_engine_service.get_khurafshi_live_market_stats()
 
 
-# saudi_economic_indicators has NO report_date column (see
-# app/models/saudi_macro.py): the only business-time label is `period`, a String
-# like '2026-03' or '2025-Q1-TTM', and retrieved_at/updated_at are scrape times.
+# saudi_economic_indicators has no scrape-time ambiguity any more: `period` is a
+# DATE holding the publisher's own business date (alembic revision
+# 2026_10_26_macro_period_date), `basis` distinguishes derivations ('TTM',
+# 'Annualized'), and retrieved_at/updated_at only say when WE scraped.
 # Keys below are the ones written by scripts/SAMA&GaStat.py via macro_importer.
 _MACRO_KEY_MAP: Dict[str, str] = {
     "repo_rate": "repo_rate_pct",
@@ -532,11 +533,11 @@ _MACRO_KEY_MAP: Dict[str, str] = {
 _GDP_GROWTH_KEYS: Tuple[str, ...] = (
     "saudi_gdp_growth", "saudi_gdp_growth_yoy", "gdp_growth_pct",
 )
-# Regex for the TTM period label written by scripts/SAMA&GaStat.py.
-# Examples: '2025-Q4-TTM' (real trailing 12M), '2025-Q1-Annualized' (single Q*4).
-# Only TTM rows are used to derive a YoY rate; Annualized rows are skipped so
-# we never mix bases.
-_GDP_TTM_PERIOD_RE = re.compile(r"^(\d{4})-Q([1-4])-TTM$")
+# The TTM distinction used to live inside the period STRING ('2025-Q4-TTM') and
+# was regexed here; period is now a DATE, so the label moved to the `basis`
+# column. Only TTM rows are used to derive a YoY rate; Annualized rows are
+# skipped so we never mix bases.
+_GDP_BASIS_TTM = "TTM"
 # Read-only guard so a stuck query cannot hang the tools tab.
 _MACRO_TIMEOUT_MS = 5000
 
@@ -616,7 +617,7 @@ def get_rebh_market_macro() -> Dict[str, Any]:
                     "value": float(r.value),
                     "name": r.indicator_name,
                     "unit": r.unit,
-                    "period": r.period,
+                    "period": str(r.period) if r.period is not None else None,
                     "source": r.source,
                     "is_fallback": bool(r.is_fallback),
                     "retrieved_at": r.retrieved_at.isoformat() if r.retrieved_at else None,
@@ -707,10 +708,12 @@ def get_rebh_market_macro() -> Dict[str, Any]:
             degraded.append(f"treasury: query failed ({type(e).__name__})")
 
         # 4. GDP YoY growth — derived from the saudi_gdp_annual LEVEL history.
-        #    The importer stores period like '2025-Q4-TTM'; a pair of TTM rows
-        #    whose year differs by exactly 1 with the same quarter yields a
-        #    legitimate YoY rate. Anything else leaves gdp_growth_derived None
-        #    so the caller sees a null and the degraded array explains why.
+        #    The importer writes one TTM observation per quarter (sum of the 4
+        #    quarters ending at that quarter's month-end, period = that DATE,
+        #    basis = 'TTM'). A pair whose years differ by exactly 1 with the
+        #    same quarter yields a legitimate YoY rate. Anything else leaves
+        #    gdp_growth_derived None so the caller sees a null and the degraded
+        #    array explains why.
         try:
             _macro_read_tx(db)
             gdp_hist = (
@@ -719,17 +722,22 @@ def get_rebh_market_macro() -> Dict[str, Any]:
                       SaudiEconomicIndicator.indicator_key == "saudi_gdp_annual",
                       SaudiEconomicIndicator.value.isnot(None),
                       SaudiEconomicIndicator.period.isnot(None),
+                      SaudiEconomicIndicator.basis == _GDP_BASIS_TTM,
                   )
                   .order_by(SaudiEconomicIndicator.period.desc())
                   .limit(8)
                   .all()
             )
+            # (year, quarter-of-year, value, human label) — all readable from the
+            # DATE itself now, no string parsing left.
             parsed: List[Tuple[int, int, float, str]] = []
             for r in gdp_hist:
-                m = _GDP_TTM_PERIOD_RE.match((r.period or "").strip())
-                if not m:
-                    continue
-                parsed.append((int(m.group(1)), int(m.group(2)), float(r.value), r.period))
+                parsed.append((
+                    r.period.year,
+                    (r.period.month - 1) // 3 + 1,
+                    float(r.value),
+                    f"{r.period.year}-Q{(r.period.month - 1) // 3 + 1}",
+                ))
             parsed.sort(key=lambda t: (t[0], t[1]), reverse=True)
             outer_done = False
             for i in range(len(parsed) - 1):
@@ -748,10 +756,12 @@ def get_rebh_market_macro() -> Dict[str, Any]:
                     break
             if gdp_growth_derived is None:
                 degraded.append(
-                    "gdp_growth: no two saudi_gdp_annual TTM periods exactly 1 "
-                    "year apart in the table; at least two macro_importer runs "
-                    "(each summing 4 quarters to TTM) are required. gdp_level_m_sar "
-                    "below is the current absolute level, not a rate."
+                    "gdp_growth: saudi_economic_indicators has no two "
+                    "saudi_gdp_annual TTM observations exactly 1 year apart "
+                    "(basis='TTM'). Run scripts/SAMA&GaStat.py --execute — the "
+                    "KAPSARC fetch now writes the full trailing-12M history, so "
+                    "pairs exist from the first run. gdp_level_m_sar below is "
+                    "the current absolute level, not a rate."
                 )
         except Exception as e:
             logger.warning("market-macro: GDP YoY derivation failed: %s", e, exc_info=True)
@@ -1202,70 +1212,56 @@ def get_terry_smith_roce_lab(
 
 
 @router.get("/quarantine")
-def get_quarantine_records() -> Dict[str, Any]:
+def get_quarantine_records(refresh: bool = False) -> Dict[str, Any]:
     """
-    Get all companies currently in Quarantine / Monger Basket.
-    Identifies failed identity checks, corrupted scale, or missing income statements.
-    Optimized for sub-second responses using cached engine universe records.
+    Unified quarantine (Error 5): a PURE view over the single data-health gate
+    (rebh_health_service.assess_health — gates G1-G5). There is no manual list and
+    no second set of checks any more; the pricing engine and this page read the
+    SAME buckets. A company lands here when the canonical gate says ok=false, and
+    is grouped by STALE / CORRUPTION / SCALE, sorted by market cap. Break a gate
+    and the company moves buckets automatically — the counters are live.
     """
-    universe = khurafshi_engine_service.get_universe_snapshot() or khurafshi_engine_service.get_khurafshi_universe_data()
-    quarantined = []
-    
-    for item in universe:
-        sym = item.get("sym")
-        name = item.get("n")
-        sec = item.get("sec")
-        fresh = item.get("fresh", False)
-        flags = item.get("flags", [])
-        # None = unknown/missing (not a health pass); False = explicit failure
-        bs_ok = item.get("bs_ok", None)
-        
-        name_en = item.get("en") or item.get("name_en") or name
-        sec_en = item.get("sec_en") or item.get("sector_en") or sec
-
-        reasons = []
-        structured_reasons = []
-        if not name and not sec:
-            reasons.append("No filings at source")
-            structured_reasons.append({"code": "NO_FILINGS", "kind": "no-filings", "label": "No filings at source"})
-        elif not fresh:
-            reasons.append("Stale or incomplete financial statements")
-            structured_reasons.append({"code": "STALE", "kind": "stale", "label": "Stale or incomplete financial statements"})
-        # Only flag corruption when bs_ok is explicitly False — None means data absent, not corrupted
-        if bs_ok is False:
-            reasons.append("Balance sheet identity mismatch (A ≠ L + E)")
-            structured_reasons.append({"code": "BALANCE_IDENTITY", "kind": "corruption", "label": "Balance sheet identity mismatch (A ≠ L + E)"})
-        if "⚑incomplete-source" in flags:
-            reasons.append("Missing financial statement line items")
-            structured_reasons.append({"code": "EMPTY_STATEMENT", "kind": "empty-statement", "label": "Missing financial statement line items"})
-        if "⚑low-f-score" in flags:
-            reasons.append("Low Piotroski score (F-Score ≤ 2)")
-            structured_reasons.append({"code": "LOW_F_SCORE", "kind": "other", "label": "Low Piotroski score (F-Score ≤ 2)"})
-            
-        if reasons:
-            quarantined.append({
-                "symbol": sym,
-                "name": name,
-                "en": name_en,
-                "sector": sec,
-                "sec_en": sec_en,
-                "reason": " • ".join(reasons),
-                "reasons_list": reasons,
-                "reasons_structured": structured_reasons,
-                "balance_identity_valid": bs_ok,
-                "discrepancy": 0.0 if bs_ok else None,
-                "price": item.get("px"),
-                "market_cap": item.get("mc"),
-                "flags": flags
-            })
-            
+    from app.services.rebh_health_service import assess_universe_health
     from datetime import datetime, timezone
+
+    rows = assess_universe_health(force_refresh=refresh)
+    total = len(rows)
+
+    quarantined: list = []
+    bucket_counts = {"STALE": 0, "CORRUPTION": 0, "SCALE": 0}
+    for r in rows:
+        if r.get("ok"):
+            continue
+        bucket = r.get("bucket", "CORRUPTION")
+        bucket_counts[bucket] = bucket_counts.get(bucket, 0) + 1
+        reasons = r.get("reasons", [])
+        quarantined.append({
+            "symbol": r.get("symbol"),
+            "name": r.get("name"),
+            "en": r.get("en"),
+            "sector": r.get("sec"),
+            "sec_en": r.get("sec_en"),
+            "bucket": bucket,
+            "reason": " • ".join(reasons),
+            "reasons_list": reasons,
+            "reasons_structured": r.get("structured", []),
+            "balance_identity_valid": not any(
+                s["code"] == "BALANCE_IDENTITY" for s in r.get("structured", [])
+            ),
+            "price": r.get("px"),
+            "market_cap": r.get("mc"),
+            "metrics": r.get("metrics", {}),
+        })
+
+    quarantined.sort(key=lambda x: (x.get("market_cap") or 0), reverse=True)
+
     return {
         "count": len(quarantined),
-        "total_universe": len(universe),
+        "total_universe": total,
         "quarantined_companies": quarantined,
+        "bucket_counts": bucket_counts,
         "status": "° verified",
-        "source": "REBH Forensic Gate & Quarantine Engine",
+        "source": "REBH Unified Data-Health Gate (G1–G5)",
         "generated_at": datetime.now(timezone.utc).isoformat()
     }
 

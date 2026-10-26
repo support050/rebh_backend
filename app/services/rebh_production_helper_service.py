@@ -328,6 +328,32 @@ def extract_cyclical_cycle_bounds(
 # 4. NINE-BOX INPUTS WITH SIGN & DEBT NORMALIZATION
 # -----------------------------------------------------------------------------
 
+
+def derive_cash_dps(
+    cff_items: Dict[str, Dict[str, Optional[float]]],
+    latest_period: Optional[str],
+    shares: Optional[float]
+) -> Optional[float]:
+    """
+    The ONLY verified DPS in the system: the cash-flow statement's actual
+    'Dividends Paid' line for the latest reported window ÷ share count.
+    Deliberately lives OUTSIDE the nine-box valuation so a quarantined EPS
+    line (e.g. 1321's filing repeats net income inside the EPS cell) can
+    never blank out dividend pages fed by the independent, auditable cash
+    outflow. Returns None (never a proxy) when the CFF reports no dividends.
+    """
+    if not (latest_period and cff_items and shares and shares > 0):
+        return None
+    for k, v in cff_items.items():
+        if re.search(r"Dividends paid|Cash dividends", k, re.IGNORECASE):
+            div_raw = v.get(latest_period)
+            if div_raw is not None:
+                # Dividends paid in CFF is negative -> absolute value to get positive flow
+                dps = round(abs(float(div_raw)) / shares, 2)
+                return dps if dps > 0 else None
+            return None
+    return None
+
 def extract_nine_box_inputs(
     eps: Optional[float],
     cff_items: Dict[str, Dict[str, Optional[float]]],
@@ -342,21 +368,12 @@ def extract_nine_box_inputs(
     - Normalizes Dividends Paid sign from cash flow (CFF is reported negative when cash paid).
     - Avoids double-counting debt in FCF.
     """
-    # 1. Dividend extraction (DPS)
-    dps = None
-    if latest_period and cff_items and shares and shares > 0:
-        div_raw = None
-        for k, v in cff_items.items():
-            if re.search(r"Dividends paid|Cash dividends", k, re.IGNORECASE):
-                div_raw = v.get(latest_period)
-                break
-        if div_raw is not None:
-            # Dividends paid in CFF is negative -> absolute value to get positive dividend flow
-            dps = round(abs(float(div_raw)) / shares, 2)
+    # 1. Dividend extraction (DPS) — same single source of truth as the
+    # dividend pages: the CFF 'Dividends Paid' line (see derive_cash_dps).
+    dps = derive_cash_dps(cff_items, latest_period, shares)
 
     # Strict Zero-Tolerance: No synthetic proxy for DPS if cash flow does not report dividends
-    if dps is None or dps <= 0:
-        dps = None
+    if dps is None:
         dps_source = "🔌 missing-source"
     else:
         dps_source = "cff_dividends_paid_actual"

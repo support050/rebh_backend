@@ -10,16 +10,21 @@ class CompanyMeta(BaseModel):
     sector: str | None = None
     currency: str | None = None
     rounding: str | None = None
+    scale_basis: str | None = None
     status: str | None = None
     report_end: str | None = None
     source_files: list[str] = Field(default_factory=list)
+    source_scales: list[dict] = Field(default_factory=list)
 
 
 class FinancialItem(BaseModel):
     label: str
     label_ar: str | None = None
+    concept_id: str | None = None
     is_header: bool
     is_unmapped: bool | None = None
+    status: str | None = None
+    flags: list[str] | None = None
     values: dict[str, Any]
 
 

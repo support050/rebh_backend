@@ -90,15 +90,52 @@ def _t(table: str, date_column: Optional[str], max_lag: Optional[int],
     }
 
 
+# ─── Schedule-runbook vocabularies (asserted by tests/test_system_registry_shape) ─
+CADENCES = ("daily", "weekly", "monthly", "quarterly", "manual")
+ROLES = ("ingestion", "computation")
+STORAGES = ("cumulative", "snapshot")
+COMMAND_KINDS = ("incremental", "full", "backfill")
+
+
+def _derive_cadence(expected_schedule: str, trigger: str) -> str:
+    """Best-effort cadence from the schedule string, so annotating every legacy
+    ``_j()`` call stays optional. An explicit ``cadence=`` always wins upstream."""
+    s = (expected_schedule or "").lower()
+    if "quarter" in s:
+        return "quarterly"
+    if "month" in s or "day 10" in s:
+        return "monthly"
+    # Weekday-range cron (Mon–Fri, Sun–Thu) is DAILY — test before the lone
+    # "fri" weekly marker, or "Mon\u2013Fri 01:00" would read as weekly.
+    if any(k in s for k in ("mon-fri", "mon\u2013fri", "sun-thu", "sun\u2013thu",
+                            "sun,mon", "business day", "every business", "daily")):
+        return "daily"
+    if "week" in s or "fri 01" in s or "sunday-evening" in s:
+        return "weekly"
+    return "manual" if trigger != "cron" else "daily"
+
+
 def _j(job_name: str, file: str, expected_schedule: str,
        max_allowed_age_hours: Optional[int] = None, trigger: str = "cron",
        writes: Optional[List[str]] = None, note: str = "",
-       tracked: bool = True) -> Dict[str, Any]:
+       tracked: bool = True, cadence: Optional[str] = None,
+       role: str = "ingestion", storage: str = "cumulative",
+       commands: Optional[List[Dict[str, str]]] = None) -> Dict[str, Any]:
     """One job. ``job_name`` MUST equal the key written into ``job_runs``.
 
     ``tracked=False`` → the entry point is not wrapped by track_job(), so
     "did it run?" is unanswerable; the Runbook falls back to table freshness.
     ``max_allowed_age_hours=None`` → no schedule to be late for (manual-only).
+
+    Schedule-runbook axes, read by GET /api/admin/system-map/schedule:
+      · cadence  → daily | weekly | monthly | quarterly | manual (derived from
+                   expected_schedule + trigger when omitted)
+      · role     → ingestion (pulls an external source) | computation (derives
+                   from local tables such as prices)
+      · storage  → cumulative (appends, keeps history) | snapshot (overwrite)
+      · commands → [{label, cli, kind}] the exact operator terminal commands,
+                   kind ∈ incremental | full | backfill. Left empty for
+                   cron-only jobs, whose door is the Run Now button instead.
     """
     return {
         "job_name": job_name,
@@ -109,6 +146,10 @@ def _j(job_name: str, file: str, expected_schedule: str,
         "tracked": tracked,
         "writes": writes or [],
         "note": note,
+        "cadence": cadence or _derive_cadence(expected_schedule, trigger),
+        "role": role,
+        "storage": storage,
+        "commands": commands or [],
     }
 
 
@@ -137,19 +178,96 @@ SYSTEMS: List[Dict[str, Any]] = [
         "name": "Home / Landing",
         "in_navbar": True,
         "navbar_label": "Home (logo)",
-        "blurb": "Static landing dashboard. Hard-coded cards and links only — no "
-                 "database or scraper dependency, so it can never be 'stale'.",
+        "blurb": "Tadawul market dashboard. Server component that fans out to six "
+                 "public read-through endpoints (latest quotes, market_pulse TASI, "
+                 "industry-group RS, REBH universe, corporate actions) and derives "
+                 "every panel — movers, sector table, breadth, TASI chart, screens "
+                 "and announcements. Zero mock content since Phase 6 2026-10-15.",
         "built": [
-            _b("frontend", "frontend/app/page.tsx", "440-line static dashboard, no API calls"),
+            _b("frontend", "frontend/app/page.tsx",
+               "async Server Component — Promise.all over the six endpoints, "
+               "revalidate 300s; renders <HomeDashboard vm={…}> only"),
+            _b("frontend", "frontend/app/_lib/homeData.ts",
+               "pure view-model builders: cap-weighted sector change, breadth, "
+               "movers, TASI index row, NCAV / owner-earnings / dividend-yield "
+               "screens, announcements"),
+            _b("frontend", "frontend/app/_components/HomeDashboard.tsx",
+               "'use client' presentation — TASI|Sectors tabs, real range buttons "
+               "(5D…MAX) on the TASI area chart, Day Watch, sector RS table, screens"),
+            _b("frontend", "frontend/app/stocks/_lib/stockApi.ts",
+               "fetchMarketSnapshot / fetchMarketPulseLatest / fetchIndustryGroups "
+               "/ fetchRebhUniverse / fetchMarketCorporateActions / fetchTasiHistory"),
+            _b("route", "backend/app/api/routes/prices.py",
+               "GET /api/prices/latest · GET /api/prices/tasi/history (TASI line)"),
+            _b("route", "backend/app/api/routes/market_pulse.py",
+               "GET /api/market-pulse/?limit=1 (TASI level, change, regime signals)"),
+            _b("route", "backend/app/api/routes/industry_groups.py",
+               "GET /api/industry-groups/latest (sector RS rank / grade / YTD)"),
+            _b("route", "backend/app/api/routes/rebh_engine.py",
+               "GET /api/rebh/universe (screens) · /api/rebh/corporate-actions "
+               "(announcements feed, symbol omitted = whole market)"),
             _b("frontend", "frontend/components/Navbar.tsx", "site navigation, 9 dropdowns"),
         ],
         "pages": ["/"],
         "jobs": [],
-        "tables": [],
+        "tables": [
+            _t("prices", "date", 1, "daily_market_update",
+               note="quote strip, movers and breadth counts all read the same "
+                    "/api/prices/latest?limit=1000 the pipeline writes"),
+            _t("market_pulse", "date", 1, "daily_market_update",
+               note="stage 3.5 — the TRUE TASI close series behind the home chart "
+                    "and every benchmark comparison"),
+            _t("industry_group_history", "date", 1, "daily_market_update",
+               note="stage 7 — the 22 Tadawul industry groups. Written the same "
+                    "evening as prices/latest, so each panel prints its own as-of "
+                    "date instead of pretending they agree"),
+            _t("corporate_actions", "eligibility_date", 14, "corporate_actions_watcher",
+               note="market-wide announcements feed on the home page; no forward "
+                    "calendar exists, so the newest row may be in the past"),
+            _t("static_stock_info", None, None, None,
+               note="company names AR/EN; reference data, no date column to probe"),
+        ],
         "issues": [
-            _i("note", "No data dependency: the page renders the same whatever the "
-                       "pipeline did or did not run. If the home page looks wrong, "
-                       "it is a design question, never a data question."),
+            _i("bug", "2026-10-18 FIXED · this system's 'tables' block was written as "
+                      "five bare strings ('prices', 'market_pulse', …) while every "
+                      "other system uses _t() dicts. The Runbook, the pipelines map "
+                      "and checks_sql() all index entries as dicts, so "
+                      "GET /api/admin/system-map/systems/<anything> died with "
+                      "'TypeError: string indices must be integers' (checks_sql() "
+                      "loops ALL systems, so one bad entry breaks every detail "
+                      "page). The home tables were also invisible to the freshness "
+                      "probe. They are proper _t() entries now, and "
+                      "system_registry._normalise_tables() coerces any future bare "
+                      "string at import time + prints a WARN, so a registry typo "
+                      "degrades into an unprobed table instead of a 500."),
+            _i("note", "2026-10-15 Phase 6: the former 440-line static dashboard "
+                       "(US futures, Dow/S&P/Nasdaq, NVDA/AMZN/TSLA watchlists, fake "
+                       "analyst articles and a hardcoded SVG curve) was deleted "
+                       "end-to-end and rebuilt on real Saudi data. The page is now "
+                       "data-dependent: if a pipeline has not published, the "
+                       "affected panel shows its own as-of date or an em-dash."),
+            _i("watch", "prices/latest serves update_status.latest_ready_date while "
+                        "market_pulse and industry_group_history are written the same "
+                        "evening — so the quote strip can trail the TASI row by one "
+                        "session. Each panel prints its own date instead of pretending "
+                        "they agree."),
+            _i("note", "2026-10-18 · the home page gained a real 'Dividend Yield "
+                       "Leaders' card: buildDividendScreen() in "
+                       "frontend/app/_lib/homeData.ts ranks /api/rebh/universe rows "
+                       "by div_yield — the cash actually distributed to shareholders "
+                       "in the latest filing ÷ market cap, never extrapolated, with "
+                       "full-year filings ranked ahead of year-to-date windows (the "
+                       "latter divide a real payment by less than a year). The "
+                       "backend withholds the ratio when the only disclosed payout "
+                       "is older than 18 months, so 106 of 257 companies qualify and "
+                       "an absent figure means 'not disclosed', not zero. The card "
+                       "reuses the universe array page.tsx already fetches: zero "
+                       "extra requests. Still absent: a FORWARD yield — Tadawul "
+                       "publishes no consensus dividend estimate."),
+            _i("watch", "The corporate-actions feed is ordered by eligibility_date "
+                        "server-side; the home page re-sorts the fetched slice by "
+                        "announcement_date. A limit/order query param would remove "
+                        "that client-side step."),
         ],
     },
 
@@ -173,12 +291,20 @@ SYSTEMS: List[Dict[str, Any]] = [
                "stage 8.1 — pre-aggregates Minervini trend counts"),
             _b("script", "backend/scripts/update_daily_market_breadth.py",
                "stage 8.x — raw SQL aggregate of stock_indicators into market_breadth"),
-            _b("script", "backend/scripts/Scrape_aporia_saudi.py",
-               "stage called by update_aporia_analytics() — Aporia Saudi table"),
             _b("script", "backend/scripts/verify_daily_update.py",
                "post-run checks incl. market_breadth row counts"),
             _b("route", "backend/app/api/routes/admin.py",
                "POST /api/admin/pipeline/daily-market-update/run|status|unlock"),
+            _b("route", "backend/app/api/routes/prices.py",
+               "GET /api/prices/history/{symbol} · /latest · POST /static-info/import · "
+               "GET /api/prices/seasonality/{symbol} (month-end close → MoM aggregates, "
+               "Redis read-through; added Phase 3 2026-10-15) · "
+               "GET /api/prices/tasi/history?days= (TRUE TASI index closes from the "
+               "market_pulse table — same benchmark source as rs_line._fetch_tasi_close(); "
+               "added Phase 5 2026-10-15)"),
+            _b("frontend", "frontend/app/stocks/_components/Seasonality.tsx",
+               "seasonality panel — sole consumer of /api/prices/seasonality/{symbol} "
+               "(wired via StockOverview; replaced mock, Phase 3)"),
             _b("frontend", "frontend/app/admin/page.tsx",
                "'Daily Market Update' tab — trigger + live status + log tail"),
         ],
@@ -188,7 +314,8 @@ SYSTEMS: List[Dict[str, Any]] = [
             "/stocks/[symbol]/balance-sheet", "/stocks/[symbol]/cash-flow",
             "/stocks/[symbol]/historical-price", "/stocks/[symbol]/earnings",
             "/stocks/[symbol]/dividends", "/stocks/[symbol]/ratings",
-            "/stocks/[symbol]/peers", "/stocks/market-breadth",
+            "/stocks/[symbol]/peers", "/stocks/[symbol]/splits",
+            "/stocks/market-breadth",
             "/admin", "/market-pulse", "/industry-groups",
         ],
         "jobs": [
@@ -196,10 +323,75 @@ SYSTEMS: List[Dict[str, Any]] = [
                "NOT SCHEDULED — manual CLI or Admin dashboard only", None, "manual",
                writes=["prices", "stock_indicators", "rs_daily_v2", "market_breadth",
                        "screener_daily_trend_counts", "market_pulse",
-                       "industry_group_history", "aporia_analytics"],
+                       "industry_group_history"],
+               cadence="daily", role="ingestion", storage="cumulative",
+               commands=[{"label": "Run full daily update",
+                          "kind": "full",
+                          "cli": '.\\venv\\Scripts\\python.exe "scripts/daily_market_update.py"'}],
                note="Started by hand (python scripts/daily_market_update.py) or by "
                     "POST /api/admin/pipeline/daily-market-update/run. Both paths are "
                     "wrapped by track_job(), so job_runs does show the runs."),
+            _j("industry_groups", "backend/scripts/calculate_industry_groups.py",
+               "stage 7 of daily_market_update; also runnable standalone",
+               _DAILY, "manual",
+               writes=["industry_group_history"],
+               cadence="daily", role="computation", storage="cumulative",
+               commands=[{"label": "Compute today's group ranks",
+                          "kind": "incremental",
+                          "cli": '.\\venv\\Scripts\\python.exe "scripts/calculate_industry_groups.py"'},
+                         {"label": "Backfill past dates",
+                          "kind": "backfill",
+                          "cli": '.\\venv\\Scripts\\python.exe "scripts/calculate_industry_groups.py" --backfill'}],
+               note="Derives the 22 Tadawul industry-group RS ranks/grades from the "
+                    "local prices + stock_indicators tables (no external pull). Reads "
+                    "the DB, so it is a computation step, not an ingestion scraper."),
+            _j("backfill_industry_group_history", "backend/scripts/backfill_industry_group_history.py",
+               "manual — run when the gap scanner finds missing group-history days",
+               None, "manual",
+               writes=["industry_group_history"],
+               cadence="manual", role="computation", storage="cumulative",
+               commands=[{"label": "Fill missing trading days",
+                          "kind": "backfill",
+                          "cli": '.\\venv\\Scripts\\python.exe "scripts/backfill_industry_group_history.py" --fill-missing --execute'},
+                         {"label": "Preview the work list (dry run)",
+                          "kind": "backfill",
+                          "cli": '.\\venv\\Scripts\\python.exe "scripts/backfill_industry_group_history.py" --fill-missing --list'}],
+               note="Recomputes stale dates of industry_group_history, or with "
+                    "--fill-missing the trading days that have NO row at all. Dry-run "
+                    "by default; --execute writes. The fix the gap scanner points at "
+                    "when group history has holes."),
+            _j("historical_price_fetcher", "backend/scripts/Historical_fetcher.py",
+               "manual - pull/repair one symbol's price history from Tadawul",
+               None, "manual",
+               writes=["prices"],
+               cadence="manual", role="ingestion", storage="cumulative",
+               commands=[{"label": "Fetch a date range for one symbol",
+                          "kind": "backfill",
+                          "cli": '$env:CHROME_BIN="C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe"; .\\venv\\Scripts\\python.exe "scripts/Historical_fetcher.py" --symbol 1150 --from 01-01-2024 --to 31-12-2024'},
+                         {"label": "Fill everything after the last stored day",
+                          "kind": "incremental",
+                          "cli": '$env:CHROME_BIN="C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe"; .\\venv\\Scripts\\python.exe "scripts/Historical_fetcher.py" --symbol 1150'}],
+               note="Selenium/Chrome scrape of the Tadawul historical endpoint for a "
+                    "single symbol. --symbol is required; --from/--to are DD-MM-YYYY, "
+                    "and omitting them fetches only what is newer than the last stored "
+                    "date (it reads MIN/MAX(date) from prices first). Needs CHROME_BIN. "
+                    "No job_runner callable, so the tab shows Copy-command only."),
+            _j("targeted_date_price_refetch", "backend/scripts/fetch_targeted_dates_tadawul.py",
+               "manual - re-scrape specific trading days and upsert prices",
+               None, "manual",
+               writes=["prices"],
+               cadence="manual", role="ingestion", storage="cumulative",
+               commands=[{"label": "Re-fetch one day for one symbol",
+                          "kind": "incremental",
+                          "cli": '$env:CHROME_BIN="C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe"; .\\venv\\Scripts\\python.exe "scripts/fetch_targeted_dates_tadawul.py" --symbol 1150 --date 04-10-2026'},
+                         {"label": "Re-fetch a date range for ALL symbols",
+                          "kind": "backfill",
+                          "cli": '$env:CHROME_BIN="C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe"; .\\venv\\Scripts\\python.exe "scripts/fetch_targeted_dates_tadawul.py" --from 01-10-2026 --to 08-10-2026'}],
+               note="Targeted-day repair tool: scrapes the chosen date(s) and does an "
+                    "ON CONFLICT (symbol, date) upsert straight into prices. Dates are "
+                    "DD-MM-YYYY; --date defaults to a fixed day, --from/--to widen to a "
+                    "range, and omitting --symbol covers every listed symbol. Selenium/"
+                    "Chrome -> needs CHROME_BIN. Copy-command only (no Run Now callable)."),
         ],
         "tables": [
             _t("prices", "date", 1, "daily_market_update"),
@@ -208,14 +400,13 @@ SYSTEMS: List[Dict[str, Any]] = [
                note="model file is app/models/rs_daily.py — filename ≠ table name"),
             _t("market_breadth", "date", 1, "daily_market_update",
                note="written by raw SQL in scripts/update_daily_market_breadth.py; "
-                    "model app/models/market_breadth.py is not imported by "
-                    "app/core/database.py, so this table is NOT under Alembic"),
+                    "model app/models/market_breadth.py is now imported by "
+                    "app/models/__init__.py, so Base.metadata + Alembic manage it "
+                    "(migration 2026_10_26_mktbreadth — a guarded no-op where it exists)"),
             _t("screener_daily_trend_counts", "date", 1, "daily_market_update"),
             _t("update_status", "latest_ready_date", 1, "daily_market_update",
                note="single row; the publish gate. latest_ready_date is what the "
                     "site treats as 'the last complete day'"),
-            _t("aporia_analytics", "updated_at", 1, "daily_market_update",
-               note="only updated when the pipeline stage runs; source is aporiaanalytics.com"),
             _t("static_stock_info", None, None, None,
                note="no date column at all — freshness is not measurable. Refreshed by "
                     "scripts/update_marginable_from_md.py (manual)"),
@@ -238,13 +429,16 @@ SYSTEMS: List[Dict[str, Any]] = [
                         "{ok, stage_failures, quality}; track_job records that as "
                         "failed, but 'success with 0 rows' is still possible — that is "
                         "what the Tables panel's lag check is for."),
-            _i("watch", "market_breadth is read by a live endpoint but its model is "
-                        "not imported by app/core/database.py or app/models/__init__.py, "
-                        "so Base.metadata (and therefore Alembic autogenerate) does not "
-                        "know it. weekly_market_reports was fixed on 2026-10-12 — see "
-                        "system 'weekly-pdf'. market_breadth is still not under "
-                        "Alembic; a fresh environment will not have that table until "
-                        "it is created by hand."),
+            _i("note", "2026-10-26 FIXED · market_breadth was read by a live endpoint "
+                       "but its model was imported nowhere, so Base.metadata (and thus "
+                       "Alembic) did not manage it and a fresh env had to create it by "
+                       "hand. app/models/market_breadth.py is now imported by "
+                       "app/models/__init__.py and a guarded migration "
+                       "(2026_10_26_mktbreadth) creates the table only when absent, so "
+                       "prod — where it already exists — is untouched. The model's two "
+                       "phantom secondary indexes were dropped to match the live table "
+                       "(date PK only). (weekly_market_reports, the other table once "
+                       "flagged here, was dropped 2026-10-25 with the 'weekly-pdf' system.)"),
         ],
     },
 
@@ -266,7 +460,7 @@ SYSTEMS: List[Dict[str, Any]] = [
                "historical-trend responses, Redis cached"),
             _b("model", "backend/app/models/stock_indicators.py", "stock_indicators"),
             _b("model", "backend/app/models/market_breadth.py",
-               "market_breadth — NOT registered in Base.metadata (see issues)"),
+               "market_breadth — registered in Base.metadata + Alembic since 2026-10-26"),
             _b("frontend", "frontend/app/api/screener/route.ts",
                "Next.js route handler — /screener does NOT call FastAPI"),
         ],
@@ -321,6 +515,9 @@ SYSTEMS: List[Dict[str, Any]] = [
             _b("model", "backend/app/models/user_prefs.py", "user_prefs"),
             _b("frontend", "frontend/app/watchlist/page.tsx",
                "tabs: Overview · RS Matrix · Matrix Chart · RS Screener"),
+            _b("frontend", "frontend/app/stocks/[symbol]/momentum/page.tsx",
+               "GET /api/rs-v2/latest?limit=1000 consumer (client-side authFetch — "
+               "protected route; TASI medians computed in-browser)"),
         ],
         "pages": [
             "/watchlist", "/rs-analysis", "/rs-line", "/market_rs",
@@ -385,11 +582,10 @@ SYSTEMS: List[Dict[str, Any]] = [
         "built": [
             _b("route", "backend/app/api/routes/market_reports.py",
                "/api/market-reports/* (substantial holders, net short, headroom, "
-               "buybacks, SBL, historical reports, qfi-flows)"),
+               "buybacks, SBL, historical reports)"),
             _b("route", "backend/app/api/routes/market_pulse.py", "/api/market-pulse/*"),
             _b("route", "backend/app/api/routes/tasi_settings.py", "/api/tasi-settings"),
             _b("route", "backend/app/api/routes/industry_groups.py", "/api/industry-groups/*"),
-            _b("route", "backend/app/api/routes/aporia.py", "/api/aporia/* (protected)"),
             _b("route", "backend/app/api/routes/valuation.py", "/api/valuation/*"),
             _b("route", "backend/app/api/routes/valuation_admin_config.py",
                "/api/admin/valuation-config (admin)"),
@@ -397,19 +593,21 @@ SYSTEMS: List[Dict[str, Any]] = [
                "the valuation engine behind /valuation tabs"),
             _b("service", "backend/app/services/market_pulse_calc.py", "pulse aggregates"),
             _b("scraper", "backend/app/scrapers/daily_financial_indicators_scraper.py",
-               "TASI weights / EPS / prices — feeds tasi_components"),
+               "TASI weights / EPS / prices — feeds tasi_components. Its source "
+               "(DailyFinancialIndicators_en.html) has NO date parameter, so it "
+               "serves only the latest day and a missed day cannot be backfilled."),
             _b("script", "backend/scripts/update_market_reports.py",
                "the SaudiExchange reports orchestrator"),
             _b("model", "backend/app/models/market_reports.py",
                "substantial_shareholders, net_short_positions, foreign_headrooms, "
-               "share_buybacks, sbl_positions, historical_reports, qfi_ownership_flows"),
+               "share_buybacks, sbl_positions, historical_reports"),
         ],
         "pages": [
             "/market-reports", "/market-reports/substantial-shareholders",
             "/market-reports/net-short-positions", "/market-reports/foreign-headroom",
             "/market-reports/share-buybacks", "/market-reports/sbl-positions",
             "/market-reports/historical-reports",
-            "/market-pulse", "/market-pulse/settings", "/saudi-analytics",
+            "/market-pulse", "/market-pulse/settings",
             "/industry-groups",
             "/valuation", "/valuation/economy", "/valuation/bond",
             "/valuation/treasury-curve", "/valuation/treasury-daily",
@@ -420,6 +618,7 @@ SYSTEMS: List[Dict[str, Any]] = [
         "jobs": [
             _j("market_reports", "backend/scripts/update_market_reports.py",
                "cron Sun–Thu 18:00 (Africa/Cairo)", _DAILY, "cron",
+               cadence="daily", role="ingestion", storage="snapshot",
                writes=["substantial_shareholders", "net_short_positions",
                        "foreign_headrooms", "share_buybacks", "sbl_positions",
                        "historical_reports"],
@@ -440,10 +639,18 @@ SYSTEMS: List[Dict[str, Any]] = [
                None, "manual", writes=["tasi_components"],
                note="key recorded by app/services/scraper_service.py:run_tasi_components. "
                     "Before 2026-10-11 this path imported a module that does not exist "
-                    "and did nothing."),
+                    "and did nothing. 2026-10-25: run_scraper_and_save_to_db() ended in "
+                    "a bare `return True` and save_to_db() swallowed its own rollback, "
+                    "so a 0-row or failed-write run was recorded GREEN (same bug class "
+                    "as the 2026-10-13 substantial-shareholders incident). It now "
+                    "returns {ok, rows, added, updated, companies, report_date, partial, "
+                    "stage_failures}; ok=False when the page served no rows or nothing "
+                    "was written, and partial=True below MIN_COMPANIES_EXPECTED (150; "
+                    "the 2026-08-25 capture held 270 rows). Contract locked by "
+                    "tests/test_daily_indicators_contract.py."),
             _j("daily_market_update", "backend/scripts/daily_market_update.py",
                "NOT SCHEDULED — see market-data", None, "manual",
-               writes=["market_pulse", "industry_group_history", "aporia_analytics"]),
+               writes=["market_pulse", "industry_group_history"]),
         ],
         "tables": [
             _t("substantial_shareholders", "report_date", 3, "market_reports"),
@@ -452,10 +659,12 @@ SYSTEMS: List[Dict[str, Any]] = [
             _t("share_buybacks", "report_date", 3, "market_reports"),
             _t("sbl_positions", "report_date", 3, "market_reports"),
             _t("historical_reports", "report_date", 7, "market_reports"),
-            _t("qfi_ownership_flows", "report_date", None, None,
-               verified=False,
-               note="read by GET /api/market-reports/qfi-flows but NO writer exists in "
-                    "active code — origin unverified"),
+            # qfi_ownership_flows REMOVED 2026-10-25 (model, response schema,
+            # GET /api/market-reports/qfi-flows, the qfi_flows counter in
+            # /api/rebh/importers-status and the table itself). It had 0 rows, no
+            # writer in scripts/update_market_reports.py (which saves only the six
+            # tables above) and no frontend caller. Re-introduce it only with a
+            # working scraper; per-symbol net inflow is not published by Tadawul.
             _t("market_pulse", "date", 1, "daily_market_update",
                note="stage 3.5 of the manual pipeline"),
             _t("industry_group_history", "date", 1, "daily_market_update",
@@ -465,9 +674,6 @@ SYSTEMS: List[Dict[str, Any]] = [
             _t("tasi_components", "updated_at", 5, "scraper:tasi_components",
                note="no business date column — updated_at is all there is",
                pages=["/valuation/market-weight", "/valuation/report"]),
-            _t("aporia_charts", "updated_at", None, "daily_market_update",
-               verified=False,
-               note="read by /api/aporia/chart/{ticker}; no writer found in active code"),
             _t("tasi_settings", "updated_at", None, None,
                note="operator-maintained settings for market pulse"),
             _t("system_config", "updated_at", None, None,
@@ -475,7 +681,14 @@ SYSTEMS: List[Dict[str, Any]] = [
             _t("valuation_zones", "created_at", None, None, verified=False,
                note="seeded reference data; no live writer identified"),
             _t("eps_estimates", "updated_at", None, None, verified=False,
-               note="seeded reference data; no live writer identified"),
+               note="seeded reference data; no live writer identified. AUDITED "
+                    "2026-10-19: 4 rows only, and they are S&P 500 INDEX earnings "
+                    "(2024 249.13 actual 'S&P', 2025 271.30, 2026 330.00, 2027 375.00 "
+                    "'Yardeni') keyed by `year` with UNIQUE(year) and NO symbol column "
+                    "— read by valuation_service for the /valuation index-level "
+                    "scenarios. It is NOT and cannot be company consensus for a "
+                    "Tadawul issuer; no analyst-consensus/revision/price-target source "
+                    "exists in this schema (72 tables checked)."),
         ],
         "issues": [
             _i("watch", "market_pulse and industry_group_history look like standalone "
@@ -505,26 +718,57 @@ SYSTEMS: List[Dict[str, Any]] = [
         "built": [
             _b("route", "backend/app/api/routes/economic_indicators.py",
                "/api/economic-indicators/* — GET per code + POST /scrape/<source>"),
-            _b("scraper", "backend/app/scrapers/fred_scraper.py", "FRED_API → economic_indicators"),
+            _b("scraper", "backend/app/scrapers/scrapling_fetch.py",
+               "shared anti-bot fetch layer (http_get / browser_get / browser_capture) "
+               "used by eurodollar, gurufocus, SAMA and sukuk — degrades to plain "
+               "requests when scrapling is absent"),
+            _b("scraper", "backend/app/scrapers/fred_scraper.py",
+               "FRED_API → economic_indicators; observation_start = last DB date − "
+               "buffer (5d daily series, 90d monthly, so official revisions and a "
+               "missed day-10 run are re-covered)"),
             _b("scraper", "backend/app/scrapers/treasury_gov_scraper.py",
                "Treasury.gov → treasury_yield_curves (the ONLY treasury module; there is "
-               "no treasury_scraper.py)"),
+               "no treasury_scraper.py). Fetches every month from last DB date − 7d to "
+               "today, not one fixed month (capped by TREASURY_MAX_INCREMENTAL_MONTHS)"),
             _b("scraper", "backend/app/scrapers/sp500_scraper.py", "OHLC + PE → sp500_history"),
-            _b("scraper", "backend/app/scrapers/sp500_pe_scraper.py", "Multpl.com PE"),
-            _b("scraper", "backend/app/scrapers/sp500_ey_scraper.py", "S&P 500 earnings yield"),
-            _b("scraper", "backend/app/scrapers/eurodollar_scraper.py", "Investing.com snapshot"),
+            _b("scraper", "backend/app/scrapers/sp500_pe_scraper.py",
+               "Multpl.com PE — incremental window = last 3 months "
+               "(SP500_PE_LOOKBACK_MONTHS), stretched back to the newest stored P/E "
+               "whenever the DB is older, so any manual run closes missing months"),
+            _b("scraper", "backend/app/scrapers/sp500_ey_scraper.py",
+               "S&P 500 earnings yield: GuruFocus 151 (Nuxt payload) primary; window "
+               "= today − SP500_EY_LOOKBACK_DAYS (90d), widened to the newest stored "
+               "EY date when the DB is behind. 1031 was the wrong series "
+               "(Quits Nonfarm) and is now guarded by a title check"),
+            _b("scraper", "backend/app/scrapers/eurodollar_scraper.py",
+               "Investing.com snapshot — Scrapling impersonated HTTP (rotating "
+               "fingerprints) → stealth browser → requests"),
             _b("scraper", "backend/app/scrapers/cmefedwatch_scraper.py", "CME FedWatch snapshot"),
             _b("scraper", "backend/app/scrapers/gurufocus_scraper.py",
-               "SP500_EY / SP500_PE (Selenium) — exists, not scheduled"),
+               "SP500_EY / SP500_PE — Scrapling HTTP + pure-Python __NUXT__ decoder, "
+               "stealth-browser fallback; Selenium removed 2026-10-23 — exists, not "
+               "scheduled (incremental page count comes from the DB's latest date)"),
             _b("service", "backend/app/services/rebh_importers_service.py",
                "health aggregation only — the sukuk/macro wrapper importers "
                "were retired 2026-10-13"),
             _b("script", "backend/scripts/Sukuk&Bonds.py",
                "THE sukuk ingestion entry point — run manually; records "
-               "job_runs key 'sukuk_importer' (trigger='manual')"),
+               "job_runs key 'sukuk_importer' (trigger='manual'). Playwright removed "
+               "2026-10-23: replays the portal data URL over Scrapling HTTP, then "
+               "stealth-session XHR capture, then DOM parsed by header name, then seed. "
+               "2026-10-25 integrity pass: upsert key is now the real composite "
+               "(symbol, parent_company_symbol) with NULL-parent rows normalised so "
+               "Postgres' NULLS-DISTINCT constraint cannot inflate the table; "
+               "lastTadeYield (53 of 62 live items) feeds yield_to_maturity, so "
+               "Build-Up R gets is_ytm=True instead of the coupon; instruments the "
+               "grid stops listing are flagged is_active=False, guarded by "
+               "SUKUK_MAX_RETIRE_PER_RUN (5) + SUKUK_MIN_DEACTIVATE_COVERAGE (0.8) "
+               "and never applied to the seed payload."),
             _b("script", "backend/scripts/SAMA&GaStat.py",
                "THE SAMA/GaStat macro ingestion entry point — run manually; "
-               "records job_runs key 'macro_importer' (trigger='manual')"),
+               "records job_runs key 'macro_importer' (trigger='manual'). Selenium "
+               "removed 2026-10-23: StealthyFetcher + page_action pulls the bulletin "
+               ".xlsx into BytesIO for pandas"),
             _b("model", "backend/app/models/economic_indicators.py",
                "5 models in one file: economic_indicators, treasury_yield_curves, "
                "sp500_history, eurodollar_futures, cme_fedwatch"),
@@ -580,14 +824,31 @@ SYSTEMS: List[Dict[str, Any]] = [
                "manual only — Admin button POST /api/economic-indicators/scrape/eurodollar-futures "
                "or Run Now",
                None, "manual", writes=["eurodollar_futures"], tracked=True,
+               cadence="daily", role="ingestion", storage="snapshot",
                note="not scheduled on purpose: Investing.com returns 403 from "
                     "datacenter IPs. Since 2026-10-13 the Admin endpoint wraps the "
                     "scrape in track_job('manual:eurodollar') and job_runner has a "
-                    "Run Now callable, so runs land in job_runs."),
+                    "Run Now callable, so runs land in job_runs. "
+                    "2026-10-26 (the table sat frozen at 2026-06-30): the browser "
+                    "channel now runs solve_cloudflare=True with a 120s budget "
+                    "(Scrapling floors it at 60s when the solver is on), and every "
+                    "channel — HTTP, browser, legacy requests — can carry a proxy "
+                    "from EURODOLLAR_PROXY -> SCRAPLING_PROXY -> HTTPS_PROXY "
+                    "(resolve_proxy in app/scrapers/scrapling_fetch.py; a datacenter "
+                    "proxy only moves the 403, it must be residential/ISP). Measured "
+                    "the same day: HTTP answers from a residential IP with all 25 "
+                    "contracts, so the block is IP reputation, not markup. Under "
+                    "EURODOLLAR_MIN_CONTRACTS (8; the page normally carries ~25) the "
+                    "grid counts as truncated and the Yahoo SOFR fallback answers with "
+                    "the ONE contract Yahoo still lists (SR3=F — per-code GE*/SR* "
+                    "tickers are 404 since Eurodollar was delisted, and CME Group "
+                    "refuses scripts by IP), flagged partial=True so the ledger reads "
+                    "'PARTIAL: ...' instead of a fake full day."),
             _j("manual:cme_fedwatch", "backend/app/scrapers/cmefedwatch_scraper.py",
                "manual only — Admin button POST /api/economic-indicators/scrape/cme-fedwatch "
                "or Run Now",
                None, "manual", writes=["cme_fedwatch"], tracked=True,
+               cadence="daily", role="ingestion", storage="snapshot",
                note="not scheduled: QuikStrike is flaky from server IPs. Since "
                     "2026-10-13 both the Admin endpoint and Run Now record under "
                     "track_job('manual:cme_fedwatch'); the scraper now returns "
@@ -597,8 +858,12 @@ SYSTEMS: List[Dict[str, Any]] = [
                "manual only — Admin monthly buttons /scrape/SP500_EY and /scrape/SP500_PE "
                "or Run Now",
                None, "manual", writes=["economic_indicators"], tracked=True,
-               note="un-scheduled from the monthly cron for RAM/CPU (headless Chrome). "
-                    "Since 2026-10-13 tracked (Admin endpoints + Run Now via "
+               note="GuruFocus (primary) + sp500_ey (alternative) both feed the "
+                    "S&P 500 earnings yield (SP500_EY) into economic_indicators; this "
+                    "job stays active and is also the sole writer of the SP500_PE key. "
+                    "Both scrape GuruFocus, which can 403 from datacenter IPs, hence "
+                    "the lighter sp500_ey alternative. un-scheduled from the monthly cron for RAM/CPU (headless "
+                    "Chrome). Since 2026-10-13 tracked (Admin endpoints + Run Now via "
                     "scheduler._gurufocus) and the driver comes from the shared "
                     "daily_detailed_scraper.build_driver (page_load_strategy=eager, "
                     "300s client timeout). sp500_ey_scraper.py is the lighter "
@@ -606,12 +871,52 @@ SYSTEMS: List[Dict[str, Any]] = [
             _j("scraper:sp500_ey", "backend/app/scrapers/sp500_ey_scraper.py",
                "manual — POST /api/admin/system/run-scraper {\"scraper\":\"sp500_ey\"}",
                None, "manual", writes=["economic_indicators"], tracked=True,
-               note="key comes from app/services/scraper_service.py:_run(); the same "
+               note="One of two SP500_EY sources in economic_indicators - the lighter "
+                    "alternative to manual:gurufocus (which stays active and is the sole "
+                    "SP500_PE writer). key comes from "
+                    "app/services/scraper_service.py:_run(); the same "
                     "prefixing yields scraper:fred:<code>, scraper:sp500_price, "
                     "scraper:sp500_pe, scraper:treasury_gov. Source chain since "
                     "2026-10-13: GuruFocus (403 from datacenter IPs) → Yahoo "
                     "quoteSummary with cookie+crumb (plain GET = 401) → own "
                     "sp500_history.pe_ratio (EY=100/PE, sanity 0.5–15%)."),
+            _j("macro_importer", "backend/scripts/SAMA&GaStat.py",
+               "manual — MONTHLY, run when a new SAMA bulletin is published",
+               None, "manual", tracked=True,
+               writes=["saudi_economic_indicators"],
+               cadence="monthly", role="ingestion", storage="cumulative",
+               commands=[{"label": "Full history (all SAMA months + GDP TTM)",
+                          "kind": "full",
+                          "cli": '$env:CHROME_BIN="C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe"; .\\venv\\Scripts\\python.exe "scripts/SAMA&GaStat.py" --execute'},
+                         {"label": "This month only (latest observation)",
+                          "kind": "incremental",
+                          "cli": '$env:CHROME_BIN="C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe"; .\\venv\\Scripts\\python.exe "scripts/SAMA&GaStat.py" --execute --no-history'}],
+               note="THE SAMA/GaStat macro ingestion entry point. --execute writes; "
+                    "without it the run is a dry plan. The browser channel needs "
+                    "CHROME_BIN (or GOOGLE_CHROME_BIN on Render) or Scrapling falls "
+                    "back to an uninstalled Playwright chromium and only the dated "
+                    "fallback is written. Records job_runs under 'macro_importer'. "
+                    "Run Now fires the LATEST-ONLY pass (history=False — newest "
+                    "observation per series); the full history re-pull stays a "
+                    "Copy-command only (--execute). saudi_economic_indicators is "
+                    "watched by the integrity scan. Removed from the "
+                    "daily_market_update pipeline 2026-10-26 — a monthly source was "
+                    "being re-pulled in full every day."),
+            _j("sukuk_importer", "backend/scripts/Sukuk&Bonds.py",
+               "manual — WEEKLY, refresh the sukuk/debt snapshot",
+               None, "manual", tracked=True,
+               writes=["sukuk_market_data"],
+               cadence="weekly", role="ingestion", storage="snapshot",
+               commands=[{"label": "Refresh sukuk snapshot",
+                          "kind": "full",
+                          "cli": '.\\venv\\Scripts\\python.exe "scripts/Sukuk&Bonds.py"'}],
+               note="THE sukuk ingestion entry point — no flags, running it performs "
+                    "the upsert. Snapshot semantics: the live grid is re-listed each "
+                    "run; instruments the grid stops listing are flagged "
+                    "is_active=False. Records job_runs under 'sukuk_importer'. Run Now "
+                    "is enabled and sukuk_market_data is watched by the integrity scan "
+                    "(weekly staleness budget). Removed from the daily_market_update "
+                    "pipeline 2026-10-26."),
         ],
         "tables": [
             _t("economic_indicators", "report_date", 7,
@@ -631,16 +936,18 @@ SYSTEMS: List[Dict[str, Any]] = [
                       "/valuation/historical-pe", "/market/sp500-pe-ratio"]),
             _t("eurodollar_futures", "scrape_date", None, "manual:eurodollar",
                note="snapshot only — Investing.com blocks server IPs, so the scheduler "
-                    "deliberately does not run it; Admin button triggers it by hand",
+                    "deliberately does not run it; Admin button triggers it by hand. A "
+                    "1-row 'Yahoo SR3=F' snapshot means the fallback ran, not a ladder.",
                pages=["/interest-rate/eurodollar-futures"]),
             _t("cme_fedwatch", "scrape_date", None, "manual:cme_fedwatch",
                note="snapshot only — CME/QuikStrike blocks server IPs (Selenium)",
                pages=["/interest-rate/cme-fedwatch"]),
-            _t("saudi_economic_indicators", "retrieved_at", 35, "macro_importer",
-               note="NO business date column: `period` is a String like '2026-03' or "
-                    "'2025-Q4'. retrieved_at = when we scraped it, not when SAMA "
-                    "published it — so lag here measures our own run, not the data. "
-                    "Written by scripts/SAMA&GaStat.py (manual), not by a cron job"),
+            _t("saudi_economic_indicators", "period", 40, "macro_importer",
+               note="`period` is a real DATE since the 2026-10-26 macro migration "
+                    "(the business period SAMA/GaStat published, not when we scraped "
+                    "it). Monthly/quarterly cadence, so the lag budget is a month "
+                    "plus slack. Written by scripts/SAMA&GaStat.py (manual), not a "
+                    "cron job"),
             _t("sukuk_market_data", "updated_at", 10, "sukuk_importer",
                note="`as_of` is a String; updated_at is the only real timestamp. "
                     "Written by scripts/Sukuk&Bonds.py (manual), not by a cron job"),
@@ -805,6 +1112,11 @@ SYSTEMS: List[Dict[str, Any]] = [
             _b("service", "backend/app/services/rebh_importers_service.py",
                "filings check + importers health (sukuk/macro/bank-lines "
                "wrappers retired 2026-10-13)"),
+            _b("service", "backend/app/services/market_universe_service.py",
+               "GET /api/rebh/universe builder — TTM/Piotroski/grades and the "
+               "unit conversion for every absolute figure. Units come ONLY from "
+               "the artifact contract (meta.rounding=='normalized_sar' → fixed "
+               "÷1e6), see backend/docs/XBRL_OUTPUT_POLICY.md"),
             _b("service", "backend/app/services/rebh_vintage_service.py",
                "run_engine_vintages_job — dedicated snapshot runner "
                "(cron / admin / CLI)"),
@@ -817,6 +1129,25 @@ SYSTEMS: List[Dict[str, Any]] = [
                "the only writer of corporate_actions; CLI, manual"),
             _b("frontend", "frontend/app/rebh/tools/components/MarketMonitorTab.tsx",
                "the /api/rebh/market-macro consumer"),
+            _b("frontend", "frontend/app/stocks/_lib/stockApi.ts",
+               "/stocks/[symbol] mock→real data layer: GET /api/engine/{symbol} "
+               "(valuation, profitability, pe-ratio, capital-structure, peers, "
+               "quarterly actuals + nine_box DPS), GET /api/rebh/peers?sector= "
+               "(peers comparison), GET /api/rebh/sector-stats-full?sector= "
+               "(profitability medians), /api/prices/* + "
+               "/api/scraper/financials/*/table (Phase 1), Phase 3: "
+               "/api/prices/seasonality/{symbol} (StockOverview), "
+               "/api/prices/tasi/history (momentum benchmark matrix · peers "
+               "PeerPerfChart · summary Momentum rows), "
+               "/api/rebh/corporate-actions?symbol= (splits · dividends · "
+               "dividends/history . news), /api/reports/{symbol} (earnings filing dates . news feed), Phase 4: engine quarterly -> StockOverview revenue rollup, /api/rebh/peers?sector= -> peers/related-stocks, annual Income_Statement -> growth"),
+            _b("frontend", "frontend/app/stocks/_components/GradeChip.tsx",
+               "shared grade letter + StatusBadge chips used by the overview summary "
+               "cards and /ratings/quant-ratings — one colour map (A+/A/A−, B±, C, D, F, "
+               "N/A → em-dash), never an empty square"),
+            _b("frontend", "frontend/app/stocks/_components/EarningsHistoryTable.tsx",
+               "reported earnings history accordion for /stocks/[symbol]/earnings — "
+               "consumes server-formatted strings only (engine flows are FULL SAR)"),
         ],
         "pages": [
             "/rebh", "/rebh/[symbol]", "/rebh/company/[symbol]", "/rebh/report/[symbol]",
@@ -844,7 +1175,14 @@ SYSTEMS: List[Dict[str, Any]] = [
         ],
         "tables": [
             _t("rebh_universe_snapshots", "snapshot_date", 7, "engine_vintages",
-               note="GET /api/rebh/universe"),
+               note="GET /api/rebh/universe reads this batch FIRST and only falls "
+                    "back to live compute when it is empty. The whole row is stored "
+                    "as payload_json, so the 2026-10-18 unit fix needed no schema "
+                    "change — that batch was rebuilt and now carries "
+                    "div_paid/div_yield/div_basis/div_period/scale_basis. Batches "
+                    "persisted before 2026-10-18 still hold the pre-fix "
+                    "(magnitude-guessed) mc/pe/roe/ncav figures and must not be "
+                    "served as current."),
             _t("rebh_engine_vintages", "vintage_date", 2, "engine_vintages"),
             _t("company_official_filings", "published_date", 3, "filings_importer",
                note="`period` is a String column; published_date is the real date"),
@@ -869,11 +1207,435 @@ SYSTEMS: List[Dict[str, Any]] = [
                       "/rebh/tools → Market Monitor tab is where it surfaces."),
             _i("watch", "corporate_actions has no scheduler entry and no track_job "
                         "wrapper, so 'did it run?' cannot be answered from job_runs. "
-                        "app/scrapers/Corporate_actions_watcher.py is 100% commented-out "
-                        "dead code — the live script is backend/scripts/ version."),
+                        "The 100%-commented-out twin at app/scrapers/"
+                        "Corporate_actions_watcher.py was deleted 2026-10-25; "
+                        "backend/scripts/corporate_actions_watcher.py is the only "
+                        "version, and its AUTO_ADJUST/NEEDS_REVIEW classification "
+                        "already carries the design notes that file was keeping."),
             _i("note", "/rebh/[symbol] and /rebh/company/[symbol] are two different "
                        "generations of the same idea; both are live and both hit "
                        "/api/rebh/company/{symbol}."),
+            _i("note", "2026-10-15 · app/stocks mock decommission complete (Phase 4): "
+                       "stocks/data/mockData.ts deleted; US-only routes removed "
+                       "(/stocks/[symbol]/options · /analysis · /transcripts · "
+                       "/peers/related-etfs · /news/[id]); MainStockChart + "
+                       "AnalysisList · NewsList · InsiderTrading · "
+                       "StockFinancialSummary components deleted. Scan of "
+                       "app/stocks for MOCK_STOCK_DATA / NVDA / S&P → 0 hits; "
+                       "charting + growth + news + related-stocks now read real "
+                       "endpoints (prices history, annual Income_Statement, "
+                       "/api/reports + corporate actions, /api/rebh/peers)."),
+            _i("note", "2026-10-15 · app/stocks Phase 5 RESTORATION — the Phase 4 "
+                       "deletion of rich UI was a regression and was reverted: "
+                       "StockFinancialSummary restored on the Overview via "
+                       "_lib/summaryBuilders.ts (all 11 card groups, real engine/"
+                       "universe/prices data, dash cells where no source); "
+                       "peers/comparison expanded to the full institutional dataset "
+                       "set + PeerPerfChart (recharts, rebased-to-100 vs TASI); "
+                       "momentum gained the BenchmarkMatrix (1M→5Y vs TRUE TASI "
+                       "returns from market_pulse via new GET /api/prices/tasi/"
+                       "history); dividends restored DividendGrades (DERIVED letters, "
+                       "documented thresholds — fabricated defaults removed), growth "
+                       "& estimates pages rebuilt on the real annual DPS series; "
+                       "earnings gained the rewritten real-data EarningsChart and the "
+                       "estimates tab rebuilt with dash-consensus tables; "
+                       "NoSourcePanel.tsx deleted (zero empty-state panels remain); "
+                       "LightweightChart got the premium frame + timeframe toolbar. "
+                       "CORRECTION to earlier assumption: a TASI historical series "
+                       "DID exist all along in market_pulse (date/close) — see "
+                       "app/services/rs_line.py::_fetch_tasi_close."),
+            _i("bug", "2026-10-18 FIXED · market_universe_service.py was the only "
+                      "consumer that ignored the XBRL artifact contract "
+                      "(meta.rounding=='normalized_sar' means the file ALREADY holds "
+                      "actual SAR). Two legacy magnitude guessers — a market-cap "
+                      "anchor with 0.05/0.00005 ratios and an abs()-threshold branch "
+                      "in _norm_period_val — re-scaled live values on top of "
+                      "pre-normalized ones. Reproducing the old TTM path over the 257 "
+                      "published artifacts mis-scaled 136 rows across 126 companies "
+                      "(49%), factors 23x–1000x, including a SIGN FLIP for 1320 "
+                      "(reported −6,964.66 M vs a true +8.94 M). Both guessers are "
+                      "gone; the only conversion is a fixed ÷1e6, and an artifact "
+                      "that violates the contract is logged + flagged "
+                      "⚑scale-unverified instead of being silently re-anchored."),
+            _i("note", "2026-10-18 · same file, three further unit defects fixed: "
+                      "(a) NCAV mixed a millions-scaled current-asset with raw "
+                      "total-assets/equity terms — 1e6 apart since normalization, "
+                      "e.g. 2060 showed a fake +106,932 M net-net (18% of its own "
+                      "market cap) where the honest figure is −5,360 M; now "
+                      "NCAV=(CA−TA+TE)/1e6 from one unit. (b) ROE/ROA divided "
+                      "millions earnings by raw-SAR equity, so 157 companies read "
+                      "exactly 0.0% ROE and the Profitability ladder was dead (all "
+                      "C+); both now convert to the same unit. (c) cash-flow fields "
+                      "(cfo/fcf/div_paid/owner_yield) annualised the LATEST period "
+                      "by 12/months — 58 of 73 dividend payers carried a 3/6/9-month "
+                      "stub, so a single yearly distribution was multiplied ×4/×2/"
+                      "×1.33 (7020's Q1-2026 payment of 1.196 bn read as 4.78 bn). "
+                      "The service now prefers a complete 12-month statement, never "
+                      "extrapolates dividends, and discloses the source via "
+                      "scale_basis / div_basis / div_period plus the flags "
+                      "⚑cashflow-stub-annualised ⚑dividend-ytd-window "
+                      "⚑dividend-stale ⚑pncav-not-graham-applicable. New payload "
+                      "keys: div_paid, div_yield, div_basis, div_period, scale_basis "
+                      "(additive — no consumer broke; Terminal sector templates now "
+                      "render a real yield where they printed an em-dash)."),
+            _i("note", "2026-10-18 · post-fix verification over the live universe "
+                      "(257 rows, read-only): scale_basis = declared_per_filing for "
+                      "257/257 · P/E positive n=165, p10/median/p90 = 7.4/15.7/68.0, "
+                      "only 2 above 500 · ROE n=252, median 6.5%, max 59.5%, "
+                      "ROE>100% = 0, exact-zero ROE down from 157 to 46 · dividends: "
+                      "176 rows carry a disclosed distribution, 106 with a usable "
+                      "trailing yield (81 full-year + 25 ytd-partial once the "
+                      "freshness gate applies), 64 withheld as "
+                      "stale, 81 none, top yield 11.59% · grades now spread across "
+                      "every letter. Verification scripts were scratch and deleted."),
+            _i("note", "2026-10-18 · SNAPSHOT REBUILT (approved DB write). The active "
+                      "rebh_universe_snapshots batch for 2026-10-18 (257 rows) was "
+                      "regenerated through the production path "
+                      "build_universe_snapshot(), so /api/rebh/universe, /api/rebh/peers, "
+                      "the home screens and the sector medians now serve the post-fix "
+                      "figures: 257/257 rows carry scale_basis="
+                      "declared_per_filing, 176 carry div_paid and 106 a usable "
+                      "div_yield (81 full-year + 25 year-to-date after the 18-month "
+                      "freshness gate), and 2060's NCAV reads −5,360 M instead of the "
+                      "fake +106,932 M. Rows were replaced in place (is_latest "
+                      "demotion + re-insert); batches from earlier dates are untouched "
+                      "and still hold pre-fix payloads — they are history, not the API "
+                      "response. The pre-fix payload of today's batch was dumped to "
+                      "backend/_universe_pre_fix_backup.json before the rewrite "
+                      "(throw-away once the fix is signed off)."),
+            _i("watch", "The rebuilt batch is a point-in-time copy: engine_vintages "
+                      "must keep running (cron / admin / CLI) or /api/rebh/universe "
+                      "silently reverts to serving stale numbers, because the endpoint "
+                      "reads the snapshot FIRST and only falls back to live compute "
+                      "when no batch exists."),
+            _i("bug", "2026-10-18 FIXED · rebh_unified_engine.py (the engine behind "
+                      "GET /api/engine/{symbol}) computed ROE/ROA as "
+                      "latest_reported_IS_window ÷ full equity. Between filing cycles "
+                      "that window is a 3-month cumulative stub, so the ratio was a "
+                      "quarter of a year over a whole balance sheet: 4001 (Al Othaim) "
+                      "published ROE 4.5% where the disclosed trailing year gives "
+                      "18.7%, and every ROE-anchored letter moved with it — "
+                      "Profitability, the Growth proxy and the financial-sector "
+                      "Safety rule (4001 Profitability C+ → B+). ROE/ROA now take a "
+                      "twelve-month numerator from _twelve_month_profit(): a complete "
+                      "TTM of four discrete quarters ('ttm_4q') › the latest reported "
+                      "12-month statement ('annual_fy') › the raw latest figure "
+                      "labelled 'partial_window'. Nothing is multiplied by "
+                      "12/months — margins stay on the raw ni/rev pair because both "
+                      "come from the SAME window. The chosen basis is published as "
+                      "provenance.profit_12m_basis / profit_12m_sar and the ratings "
+                      "page reads it."),
+            _i("watch", "2026-10-18 · XBRL artifacts that cannot support a "
+                      "twelve-month numerator: 10 of 257 companies publish a "
+                      "full-year REVENUE below a shorter cumulative window of the "
+                      "same fiscal year, which is arithmetically impossible under "
+                      "cumulative YTD reporting — 2060 FY2025 2,488.7 M against its "
+                      "own disclosed 2,531.2 M nine-month figure (1212 2025, 1330 "
+                      "2018, 2060 2025, 2120 2025, 2140 2025, 2250 2025, 8060 2021, "
+                      "8160 2018, 8180 2022, 8260 2022). The derived Q4 "
+                      "(annual − 9M) becomes a phantom negative quarter: 2060 would "
+                      "have read ROE −39% against a disclosed +5.5%. The engine now "
+                      "REFUSES ROE/ROA for those filings "
+                      "(profit_12m_basis='rejected-corrupt-fy-<year>-revenue'); the "
+                      "Profitability/Cash letters render 'N/A' and the page shows "
+                      "em-dashes plus an amber disclosure. Net profit is deliberately "
+                      "not used as the detector — a Q4 loss or impairment is "
+                      "legitimate, revenue is not. The fix belongs upstream in the "
+                      "parser/ingestion, not in the ratio: re-scrape or re-import "
+                      "those ten artifacts and the guard releases them automatically."),
+            _i("note", "2026-10-18 · LAST MOCK PAGE CLOSED · "
+                      "frontend/app/stocks/[symbol]/ratings/quant-ratings/page.tsx "
+                      "was serving hardcoded factor letters (F / A- / A-), fake 🔒 "
+                      "paywall affordances and a Strong Sell→Strong Buy consensus "
+                      "scale that no Tadawul source publishes. It is now a server "
+                      "component over two real endpoints, fetched once each "
+                      "(Promise.all, no duplicate requests): GET "
+                      "/api/engine/{symbol} `grades` "
+                      "(rebh_production_helper_service.py::compute_peer_relative_grades "
+                      "— Cash, Profitability, Balance, Valuation, Growth, Safety) and "
+                      "GET /api/rebh/vintages/{symbol} for the dated columns, which "
+                      "print the real archived batch dates instead of an invented "
+                      "3M/6M series (the table retains 2 batches per company today). "
+                      "The left card shows the engine's actual verdict inputs (buy "
+                      "gate, margin of safety, required return, Piotroski /9, Altman, "
+                      "Beneish, predictability stars, red flags, owner yield, NCAV, "
+                      "Shariah screen) with stale/quarantine banners. stockApi.ts "
+                      "gained EngineSafetyDto / EngineBuyGateDto / EngineShariahDto / "
+                      "EngineVintageGradesDto, 16 EngineSnapshotDto fields (incl. pe "
+                      "derived exactly as _compat_payload does) and "
+                      "fetchEngineGradeHistory(). Still unreferenced mock "
+                      "components awaiting a delete decision: "
+                      "stocks/_components/RatingsSummary.tsx (SA Analysts 3.74 / Wall "
+                      "Street 4.67), AnnualEstimatesSummary.tsx, "
+                      "RevisionsTrendTable.tsx — none is imported anywhere."),
+            _i("note", "2026-10-18 · regression nets added (backend/tests, no DB, "
+                      "no network): test_universe_unit_contract.py (17 tests) pins "
+                      "the artifact unit contract — no 0.00005 anchor, no "
+                      "magnitude-conditional branch, _norm_period_val is a fixed "
+                      "÷1e6, NCAV/ROE/ROA single-unit, dividends never annualised "
+                      "and the div_* keys published — plus "
+                      "test_engine_twelve_month_profit.py (22 tests) for the "
+                      "twelve-month numerator and the corrupt-filing guard. "
+                      "Period labels are built relative to date.today() so the "
+                      "files cannot rot."),
+            _i("note", "2026-10-19 · /stocks/[symbol] presentation pass (frontend "
+                      "only — no endpoint, table or job changed). (1) Grade letters "
+                      "belong to five cards only (Valuation · Growth · Profitability · "
+                      "Momentum · Earnings Revisions); the four statement cards and the "
+                      "non-scored cards no longer render a badge node at all — the "
+                      "placeholder square that read like a collapse button is removed "
+                      "from the DOM (StockFinancialSummary.tsx takes `grades` as "
+                      "optional and skips the span when undefined). (2) The Dividend "
+                      "Growth History English raw message became a framed bilingual "
+                      "empty state that prints the disclosed facts: for 1321 the "
+                      "universe row (/api/rebh/peers) carries div_paid 141.75 M SAR · "
+                      "div_yield 2.44 % · basis annual · window 2025-04_2026-03, while "
+                      "corporate_actions holds only a 2022-10-19 bonus issue and the "
+                      "annual IS has no per-share dividend row — so the bars are empty "
+                      "for want of an annual DPS series, not for want of a distribution. "
+                      "summaryBuilders.ts now exports DividendFacts + revisionsGrade() "
+                      "+ revisionsCounts(). (3) The Revisions grade rule lives in one "
+                      "place (sequential realised EPS direction over the last 4 "
+                      "discrete quarters: 4→A, 3→B, 2→C, 1→D, 0→F, <4 measured → no "
+                      "letter) and is labelled realised momentum, never analyst "
+                      "consensus — the overview card, /earnings and /earnings/revisions "
+                      "cannot disagree. (4) /ratings/quant-ratings: stale/quarantine "
+                      "amber+red bars demoted to StatusBadge chips in one top strip; "
+                      "Factor Grades is an aligned table (uppercase headers, divide-y "
+                      "rows, tabular-nums, real vintage dates from /api/rebh/vintages/"
+                      "{symbol}); Piotroski / Altman Z / Margin of Safety / Shariah "
+                      "render as Bloomberg-style StatTiles. (5) Earnings Summary now "
+                      "hosts both annual estimate tables (reported FY rows + dashed "
+                      "consensus rows) beside the chart, and Earnings History is the "
+                      "per-quarter disclosure accordion (XBRL filing date from the "
+                      "scraper Quarterly Income_Statement `Last Update Date` row, "
+                      "margins, vs prior quarter, vs year ago). Bug fixed on the way: "
+                      "engine quarterly flows are FULL SAR, so money cells are "
+                      "formatted server-side as fmtSarM(v / 1e6) — the first cut "
+                      "printed '160.00T SAR'; and the P/E · P/S · forward multiples now "
+                      "divide a FULL-SAR market cap (price × diluted_shares) by a "
+                      "FULL-SAR flow instead of price ÷ a per-share sum. Superseded "
+                      "orphan components awaiting a delete decision: "
+                      "EarningsHistory.tsx, RevisionsTable.tsx, EarningsSummary.tsx "
+                      "(plus the earlier RatingsSummary.tsx, "
+                      "AnnualEstimatesSummary.tsx, RevisionsTrendTable.tsx) — none is "
+                      "imported anywhere. Known open data gap: the engine publishes no "
+                      "`grades.Momentum` key, so the Momentum letter is a permanent "
+                      "neutral dash until the engine emits it. SUPERSEDED: Momentum "
+                      "now reads the real sector_rs_rating (see Phase 6 note below)."),
+            _i("note", "2026-10-19 · Phase 6 — the em-dash audit of the stock pages. "
+                      "(1) ROOT CAUSE of the empty statement fields was a mapping-key "
+                      "mismatch, not missing data: XBRL items whose raw label never "
+                      "resolved were stored is_unmapped=True and every consumer "
+                      "filtered them out, silently discarding disclosed figures — "
+                      "'Finance leases, non-current' (154 issuers, blocklisted), "
+                      "Rajhi's 'Borrowings - current' 56.17 B / '- non-current' "
+                      "323.34 B, Almarai's plural 'Debt securities, term loans, "
+                      "borrowings and sukuks in issue', and 'Profit (loss) from "
+                      "operating activities' (12 issuers — a disclosed EBIT subtotal). "
+                      "Fixed in synonyms.json (+32 bindings, 470→502) mirrored into "
+                      "xbrl_mapping.PARAM_MAPPING, the finance-lease blocklist entry "
+                      "deleted (proved against backend/data/downloads/1321/"
+                      "2025_XBRL_Q3.xls that it rolls up under Non-current "
+                      "liabilities), and a strictly additive read-time repair "
+                      "_with_catalog_repair() in xbrl_data_service.get_company "
+                      "(exact NORM_MAP only, status rebound@read). Coverage moved: "
+                      "issuers with a borrowing value on the latest balance sheet "
+                      "173→218 (217 non-zero of 237), issuers carrying an EBIT line "
+                      "166→178. (2) The engine now publishes the provenance the UI "
+                      "needs: CapitalStructure.borrowings_disclosed + "
+                      "source_status, safety.interest_coverage_basis and "
+                      "provenance.gross_profit_basis. Gross Profit is the disclosed "
+                      "IS-030 subtotal where filed, else Revenue + Cost of Sales "
+                      "(identity held on 4,506/4,512 period checks within 2%; "
+                      "expenses are stored negative, hence the sum) — which keeps a "
+                      "legitimately negative gross profit (2210 −108,441,000). "
+                      "Operating profit is deliberately NEVER derived (Gross+S&D+G&A+"
+                      "Other matched only 2,148/4,010 = 54%) because EBIT feeds "
+                      "interest coverage → safety → compensation_pct → required "
+                      "return → DCF/zones/MoS. (3) summaryBuilders.ts distinguishes a "
+                      "VERIFIED zero debt from an UNDISCLOSED one (fmtSarM "
+                      "treatZeroAsMissing driven by borrowings_disclosed) and prints "
+                      "a note explaining that Net Debt is then net cash and D/E is 0; "
+                      "Interest Coverage now comes from engine.safety with its basis. "
+                      "(4) Dividend Growth History: swept all 237 issuers / 1,298 "
+                      "annual Income_Statement rows — the 'Cash Dividends' row is a "
+                      "PER-SHARE figure for exactly 1 issuer (2210), an AGGREGATE "
+                      "amount for 80 (2010 = 13,500,000), blank for 120 (incl. 1321) "
+                      "and absent for 36; corporate_actions has no amount column at "
+                      "all and the archive stops near FY2022. So no DPS history is "
+                      "computed for ANY Saudi stock and the Overview card was DELETED "
+                      "on instruction; the same sweep found the aggregate figures "
+                      "being printed as 'SAR / share' on the dividend pages, now "
+                      "blocked by DPS_PLAUSIBILITY_CEILING = 250 in "
+                      "_lib/dividendGrades.ts plus diagnoseDividendGap() driving "
+                      "three distinct AR/EN empty states on /dividends/growth and "
+                      "/dividends/history. (5) DISCLOSURE DATE: audited schema-wide — "
+                      "company_official_filings.published_date is NULL on all 21,424 "
+                      "rows and XBRL compiled meta carries no filing date, so the "
+                      "only usable source is the scraped 'Last Update Date' row; "
+                      "/earnings now merges the Quarterly row with the Annually row "
+                      "(the annual one covers fiscal year-ends, where the quarterly "
+                      "archive lost it). (6) EstimatesTable mapped columns by header "
+                      "WORDING and required the exact strings 'P/E'/'P/S', so "
+                      "'P/E (reported)' fell through to row[h], found no key and "
+                      "dashed a multiple that HAD been computed — columns are now "
+                      "declared by an explicit keys[] prop. (7) CONSENSUS VERDICT: "
+                      "Tadawul publishes no analyst consensus and none is ingested "
+                      "(72 tables, every route and every scraper checked), so "
+                      "/earnings/estimates and /earnings/revisions were re-based on "
+                      "realised figures on instruction: the Low/High/#-of-Analysts "
+                      "columns, the FY+n placeholder rows, the all-dash 90-day "
+                      "revisions table and the DashCard are gone; in their place are "
+                      "realised FY growth, reported P/E and P/S on complete fiscal "
+                      "years, a realised quarter table with the year-ago surprise, "
+                      "and realised up/cut direction over the last 4 and 8 quarters "
+                      "for EPS AND revenue (same revisionsCounts rule, revenue "
+                      "passed as the series). (8) Momentum letter in the Overview is "
+                      "no longer a permanent dash: /api/rs-v2/* is mounted with "
+                      "protected_dependencies, so SSR cannot forward the session and "
+                      "a 'use client' MomentumGradeBadge.tsx uses the existing "
+                      "authFetch-based fetchRsLatest() and picks "
+                      "sector_rs_rating for the symbol, with SummaryCard.gradesSlot "
+                      "and a shared _lib/gradeBadge.ts (a function prop cannot cross "
+                      "the server→client boundary). (9) Peers: /peers/comparison now "
+                      "shows the universe div_yield (112 of 257 rows carry one; 176 "
+                      "carry div_paid; 81 none; 64 stale with the yield withheld by "
+                      "design), div_paid and the Distribution Window basis on every "
+                      "column, and /peers/related-stocks gained a Div Yield % column. "
+                      "The 100-cell dash farms 'Institutional Ownership' and 'EPS "
+                      "Revisions (90-day consensus)' were DELETED on instruction, and "
+                      "'Total Return & Risk' is now computed for real from the stored "
+                      "daily closes (262 of 274 symbols hold ≥240 trading days in the "
+                      "trailing year) against the true TASI benchmark — new "
+                      "_lib/returnRisk.ts + PeerRiskRows.tsx, which reuse the exact "
+                      "series the PeerPerfChart already fetches (getJson dedupes the "
+                      "URL, so no extra request per symbol). (10) The six orphan "
+                      "components (EarningsHistory, RevisionsTable, EarningsSummary, "
+                      "RatingsSummary, AnnualEstimatesSummary, RevisionsTrendTable) "
+                      "are deleted after grep-confirming zero importers. npx tsc "
+                      "--noEmit clean. (11) VERIFIED by SSR render of 14 stock routes: "
+                      "1321 Gross Profit 592.39 M / Operating Profit 569.83 M / Total "
+                      "Debt 13.07 M / Net Debt -127.61 M / D-E 0.8% / Interest Coverage "
+                      "62.30x; 2210 -135.48 M / -200.83 M / 113.78 M / -5.40x; 1010 "
+                      "13.17 B / 51.43 B / 15.00x; earnings history detail margins 8/8 "
+                      "and disclosure dates 3/3 filled; reported P/E 14.21 and P/S 3.64 "
+                      "print in the FY tables. Two dashes are PROVEN honest, not bugs: "
+                      "3001 discloses no borrowing line (footnote explains Net Debt = net "
+                      "cash), and 2222 interest coverage is null with basis 'no source: "
+                      "operating result not disclosed'. GOTCHA for future em-dash "
+                      "triage: getJson() passes next:{revalidate:3600}, so the frontend "
+                      "can serve a payload captured BEFORE a backend engine change for up "
+                      "to an hour - a dash seen in SSR must be compared against "
+                      "GET /api/engine/{symbol} before any mapping is blamed (that is "
+                      "exactly how 1321 Total Debt looked unfixed). (12) ZERO-SUBSTITUTION "
+                      "RESTRUCTURING (2026-10-19): routes /stocks/[symbol]/earnings/"
+                      "estimates, /earnings/revisions, /dividends/growth and /dividends/"
+                      "estimates deleted (verified 404); the realised quarter-vs-prior-"
+                      "quarter delta table moved into the Earnings Summary (tabs now = "
+                      "Summary + Surprise); dividend tabs now Scorecard/Yield/Safety/"
+                      "History. Feature-level permanent dashes removed from the DOM: "
+                      "Revenue/EPS Growth (FWD), Payout Frequency, FY1/FY2 (est.) rows "
+                      "(summaryBuilders), Forward Yield cell (dividends/yield), "
+                      "Dividend Growth grade row + dpsCagr/dpsLatestYoY/"
+                      "consecutiveGrowthYears helpers (no per-share DPS history exists; "
+                      "only 1 of 237 issuers files one). Honest per-company dashes "
+                      "remain by decision. Backend fix: invalidate_industry_groups_data "
+                      "was imported by prices.py + scraper.py but defined nowhere - now "
+                      "implemented in cache_helpers.py (industry:groups:* pattern). SSR "
+                      "smoke gotcha: middleware.ts redirects EVERY non-public path to "
+                      "/login when no session_token/refresh_token cookie is present - "
+                      "smoke scripts must send a dummy cookie or they validate the "
+                      "login page, not the route. tsc clean; pytest 266 pass - the 28 "
+                      "failures are pre-existing: async auth suites need pytest-asyncio "
+                      "(not installed in this venv) and 3 REBH acceptance tests assert "
+                      "against an older engine contract (label casing, .fresh gating)."),
+            _i("note", "2026-10-20 · DIVIDEND-CASH DECOUPLING + ZERO-SUBSTITUTION "
+                      "CUTS (1321 inquiry): (1) rebh_unified_engine.py §5b now computes "
+                      "dps/dps_source/diluted_shares via derive_cash_dps "
+                      "(rebh_production_helper_service.py, single CFF 'Dividends Paid' "
+                      "source shared with extract_nine_box_inputs) BEFORE and OUTSIDE "
+                      "the quarantine gate - a corrupted issuer EPS line can no longer "
+                      "blank dividend pages; nine_box/DCF/IRR stay blocked (1321: "
+                      "dps=4.50 SAR from 141.75M ÷ 31.5M shares while nine_box stays "
+                      "null). Contract gained top-level dps/dps_source/diluted_shares "
+                      "(rebh_contract.py); stockApi.ts prefers them, falling back to "
+                      "nine_box for cached payloads. (2) G3 EPS_SHARES_CROSSCHECK now "
+                      "prints a dedicated Arabic label when eps_reported == net "
+                      "(issuer repeated net income inside the EPS cell - 1321's real "
+                      "defect, ratio signature = share count exactly) instead of the "
+                      "generic units fault. (3) Dividends hub: 'Corporate Actions on "
+                      "Record' AND 'Last Announced Distribution' blocks DELETED (0 of "
+                      "194 market-wide corporate-action rows is a cash-distribution "
+                      "record; capital events live on /splits); real Sector Median "
+                      "Yield added (medianNum over /api/rebh/peers div_yield - 1321: "
+                      "2.57% vs 4.01% median of 22 Materials payers). (4) pe-ratio: "
+                      "'Earnings Growth (Actual, TTM vs Prior Year)' substitute card "
+                      "DELETED (zero-substitution: it stood in for consensus EPS "
+                      "estimates; realized growth lives on /growth). Verified: tsc "
+                      "clean, targeted pytest 57 pass (1 pre-existing acceptance "
+                      "failure on growth-signal wording, unrelated), 15/15 SSR smoke "
+                      "on 1321 dividends/yield/safety/pe-ratio; engine cache must be "
+                      "invalidated after contract-field changes "
+                      "(invalidate_rebh_engine_cache) and Next revalidate:3600 can "
+                      "serve the pre-change payload once before the value lands."),
+            _i("note", "2026-10-20 · FINANCIAL-CONCEPT-MISMATCH AUDIT (frontend only - no "
+                      "endpoint, table or job changed): rule = a term with a precise global "
+                      "meaning may not be stamped on unrelated equations/historical data; "
+                      "where the market has no such data the feature is DELETED, not "
+                      "relabelled. (1) 'Earnings Revisions' card on the overview + the "
+                      "earnings page renamed to 'Quarterly Earnings Trend (QoQ)' / "
+                      "'Quarterly EPS Trend (QoQ)' and computed from realised NET PROFIT "
+                      "between consecutive quarters (the old code computed a revenue delta "
+                      "but labelled the rows EPS); every 'Revisions' token struck. "
+                      "(2) EarningsSurprise tab AND route /stocks/[symbol]/earnings/surprise "
+                      "DELETED (verified 404) - surprise needs actual minus consensus and "
+                      "Tadawul publishes no consensus; the tab showed plain YoY growth. "
+                      "Earnings tabs are now Summary only. (3) Momentum: Buy/Sell -> "
+                      "'Above SMA'/'Below SMA'/'At SMA' with column header 'Position vs "
+                      "Average' (a price-vs-average position is not a licensed "
+                      "recommendation). (4) /ratings/quant-ratings carries a bilingual "
+                      "banner: REBH Algorithmic Peer-Relative Grades, not credit ratings, "
+                      "not Tadawul classification, not analyst opinion; same provenance "
+                      "now printed wherever a letter survives (new shared component "
+                      "_components/GradeProvenanceNote.tsx wired into /valuation and "
+                      "/profitability; MomentumGradeTable footnote; HomeDashboard Sector-RS "
+                      "footnote). (5) Dividends: self-invented letters cancelled - "
+                      "deriveDividendGrades/DividendGradeSet deleted from "
+                      "_lib/dividendGrades.ts, DividendScorecard renders the accounting "
+                      "ratios with their formulas (payout ratio, FCF coverage, fiscal "
+                      "years with a filed dividend); tab 'Dividend Safety' -> 'Payout & "
+                      "Coverage' (route /dividends/safety kept); yield page states 'No "
+                      "yield grade is issued'. (6) GLOBAL SWEEP: 5 orphan mock-era "
+                      "components deleted from app/stocks/_components (DividendGrades, "
+                      "DividendGrowthBars, FactorGrades - defaulted to hardcoded letters "
+                      "incl. a 'Revisions' row, QuantRanking - hardcoded 'Information "
+                      "Technology / Semiconductors / 747 out of 4327', AnalysisList - "
+                      "fabricated analyst posts with dicebear avatars); code-level misnomer "
+                      "forwardPe/forwardPs -> peReported/psReported in earnings/page.tsx + "
+                      "FiscalYearTable.tsx (values are current price/cap over FILED "
+                      "figures); screener filter 'SmartSelect Ratings' -> 'Relative-"
+                      "Strength Ratings'/'RS Ratings' (TopFilterPanel + FilterSidebar; "
+                      "internal id 'smartselect' kept); rebh/[symbol] CapitalStructureCard "
+                      "badge 'Seeking Alpha model - Verified' -> 'REBH engine - computed "
+                      "from filed statements' and '0 M' -> em-dash; market-pulse column "
+                      "groups 'Buy Signals'/'Sell Signals' -> 'Strength Patterns'/'Weakness "
+                      "Patterns' and 'Buy Switch' -> 'Buy Switch (FTD gate)' (matches "
+                      "market_pulse_calc.py =IF(T2=\"FTD\",\"ON\",\"\")); "
+                      "/market/yri-earnings-outlook given an amber third-party-source "
+                      "disclosure (static S&P 500 consensus PNGs/JSON, reproduced not "
+                      "computed, no recommendation implied). Verified: tsc --noEmit exit 0; "
+                      "34-route SSR smoke all 200 (surprise 404 by design, /ratings and "
+                      "/peers 307 by design); case-sensitive DOM audit of /earnings, "
+                      "/dividends and /quant-ratings HTML shows zero surviving 'Earnings "
+                      "Revisions'/'Earnings Surprise'/'Consensus'/'Dividend Grades'/"
+                      "'Safety Grade'/'Yield Grade'/'# of Analysts' - the only 'Strong Buy' "
+                      "string left is inside the disclaimer sentence that denies it. "
+                      "GOTCHA for repeats: PowerShell -match/-like are CASE-INSENSITIVE, "
+                      "so forbidden-term sweeps over fetched HTML must use node or "
+                      "Select-String -CaseSensitive or disclaimers read as violations; "
+                      "Invoke-WebRequest does "
+                      "not follow 307/308 - use curl.exe for route smoke."),
         ],
     },
 
@@ -967,6 +1729,7 @@ SYSTEMS: List[Dict[str, Any]] = [
         "jobs": [
             _j("breadth_daily", "backend/app/services/breadth_job.py",
                "cron Sun–Thu 21:15", _DAILY, "cron",
+               cadence="daily", role="computation", storage="cumulative",
                writes=["breadth_runs"] + [
                    "breadth_participation", "breadth_advance_decline", "breadth_momentum",
                    "breadth_thrusts", "breadth_classic", "breadth_divergences",
@@ -1117,76 +1880,24 @@ SYSTEMS: List[Dict[str, Any]] = [
         ],
     },
 
-    # ─────────────── 13. Weekly Routine PDF (frontend-only) ────────────────
-    {
-        "id": "weekly-pdf",
-        "name": "Weekly Routine PDF",
-        "in_navbar": False,
-        "navbar_label": None,
-        "blurb": "A frontend server route that drives Puppeteer against the live site, "
-                 "screenshots five pages and stitches them into Weekly_Routine.pdf. No "
-                 "backend endpoint involved — but it fails whenever the pages it photographs "
-                 "are stale or slow to paint.",
-        "built": [
-            _b("frontend", "frontend/app/api/generate-weekly-report/route.ts",
-               "POST handler: puppeteer + pdf-lib, 1920x1080 screenshots"),
-            _b("frontend", "frontend/app/industry-groups/page.tsx",
-               "exposes window.__REPORT_PDF_BASE64__ for the jsPDF capture"),
-            _b("script", "backend/scripts/generate_weekly_report.py",
-               "the UNRELATED backend weekly report (writes weekly_market_reports) — "
-               "same words, different system"),
-        ],
-        "pages": ["/industry-groups"],
-        "jobs": [
-            _j("weekly_pdf_capture", "frontend/app/api/generate-weekly-report/route.ts",
-               "manual — clicked from /industry-groups", None, "manual", tracked=False,
-               note="frontend route, cannot write job_runs; waits up to 30s for canvases "
-                    "to paint and 90s for the industry-groups jsPDF"),
-            _j("weekly_report_generator", "backend/scripts/generate_weekly_report.py",
-               "manual CLI (python scripts/generate_weekly_report.py)", None, "manual",
-               writes=["weekly_market_reports"], tracked=False,
-               note="wrapping this script's __main__ was not part of Phase 1; job_runs "
-                    "will not show it until it is"),
-        ],
-        "tables": [
-            _t("weekly_market_reports", "week_end", 8, "weekly_report_generator",
-               note="model is now imported by app/core/database.py + "
-                    "app/models/__init__.py (2026-10-12). Alembic migration "
-                    "2026_10_12_weekly_add_weekly_market_reports creates the table; "
-                    "GET /api/weekly-market-update/latest returns 404 'No weekly "
-                    "report generated yet' when the table is empty — that is normal "
-                    "on a fresh env until scripts/generate_weekly_report.py runs."),
-        ],
-        "issues": [
-            _i("note", "2026-10-12 · Bug 3 FIXED. app/api/routes/weekly_market_update.py "
-                       "is now included in app/main.py with prefix=/api and "
-                       "dependencies=protected_dependencies (get_current_user), so "
-                       "/api/weekly-market-update/latest · /list · /{week_end} · "
-                       "/generate all reach the handler instead of 404. The model "
-                       "WeeklyMarketReport was also added to app/core/database.py and "
-                       "app/models/__init__.py so Base.metadata + Alembic autogenerate "
-                       "now see it. Migration "
-                       "alembic/versions/2026_10_12_weekly_add_weekly_market_reports.py "
-                       "creates the table idempotently (CREATE TABLE IF NOT EXISTS) — "
-                       "run `alembic upgrade head` before opening /weekly-update on a "
-                       "fresh environment, otherwise the endpoint will 500 with "
-                       "'relation weekly_market_reports does not exist'."),
-            _i("watch", "POST /api/weekly-market-update/generate is only gated by "
-                        "get_current_user (not admin) — the mount inherits "
-                        "protected_dependencies. That matches the live caller in "
-                        "frontend/app/weekly-update/page.tsx; tighten to admin if the "
-                        "product stance changes. /weekly-update is NOT in middleware "
-                        "publicPaths, so the front door is session-gated."),
-            _i("watch", "components/market-report/compact.tsx also calls "
-                        "/api/weekly-market-update/latest but nothing imports it — dead "
-                        "code, left in place. Delete when a decision is made."),
-            _i("watch", "The PDF route needs Chromium in the frontend image and screenshots "
-                        "PAGES BY URL — /Percent_of_Stocks_Above_MA, /minervini-trend, "
-                        "/screeners/Alrayan&Alhussain, /industry-groups?autoReport=true, "
-                        "/watchlist?tab=Matrix%20Chart. Rename or move any of those and the "
-                        "PDF silently loses a section."),
-        ],
-    },
+    # ─────────────── 13. Weekly Routine PDF — REMOVED 2026-10-25 ────────────────
+    # The whole system was deleted on 2026-10-25 at the owner's request (the
+    # button was already off the page):
+    #   · frontend/app/api/generate-weekly-report/route.ts (Puppeteer + pdf-lib,
+    #     Weekly_Routine.pdf) — the ONLY user of both npm deps
+    #   · the ?autoReport=true / window.__REPORT_PDF_BASE64__ hook in
+    #     frontend/app/industry-groups/page.tsx (its only caller is gone; the
+    #     page's own jsPDF export still saves a file directly)
+    #   · backend/scripts/generate_weekly_report.py
+    #   · the WeeklyMarketReport type in frontend/lib/market-report.ts
+    #   · table weekly_market_reports (migration 2026_10_25_drop_unwritten_tables)
+    # The backend half (app/api/routes/weekly_market_update.py,
+    # app/models/weekly_market_report.py, app/services/weekly_report/) lived in
+    # git HEAD but was already deleted from the working tree by the uncommitted
+    # cleanup before this date, so the table stayed at 0 rows and the GET route's
+    # own 404 "No weekly report generated yet. Run generate_weekly_report.py
+    # first." was the page seeing an empty table — the message came from the
+    # route itself, and the route was mounted in main.py at HEAD.
 
     # ─────────────── 14. Accounts, auth & site pages ───────────────────────
     {
@@ -1252,9 +1963,10 @@ SYSTEMS: List[Dict[str, Any]] = [
             _b("infra", "backend/alembic/versions/2026_10_11_jobruns_add_job_runs.py",
                "job_runs migration — applied 2026-10-11"),
             _b("infra",
-               "backend/alembic/versions/2026_10_12_weekly_add_weekly_market_reports.py",
-               "weekly_market_reports migration — written 2026-10-12, run "
-               "alembic upgrade head before opening /weekly-update"),
+               "backend/alembic/versions/2026_10_25_drop_unwritten_tables.py",
+               "drops weekly_market_reports + qfi_ownership_flows (2026-10-25). "
+               "The older 2026_10_12_weekly migration is kept in the chain as "
+               "history — live alembic_version still points at it."),
             _b("frontend", "frontend/app/admin/page.tsx", "legacy dashboard"),
             _b("frontend", "frontend/app/admin/system-map/page.tsx", "this Runbook"),
             _b("infra", "backend/app/core/scheduler.py",
@@ -1323,6 +2035,34 @@ SYSTEMS: List[Dict[str, Any]] = [
 # ══════════════════════════════════════════════════════════════════════════════
 #  Lookup helpers used by the /api/admin/system-map routes
 # ══════════════════════════════════════════════════════════════════════════════
+
+def _normalise_tables() -> None:
+    """Coerce every ``tables`` entry into the dict _t() produces.
+
+    The Runbook, the pipelines map and checks_sql() all index entries as dicts
+    (entry["table"], entry["date_column"]). A bare string anywhere in the
+    registry therefore took down GET /api/admin/system-map/systems/<id> with
+    'TypeError: string indices must be integers' - the home system shipped five
+    such strings. Fixing only home would leave the next hand-written entry one
+    typo away from a 500 on the admin panel, so the registry normalises itself at
+    import time and warns instead of throwing.
+    """
+    for system in SYSTEMS:
+        fixed = []
+        for entry in system.get("tables", []):
+            if isinstance(entry, dict) and "table" in entry:
+                fixed.append(entry)
+                continue
+            name = entry if isinstance(entry, str) else repr(entry)
+            print(f"[system_registry] WARN - system '{system['id']}' table "
+                  f"'{name}' is not a _t() entry; probed as 'no date column'")
+            fixed.append(_t(name, None, None, None,
+                            note="registry entry written as a bare string - add a "
+                                 "_t(...) with its real date column", verified=False))
+        system["tables"] = fixed
+
+
+_normalise_tables()
 
 _INDEX: Dict[str, Dict[str, Any]] = {s["id"]: s for s in SYSTEMS}
 
@@ -1474,3 +2214,102 @@ def registry_stats() -> Dict[str, int]:
         "issues": sum(len(s["issues"]) for s in SYSTEMS),
         "bugs": sum(1 for s in SYSTEMS for i in s["issues"] if i["severity"] == "bug"),
     }
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  Schedule-runbook projections — read by GET /api/admin/system-map/schedule and
+#  /integrity/scan. Pure (no DB, no job_runner import): the route layers the live
+#  run-capability + last-run signals on top so this stays unit-testable offline.
+# ══════════════════════════════════════════════════════════════════════════════
+def schedule_jobs() -> List[Dict[str, Any]]:
+    """Every job ONCE, carrying the cadence/role/storage/commands axes plus the
+    owning system ids.
+
+    A job such as ``daily_market_update`` is listed under several systems (each
+    naming the tables that system reads); the Schedule tab wants a single card, so
+    we dedupe by ``job_name`` and union the ``writes``. The entry with the richest
+    ``commands`` list wins, so the operator-facing CLI never disappears.
+    """
+    by_name: Dict[str, Dict[str, Any]] = {}
+    order: List[str] = []
+    for system in SYSTEMS:
+        for job in system["jobs"]:
+            name = job["job_name"]
+            row = by_name.get(name)
+            if row is None:
+                row = {
+                    "job_name": name,
+                    "file": job["file"],
+                    "cadence": job.get("cadence") or _derive_cadence(
+                        job["expected_schedule"], job.get("trigger", "cron")),
+                    "role": job.get("role", "ingestion"),
+                    "storage": job.get("storage", "cumulative"),
+                    "commands": list(job.get("commands") or []),
+                    "writes": list(job.get("writes") or []),
+                    "expected_schedule": job["expected_schedule"],
+                    "trigger": job.get("trigger", "cron"),
+                    "tracked": job.get("tracked", True),
+                    "note": job.get("note", ""),
+                    "systems": [system["id"]],
+                }
+                by_name[name] = row
+                order.append(name)
+            else:
+                if system["id"] not in row["systems"]:
+                    row["systems"].append(system["id"])
+                for tbl in (job.get("writes") or []):
+                    if tbl not in row["writes"]:
+                        row["writes"].append(tbl)
+                if len(job.get("commands") or []) > len(row["commands"]):
+                    row["commands"] = list(job["commands"])
+    return [by_name[n] for n in order]
+
+
+# Tables the gap scanner probes → the job that owns the fix. industry_group_history
+# is *written* by daily_market_update but *repaired* by backfill_industry_group_history,
+# so the owner here is the repair job (its commands are the actionable fix).
+#
+# The 5th field, ``count_gaps``, says whether a missing-trading-DAY count is
+# meaningful for that table. Only cumulative daily-ingest tables qualify:
+#   · saudi_economic_indicators is month-end periods → a day count is noise.
+#   · eurodollar_futures is a manual snapshot (scrape_date only on demand) →
+#     it will never hold every trading day, so only its lag is scored.
+_INTEGRITY_TABLES = (
+    ("prices", "date", "daily_market_update", "daily", True),
+    ("industry_group_history", "date", "backfill_industry_group_history", "daily", True),
+    ("saudi_economic_indicators", "period", "macro_importer", "monthly", False),
+    ("sukuk_market_data", "updated_at", "sukuk_importer", "weekly", False),
+    ("eurodollar_futures", "scrape_date", "manual:eurodollar", "daily", False),
+    ("treasury_yield_curves", "report_date", "treasury_gov", "daily", True),
+)
+
+
+def _job_index() -> Dict[str, Dict[str, Any]]:
+    idx: Dict[str, Dict[str, Any]] = {}
+    for system in SYSTEMS:
+        for job in system["jobs"]:
+            idx.setdefault(job["job_name"], job)
+    return idx
+
+
+def integrity_targets() -> List[Dict[str, Any]]:
+    """The scanner's table list with the responsible job + its fix commands resolved
+    from the registry. Pure — the route runs the actual SQL probes.
+
+    ``cadence`` + ``count_gaps`` tell the scanner whether a trading-day gap count is
+    meaningful (cumulative daily tables) or not (month-end periods, or an on-demand
+    snapshot whose scrape_date will never cover every trading day)."""
+    jobs = _job_index()
+    out: List[Dict[str, Any]] = []
+    for table, col, owner, cadence, count_gaps in _INTEGRITY_TABLES:
+        job = jobs.get(owner, {})
+        out.append({
+            "table": table,
+            "date_column": col,
+            "cadence": cadence,
+            "count_gaps": count_gaps,
+            "responsible_job": owner,
+            "responsible_file": job.get("file", ""),
+            "fix_commands": list(job.get("commands") or []),
+        })
+    return out

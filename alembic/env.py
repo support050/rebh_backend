@@ -31,7 +31,6 @@ import app.models.eps_estimates
 import app.models.system_config
 import app.models.valuation_zones
 import app.models.tasi_components
-import app.models.aporia
 import app.models.Corporate_actions
 import app.models.update_status
 import app.models.rebh_engine_vintage

@@ -186,6 +186,17 @@ def make_prices_history_key(symbol: str, limit: int) -> str:
     return f"{PREFIX_PRICES}:history:symbol:{symbol_norm}:limit:{limit}"
 
 
+def make_prices_seasonality_key(symbol: str, years: int) -> str:
+    """Key: prices:seasonality:symbol:{symbol}:years:{years}"""
+    symbol_norm = normalize_string(symbol)
+    return f"{PREFIX_PRICES}:seasonality:symbol:{symbol_norm}:years:{years}"
+
+
+def make_prices_tasi_history_key(days: int) -> str:
+    """Key: prices:tasi:history:days:{days} — TASI index series from market_pulse."""
+    return f"{PREFIX_PRICES}:tasi:history:days:{days}"
+
+
 # ============================================================================
 # INDUSTRY_GROUPS.PY Cache Key Generators
 # ============================================================================
@@ -378,6 +389,15 @@ async def invalidate_prices_latest() -> None:
 async def invalidate_prices_history() -> None:
     """Invalidate only prices history cache"""
     await invalidate_patterns([f"{PREFIX_PRICES}:history:*"])
+
+
+async def invalidate_industry_groups_data() -> None:
+    """Invalidate all industry-groups cache (latest + per-group stock lists).
+
+    Called by the prices ingest route and the scraper ingestion route after
+    financial data changes; the two import sites pre-dated this definition.
+    """
+    await invalidate_patterns([f"{PREFIX_INDUSTRY_GROUPS}:*"])
 
 
 # ============================================================================

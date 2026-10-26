@@ -3,18 +3,21 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from sqlalchemy import desc, asc
 from typing import List, Optional
-from datetime import date
+from datetime import date, timedelta
 import logging
 
 import pandas as pd
 
 from app.core.database import get_db
 from app.models.price import Price
+from app.models.market_pulse import MarketPulse
 from app.schemas.price import PriceResponse, LatestPricesResponse
 from app.core.cache_helpers import (
     cache_read_through,
     make_prices_history_key,
-    make_prices_latest_key
+    make_prices_latest_key,
+    make_prices_seasonality_key,
+    make_prices_tasi_history_key
 )
 from app.core.cache_config import CACHE_TTL_PRICES_HISTORY, CACHE_TTL_PRICES_LATEST
 
@@ -180,6 +183,152 @@ async def get_price_history(
             raise HTTPException(status_code=500, detail=str(e))
 
     return await cache_read_through(cache_key, CACHE_TTL_PRICES_HISTORY, fetch_history)
+
+
+_MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
+                "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+
+
+@router.get("/seasonality/{symbol}")
+async def get_price_seasonality(
+    symbol: str,
+    db: Session = Depends(get_db),
+    years: int = Query(10, ge=2, le=20, description="Max calendar years in the year×month matrix"),
+):
+    """
+    Calendar-month return seasonality computed from real closes in the prices
+    table (indexed by idx_prices_symbol_date — single-symbol scan, ≤1 row/day).
+
+    Method: take the last trading close of each calendar month, then
+    month-over-month % return. Aggregated per calendar month across all
+    history: mean, median, win rate (% positive months) and sample count.
+    Also returns the newest `years` calendar years as a year×month matrix
+    (null = month without a computed return, e.g. first month of data).
+    Redis read-through cache, same TTL as /history.
+    """
+    cache_key = make_prices_seasonality_key(symbol, years)
+
+    async def fetch_seasonality():
+        try:
+            rows = (
+                db.query(Price.date, Price.close)
+                .filter(Price.symbol == symbol)
+                .order_by(asc(Price.date))
+                .all()
+            )
+            if not rows:
+                raise HTTPException(status_code=404, detail=f"No price history for symbol {symbol}")
+
+            df = pd.DataFrame([(r[0], r[1]) for r in rows], columns=["date", "close"])
+            df["close"] = pd.to_numeric(df["close"], errors="coerce")
+            df = df.dropna(subset=["close", "date"])
+            df = df[df["close"] > 0]
+            if df.empty:
+                raise HTTPException(status_code=404, detail=f"No usable closes for symbol {symbol}")
+
+            df = df.sort_values("date")
+            df["year"] = df["date"].apply(lambda d: d.year)
+            df["month"] = df["date"].apply(lambda d: d.month)
+            # Last trading close of each calendar month
+            monthly = df.groupby(["year", "month"], sort=True)["close"].last().reset_index()
+            monthly["prev_close"] = monthly["close"].shift(1)
+            monthly = monthly[monthly["prev_close"] > 0]
+            monthly["ret_pct"] = (monthly["close"] / monthly["prev_close"] - 1.0) * 100.0
+
+            # ── Per-calendar-month aggregates ─────────────────────────────
+            months_out = []
+            for m in range(1, 13):
+                vals = monthly.loc[monthly["month"] == m, "ret_pct"]
+                n = int(vals.count())
+                if n == 0:
+                    months_out.append({
+                        "month": m, "name": _MONTH_NAMES[m - 1],
+                        "mean": None, "median": None, "win_rate": None, "n": 0,
+                    })
+                    continue
+                months_out.append({
+                    "month": m, "name": _MONTH_NAMES[m - 1],
+                    "mean": round(float(vals.mean()), 2),
+                    "median": round(float(vals.median()), 2),
+                    "win_rate": round(float((vals > 0).sum()) / n * 100.0, 1),
+                    "n": n,
+                })
+
+            # ── Year × month matrix (newest `years` calendar years) ───────
+            monthly["key"] = list(zip(monthly["year"], monthly["month"]))
+            ret_map = {k: round(float(v), 2) for k, v in zip(monthly["key"], monthly["ret_pct"])}
+            all_years = sorted({int(y) for y in monthly["year"]})
+            recent_years = all_years[-years:]
+            years_out = []
+            for y in recent_years:
+                cells = [ret_map.get((y, m)) for m in range(1, 13)]
+                years_out.append({"year": y, "values": cells})
+
+            return {
+                "symbol": symbol,
+                "first_date": df["date"].iloc[0].isoformat(),
+                "last_date": df["date"].iloc[-1].isoformat(),
+                "years_covered": len(all_years),
+                "months": months_out,
+                "years": years_out,
+            }
+
+        except HTTPException:
+            raise
+        except Exception as e:
+            print(f"Error computing seasonality for {symbol}: {e}")
+            raise HTTPException(status_code=500, detail=str(e))
+
+    return await cache_read_through(cache_key, CACHE_TTL_PRICES_HISTORY, fetch_seasonality)
+
+
+@router.get("/tasi/history")
+async def get_tasi_history(
+    db: Session = Depends(get_db),
+    days: int = Query(3650, ge=30, le=7300, description="Calendar days of TASI history (default ~10y)"),
+):
+    """
+    True TASI index historical closes from the market_pulse table
+    (columns date/close, date uniquely indexed) — the same benchmark source
+    used by app/services/rs_line.py `_fetch_tasi_close()`.
+
+    Returns the ascending daily series as { time: 'YYYY-MM-DD', close: number }
+    so the frontend can compute real index returns (1M…5Y) and overlay the
+    benchmark against individual symbols. Redis read-through, TTL = history.
+    """
+    cache_key = make_prices_tasi_history_key(days)
+
+    async def fetch_tasi():
+        try:
+            min_date = date.today() - timedelta(days=days)
+            rows = (
+                db.query(MarketPulse.date, MarketPulse.close)
+                .filter(MarketPulse.date >= min_date)
+                .order_by(asc(MarketPulse.date))
+                .all()
+            )
+            data = [
+                {"time": r[0].isoformat(), "close": float(r[1]) if r[1] is not None else None}
+                for r in rows
+                if r[0] is not None
+            ]
+            if not data:
+                raise HTTPException(status_code=404, detail="No TASI data in market_pulse table")
+            return {
+                "symbol": "TASI",
+                "source": "market_pulse",
+                "count": len(data),
+                "first_date": data[0]["time"],
+                "last_date": data[-1]["time"],
+                "data": data,
+            }
+        except HTTPException:
+            raise
+        except Exception as e:
+            print(f"Error fetching TASI history from market_pulse: {e}")
+            raise HTTPException(status_code=500, detail=str(e))
+
+    return await cache_read_through(cache_key, CACHE_TTL_PRICES_HISTORY, fetch_tasi)
 
 
 @router.post("/static-info/import")

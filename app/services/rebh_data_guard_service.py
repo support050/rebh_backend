@@ -10,6 +10,7 @@ Implements mandatory accounting identities, plausibility guards, and scale verif
 - 10 Financial Red-Flags auditing engine
 """
 from typing import Dict, List, Optional, Any, Tuple
+import math
 
 
 def verify_balance_sheet_identity(
@@ -111,6 +112,229 @@ def discrete_quarters(cum: Dict[str, Optional[float]]) -> Dict[str, Optional[flo
     if None not in (cum.get("FY"), cum.get("9M")):
         out["Q4"] = cum["FY"] - cum["9M"]
     return out
+
+
+def derive_discrete_quarter_series(
+    values: Dict[str, Optional[float]]
+) -> List[Tuple[str, Optional[float]]]:
+    """
+    Turn a {period_key: value} map keyed by the XBRL parser's *cumulative*
+    windows ('YYYY-MM_YYYY-MM', running from the fiscal-year start) into a
+    chronological list of discrete quarterly values.
+
+    Income-statement and cash-flow items are flow figures and MUST be
+    de-cumulated (Qn = Cum_n - Cum_(n-1)); balance-sheet snapshot lines must
+    never be passed here. Explicitly-reported discrete windows already present
+    in the source (e.g. 'YYYY-04_YYYY-06') are preferred over derived ones.
+
+    Returns a list of (label, value) tuples where label is 'YYYY-Qn'. Fiscal
+    years without recognizable calendar-year cumulative anchors are skipped.
+    """
+    if not values:
+        return []
+    years = sorted({
+        key.split("_")[0][:4]
+        for key in values
+        if "_" in key and len(key.split("_")[0]) >= 7 and key.split("_")[0][:4].isdigit()
+    })
+    series: List[Tuple[str, Optional[float]]] = []
+    for y in years:
+        cum = {
+            "3M": values.get(f"{y}-01_{y}-03"),
+            "6M": values.get(f"{y}-01_{y}-06"),
+            "9M": values.get(f"{y}-01_{y}-09"),
+            "FY": values.get(f"{y}-01_{y}-12"),
+        }
+        derived = discrete_quarters(cum)
+
+        def _pick(disc_key: str, derived_key: str) -> Optional[float]:
+            explicit = values.get(disc_key)
+            if explicit is not None:
+                return explicit
+            return derived.get(derived_key)
+
+        quarters = (
+            ("Q1", _pick(f"{y}-01_{y}-03", "Q1")),
+            ("Q2", _pick(f"{y}-04_{y}-06", "Q2")),
+            ("Q3", _pick(f"{y}-07_{y}-09", "Q3")),
+            ("Q4", _pick(f"{y}-10_{y}-12", "Q4")),
+        )
+        for quarter, val in quarters:
+            if val is not None:
+                series.append((f"{y}-{quarter}", val))
+    return series
+
+
+def _first_present(items: Dict[str, Dict[str, Any]], labels, period) -> Optional[float]:
+    for lbl in labels:
+        v = items.get(lbl, {}).get(period)
+        if isinstance(v, (int, float)) and v not in (0, 0.0):
+            return float(v)
+    return None
+
+
+SHARE_CAPITAL_LABELS = (
+    "Share Capital", "Issued Capital", "Paid-up Capital", "Capital",
+    "share capital", "Share capital", "Issued share capital",
+)
+EPS_LABELS = (
+    "Basic Earnings per Share (EPS)",
+    "Basic Earnings Per Share", "Basic And Diluted Earnings Per Share",
+    "Earnings Per Share", "Basic EPS", "بند ربحية السهم",
+)
+NET_LABELS = (
+    "Net Profit Attributable to Shareholders of Parent",
+    "Net Profit for the Period",
+)
+
+
+def _pick_basic_eps(is_items: Dict[str, Dict[str, Any]], period) -> Optional[float]:
+    """Return the reported basic EPS (a SAR-per-share figure) for `period`.
+    Prefers a label in EPS_LABELS, else the first *basic, non-discontinued*
+    'per share' line. EPS is scale-agnostic — it is quoted per share no matter
+    whether the statements' bulk money runs in SAR, thousands or millions."""
+    for lbl in EPS_LABELS:
+        v = is_items.get(lbl, {}).get(period)
+        if isinstance(v, (int, float)) and abs(v) > 1e-9:
+            return float(v)
+    best: Optional[float] = None
+    for lbl, values in is_items.items():
+        low = (lbl or "").lower()
+        if "per share" not in low and "eps" not in low:
+            continue
+        if "discontinued" in low or "diluted" in low:
+            continue
+        v = values.get(period)
+        if isinstance(v, (int, float)) and abs(v) > 1e-9:
+            best = float(v)
+            break
+    return best
+
+
+def detect_scale_factor(
+    bs_items: Dict[str, Dict[str, Any]],
+    is_items: Dict[str, Dict[str, Any]],
+    market_cap_sar: Optional[float],
+    price: Optional[float],
+    latest_bs_period,
+    latest_is_period,
+    par_value_sar: float = 10.0,
+) -> Tuple[float, str]:
+    """
+    Detect the reporting scale (decimals/rounding) of a stored financial file and
+    return the multiplier that converts its raw monetary values into actual SAR.
+
+    Stored XBRL artifacts arrive in MIXED units across companies (full SAR,
+    thousands, or millions) and the source 'rounding' attribute is almost always
+    absent, so the scale is inferred from a hard SAR anchor — the market-implied
+    share count (market_cap_sar / price, always in true SAR). Two independent
+    ratios are tried, snapped to the nearest power of ten:
+
+    1. reported-EPS (PRIMARY): net_profit / eps reveals the true share count in
+       the file's own money units, so implied_shares / (net/eps) = net*price /
+       (mc*eps) gives the scale. This is EXACT and par-value independent because
+       net profit and EPS always refer to the same period and EPS is quoted per
+       share regardless of the statements' bulk scale.
+    2. share-capital (FALLBACK): implied_shares / (share_capital / par). Assumes
+       a 10 SAR par, which several Tadawul names (e.g. Aramco after its par cut)
+       violate, so it is only trusted when the EPS anchor is unavailable (loss-
+       making or ~zero-EPS companies).
+
+    Returns (scale_factor, basis). scale_factor defaults to 1.0 (treat as SAR)
+    when no reliable anchor exists; callers surface a SCALE quarantine in that case.
+    """
+    if not market_cap_sar or market_cap_sar <= 0 or not price or price <= 0:
+        return 1.0, "no-market-anchor"
+    implied_shares = market_cap_sar / price
+
+    # 1. Par-independent EPS anchor (exact: net and EPS share the same period).
+    eps = _pick_basic_eps(is_items, latest_is_period)
+    net_raw = _first_present(is_items, NET_LABELS, latest_is_period)
+    if eps and abs(eps) > 1e-9 and net_raw and abs(net_raw) > 1e-9 and (net_raw > 0) == (eps > 0):
+        shares_in_file_units = net_raw / eps
+        if shares_in_file_units > 0:
+            ratio = implied_shares / shares_in_file_units
+            if ratio > 0:
+                return float(10 ** int(round(math.log10(ratio)))), "reported-eps"
+
+    # 2. Share-capital anchor with assumed par value (fallback for loss-makers).
+    sc_raw = _first_present(bs_items, SHARE_CAPITAL_LABELS, latest_bs_period)
+    if sc_raw and sc_raw > 0:
+        shares_in_file_units = sc_raw / par_value_sar
+        if shares_in_file_units > 0:
+            ratio = implied_shares / shares_in_file_units
+            if ratio > 0:
+                return float(10 ** int(round(math.log10(ratio)))), "share-capital"
+
+    return 1.0, "no-scale-anchor"
+
+
+NON_MONETARY_LABELS = (
+    "per share", "per saham", "ربحية السهم", "السهم", "لكل سهم",
+    "number of shares", "shares outstanding", "weighted average",
+    "عدد الاسهم", "عدد الأسهم", "dividend per",
+)
+
+
+def _is_non_monetary(label: str) -> bool:
+    low = (label or "").lower()
+    return any(tok in low for tok in NON_MONETARY_LABELS)
+
+
+def scale_monetary_items(
+    items: Dict[str, Dict[str, Any]], factor: float
+) -> Dict[str, Dict[str, Any]]:
+    """Multiply every monetary numeric value in a {label: {period: value}} map by
+    `factor`, in place. Per-share / share-count / ratio lines are left untouched
+    (they are already in SAR-per-share regardless of the statements' bulk scale).
+    A factor of 1.0 is a no-op, so the call is idempotent once data is canonical."""
+    if not factor or factor == 1.0:
+        return items
+    for label, values in items.items():
+        if _is_non_monetary(label):
+            continue
+        for period, val in list(values.items()):
+            if isinstance(val, (int, float)):
+                values[period] = val * factor
+    return items
+
+
+_EQUITY_EXACT = (
+    "Total Equity", "Total equity", "Total Equity Attributable to Shareholders",
+    "Equity attributable to owners of parent", "Total Shareholders Equity",
+)
+
+
+def resolve_total_equity(
+    bs_items: Dict[str, Dict[str, Any]], period
+) -> Optional[float]:
+    """Return the book total-equity figure for `period`, tolerating the label
+    variants different Tadawul filers use (REITs and insurers often publish only
+    a lowercase 'Total equity attributable to equity holders of company' and no
+    plain 'Total Equity' line). Exact labels first, then a case-insensitive scan
+    for the closest equity subtotal; narrowly-named reserve/other-comprehensive
+    lines are excluded so we never mistake a component for the grand total."""
+    for lbl in _EQUITY_EXACT:
+        v = bs_items.get(lbl, {}).get(period)
+        if isinstance(v, (int, float)):
+            return float(v)
+    for lbl, values in bs_items.items():
+        low = (lbl or "").lower()
+        if low in ("total equity", "total shareholders equity",
+                   "total equity attributable to shareholders",
+                   "total equity attributable to equity holders of company",
+                   "equity attributable to owners of parent",
+                   "total equity and liabilities"):
+            v = values.get(period)
+            if isinstance(v, (int, float)):
+                return float(v)
+    for lbl, values in bs_items.items():
+        low = (lbl or "").lower()
+        if "equity attributable" in low and "holders" in low:
+            v = values.get(period)
+            if isinstance(v, (int, float)):
+                return float(v)
+    return None
 
 
 def ttm_series(quarters: List[Optional[float]]) -> List[Optional[float]]:

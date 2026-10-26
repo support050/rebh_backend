@@ -121,28 +121,11 @@ class HistoricalReport(Base):
     retrieval_timestamp = Column(DateTime(timezone=True), server_default=func.now())
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
-
-class QFIOwnershipFlow(Base):
-    """
-    Phase 6: Qualified Foreign Investor (QFI) ownership levels and net weekly/daily inflows.
-    """
-    __tablename__ = "qfi_ownership_flows"
-    id = Column(Integer, primary_key=True, index=True)
-    report_date = Column(Date, nullable=False, index=True)
-    symbol = Column(String(20), nullable=False, index=True)
-    normalized_symbol = Column(String(20), nullable=False, index=True)
-    company_name = Column(String(255), nullable=True)
-    
-    qfi_holding_percent = Column(Numeric(10, 4), nullable=True)
-    total_foreign_percent = Column(Numeric(10, 4), nullable=True)
-    net_inflow_shares = Column(Numeric(18, 2), nullable=True)
-    net_inflow_sar = Column(Numeric(20, 2), nullable=True)
-    
-    source_url = Column(String(500), nullable=True)
-    raw_payload = Column(JSON, nullable=True)
-    retrieval_timestamp = Column(DateTime(timezone=True), server_default=func.now())
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-
-    __table_args__ = (
-        UniqueConstraint('report_date', 'symbol', name='uq_qfi_ownership_date_symbol'),
-    )
+# 2026-10-25: QFIOwnershipFlow (qfi_ownership_flows) removed. The model, its
+# response schema and GET /api/market-reports/qfi-flows were shipped in the
+# "Phase 6" design but NO writer was ever implemented: the table held 0 rows,
+# scripts/update_market_reports.py saves only the five reports above, and no
+# frontend page called the endpoint. Dropped by migration
+# 2026_10_25_drop_unwritten_tables. Re-add it only together with a working
+# scraper, and note that per-symbol net inflow (shares / SAR) is NOT published
+# by Tadawul — it would have to be derived, not scraped.

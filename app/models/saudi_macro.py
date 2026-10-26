@@ -1,5 +1,5 @@
 # backend/app/models/saudi_macro.py
-from sqlalchemy import Column, Integer, String, Float, Boolean, DateTime, UniqueConstraint
+from sqlalchemy import Column, Integer, String, Float, Boolean, Date, DateTime, UniqueConstraint
 from sqlalchemy.sql import func
 from app.core.database import Base
 
@@ -17,7 +17,14 @@ class SaudiEconomicIndicator(Base):
     value = Column(Float, nullable=True)
     raw_value = Column(String(100), nullable=True)
     unit = Column(String(50), nullable=True)  # %, SAR Million, Ratio
-    period = Column(String(50), nullable=False)  # Observation period e.g. 2026-03 or 2025-Q4
+    # Business date of the observation — the publisher's own period, never the
+    # month we happened to run the scraper (see alembic revision
+    # 2026_10_26_macro_period_date). Monthly series carry month-end dates,
+    # quarterly series quarter-end dates, annual series 31 Dec.
+    period = Column(Date, nullable=False, index=True)
+    # How to read the value when the same indicator has several derivations,
+    # e.g. saudi_gdp_annual 'TTM' vs 'Annualized'. NULL = the plain series.
+    basis = Column(String(20), nullable=True)
     frequency = Column(String(50), default="Monthly")  # Daily, Monthly, Quarterly, Annual
     source = Column(String(100), nullable=False)  # SAMA, GaStat, KAPSARC
     source_url = Column(String(500), nullable=True)

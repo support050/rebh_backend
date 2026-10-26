@@ -29,6 +29,7 @@ HERE = Path(__file__).resolve().parent                 # backend/app/services
 ENGINE_DIR = HERE / "breadth_engine"
 BACKEND_DIR = HERE.parents[1]                           # .../backend
 LOADER_SCRIPT = HERE / "breadth_loader.py"
+LOADER_MARKER = "__BREADTH_JSON__ "        # must match breadth_loader.JSON_MARKER
 sys.path.insert(0, str(ENGINE_DIR))                    # make `breadth` importable
 
 try:
@@ -173,6 +174,34 @@ def _read_df(fn, attempts: int = 3):
     raise SystemExit(f"breadth_job: cannot read from DB after {attempts} attempts: {last}")
 
 
+def _err_head(text: str, limit: int = 1200) -> str:
+    """The readable part of the loader's output: short lines, no parameter dumps.
+
+    A SQLAlchemy StatementError ends by printing every bound value, so slicing the TAIL
+    of the child's output (what this used to do) returned only that dump — the actual
+    Postgres message was thrown away and the 2026-10-25 failure could not be diagnosed
+    from the job's own log. The loader now reports via `_err_brief()`; this is the net.
+    """
+    keep = [l.rstrip() for l in (text or "").splitlines()
+            if l.strip() and len(l) <= 300 and "Background on this error" not in l]
+    body = keep if len(keep) <= 16 else keep[:10] + ["…"] + keep[-6:]
+    return "\n".join(body)[:limit]
+
+
+def _parse_loader_report(stdout: str):
+    """Read the loader's marker line; fall back to the legacy bare-JSON line."""
+    for line in (stdout or "").splitlines():
+        if line.startswith(LOADER_MARKER):
+            return json.loads(line[len(LOADER_MARKER):])
+    m = re.search(r"\{[^\n]*\}\s*$", stdout or "", re.S)
+    if m:
+        try:
+            return json.loads(m.group(0))
+        except json.JSONDecodeError:
+            return None
+    return None
+
+
 def _run_loader(snapshot_html=None, snapshot_only=False) -> dict:
     """Every Postgres write happens in breadth_loader.py, under THIS same interpreter.
 
@@ -181,6 +210,10 @@ def _run_loader(snapshot_html=None, snapshot_only=False) -> dict:
     (Historical note: the 8 MB breadth_data jsonb push fails on SQLAlchemy>=2.1 over
     this SSL link and lands in ~28 s on the project stack 2.0.x — measured 2026-10-07.
     That is a reason to stay on the project interpreter, never to add another one.)
+
+    A table failure is NO LONGER fatal here: the loader isolates each table, always
+    writes breadth_data and breadth_runs, and returns the per-table report, so one
+    command completes the pipeline (see breadth_loader.load_table).
     """
     cmd = [sys.executable, "-X", "utf8", str(LOADER_SCRIPT)]
     if snapshot_html:
@@ -188,11 +221,21 @@ def _run_loader(snapshot_html=None, snapshot_only=False) -> dict:
     if snapshot_only:
         cmd += ["--snapshot-only"]
     proc = subprocess.run(cmd, cwd=str(BACKEND_DIR), capture_output=True, text=True)
-    m = re.search(r"\{.*\}", proc.stdout or "", re.S)
-    if proc.returncode != 0 or not m:
-        raise SystemExit("breadth_loader failed: "
-                         + ((proc.stdout or "")[-400:] + (proc.stderr or "")[-800:]))
-    return json.loads(m.group(0))
+    rep = _parse_loader_report(proc.stdout)
+    if rep is None:
+        # nothing parseable = the loader itself died before reporting; show the head
+        raise SystemExit(f"breadth_loader failed (rc={proc.returncode}):\n"
+                         + _err_head((proc.stderr or "") + "\n" + (proc.stdout or "")))
+    bad = {k: v for k, v in rep.items() if not isinstance(v, (int, dict))}
+    if bad:
+        # loud, but the run is done: breadth_data landed, the rest is already committed
+        print(f"[loader] partial — {json.dumps(bad, ensure_ascii=False, default=str)}",
+              file=sys.stderr, flush=True)
+    if proc.stderr:
+        for line in proc.stderr.splitlines():
+            if line.startswith(("[fix]", "[warn]", "[snapshot]")):
+                print(line, flush=True)
+    return rep
 
 
 def snapshot_only() -> dict:
@@ -229,10 +272,18 @@ def run(skip_load: bool = False) -> dict:
     if not skip_load:
         pro_html = status.get("pro_dashboard")
         snap = pro_html if pro_html and Path(pro_html).exists() else None
+        fallback = ENGINE_DIR / "storage" / "reports" / "breadth_dashboard.html"
+        if not snap and fallback.exists():
+            # the engine reports the path it wrote; if that key ever drifts, the dashboard
+            # on disk is still the right snapshot source — never make the operator run a
+            # second command for it
+            snap = str(fallback)
+            print(f"[warn] pro_dashboard={pro_html} not found — snapshotting {fallback.name}",
+                  file=sys.stderr)
         if not snap:
             # this module logs with print(); breadth_data feeds the API, so a missing
             # dashboard must be loud, not a silent skip
-            print(f"[warn] no pro dashboard HTML at {pro_html} — breadth_data not refreshed",
+            print(f"[warn] no dashboard HTML at all — breadth_data not refreshed",
                   file=sys.stderr)
         status["loader"] = _run_loader(snapshot_html=snap)
         status["tables_loaded"] = {k: v for k, v in status["loader"].items()

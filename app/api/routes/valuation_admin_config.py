@@ -340,11 +340,20 @@ def refresh_tasi_market_data():
     and index weights (Market Cap %) for all active components directly from Tadawul.
     """
     try:
-        success = run_scraper_and_save_to_db()
-        if success:
-            return {"status": "success", "message": "TASI market data and weights refreshed successfully."}
-        else:
-            raise HTTPException(status_code=500, detail="Scraper executed but returned failure.")
+        result = run_scraper_and_save_to_db() or {}
+        if result.get("ok"):
+            message = (f"TASI market data and weights refreshed — "
+                       f"{result.get('rows', 0)} rows written")
+            if result.get("partial"):
+                message += (f" (partial page: only {result.get('companies')} companies; "
+                            f"{result.get('added', 0)} added / {result.get('updated', 0)} updated)")
+            return {"status": "success", "message": message}
+        failures = result.get("stage_failures") or []
+        detail = "; ".join(f"[{f.get('stage')}] {f.get('error')}" for f in failures) or \
+            "Scraper executed but returned ok=False."
+        raise HTTPException(status_code=502, detail=detail)
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"TASI refresh error: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))

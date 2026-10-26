@@ -31,6 +31,41 @@ if not FRED_API_KEY:
     )
 FRED_API_URL = "https://api.stlouisfed.org/fred/series/observations"
 
+# ── Smart Incremental Backfill windows ───────────────────────────────────────
+# `observation_start` is only a LOWER bound: FRED answers with every observation
+# from that date up to today. So a missed run never leaves a hole — the next run
+# closes the gap by itself. The buffer below is therefore about official
+# REVISIONS (stats offices rewrite recent months) and about a job that skipped
+# its day, not about discovering gaps.
+DAILY_LOOKBACK_DAYS = int(os.getenv("FRED_DAILY_LOOKBACK_DAYS", "5"))
+WEEKLY_LOOKBACK_DAYS = int(os.getenv("FRED_WEEKLY_LOOKBACK_DAYS", "45"))
+# Monthly macro series (UNRATE, PAYEMS, CPI, Saudi CPI, money supply) are revised
+# for several months after release, and the day-10 cron can be missed entirely:
+# re-covering the last 3 months catches both.
+MONTHLY_LOOKBACK_DAYS = int(os.getenv("FRED_MONTHLY_LOOKBACK_DAYS", "90"))
+
+# FRED publication frequency per series (the defaults that need the least
+# re-covering). Anything not listed here is treated as daily.
+MONTHLY_SERIES = {
+    "UNRATE", "PAYEMS", "FEDFUNDS", "CPIAUCSL_PC1", "SAUCPALTT01GPM",
+    "M1SL", "M2SL",
+}
+WEEKLY_SERIES = {
+    "IC4WSA",            # initial claims are revised week after week
+    "WALCL",             # Fed H.4.1 lines get restated
+    "TLAACBW027SBOG", "TOTLL", "BOGMBASE",
+}
+
+
+def lookback_days_for(indicator_code: str) -> int:
+    """Revision buffer for one series, by publication frequency."""
+    code = indicator_code.upper()
+    if code in MONTHLY_SERIES:
+        return MONTHLY_LOOKBACK_DAYS
+    if code in WEEKLY_SERIES:
+        return WEEKLY_LOOKBACK_DAYS
+    return DAILY_LOOKBACK_DAYS
+
 # All FRED series configurations (Indicator Code -> series_id and optional params)
 FRED_SERIES_CONFIG: Dict[str, Dict[str, Any]] = {
     # ── Labor market ─────────────────────────────────────────────────────────
@@ -256,21 +291,17 @@ def scrape_fred_indicator(indicator_code: str) -> dict:
         ).scalar()
 
         # ── Determine Lookback Window for Incremental Fetch ──
-        # Monthly macroeconomic series with frequent historical revisions need a 365-day lookback.
-        # Other daily/weekly series use a 90-day lookback.
-        MONTHLY_REVISED_SERIES = {
-            "CPIAUCSL_PC1", "M1SL", "M2SL", "UNRATE", "PAYEMS",
-            "TLAACBW027SBOG", "TOTLL", "BOGMBASE",
-            # IMF-published Saudi CPI growth is revised as new quarters land.
-            "SAUCPALTT01GPM",
-        }
-        lookback_days = 365 if indicator_code in MONTHLY_REVISED_SERIES else 90
+        # Frequency-aware: daily series re-cover a few days, weekly a few weeks,
+        # revised monthly series re-cover a quarter. Everything from there to
+        # today is returned by FRED, so gaps self-heal on the next run.
+        lookback_days = lookback_days_for(indicator_code)
 
         observation_start = None
         if latest_date:
             safe_start = latest_date - timedelta(days=lookback_days)
             observation_start = safe_start.strftime("%Y-%m-%d")
-            logger.info(f"   📅 Latest in DB: {latest_date}. Fetching revisions/new from {observation_start} ({lookback_days}d lookback)...")
+            logger.info(f"   📅 Latest in DB: {latest_date}. Fetching from "
+                        f"{observation_start} ({lookback_days}d revision buffer)")
         else:
             logger.info(f"   📅 First run for {indicator_code} — fetching full historical series...")
 

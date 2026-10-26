@@ -27,7 +27,7 @@ from typing import Dict, Any
 from app.core.database import SessionLocal
 from app.models.sukuk_bonds import SukukMarketData
 from app.models.saudi_macro import SaudiEconomicIndicator
-from app.models.market_reports import QFIOwnershipFlow, SubstantialShareholder
+from app.models.market_reports import SubstantialShareholder
 from app.models.official_filings import CompanyOfficialFiling
 from app.models.update_status import UpdateStatus
 from app.models.job_run import JobRun
@@ -133,8 +133,10 @@ def get_importers_health_status() -> Dict[str, Any]:
         daily_ready_date = update_status.latest_ready_date.isoformat() if update_status and update_status.latest_ready_date else None
         daily_updating = update_status.is_updating if update_status else False
 
-        # 5. Market reports (QFI and Shareholders)
-        qfi_count = db.query(QFIOwnershipFlow).count()
+        # 5. Market reports (substantial shareholders)
+        #    qfi_flows was reported here until 2026-10-25: qfi_ownership_flows had
+        #    0 rows and no writer, so the counter was a permanent 0 that read as
+        #    "broken scraper". The model, endpoint and table were removed.
         shareholders_count = db.query(SubstantialShareholder).count()
 
         # 6. Last real run of the standalone ingestion scripts (job_runs ledger)
@@ -166,7 +168,6 @@ def get_importers_health_status() -> Dict[str, Any]:
                 "sukuk_instruments": sukuk_count,
                 "macro_indicators": macro_count,
                 "official_filings": filings_count,
-                "qfi_flows": qfi_count,
                 "substantial_shareholders": shareholders_count,
                 "pipeline_latest_date": daily_ready_date,
                 "sukuk_latest_update": sukuk_last_date,

@@ -104,15 +104,20 @@ def run_tasi_components(symbols: Optional[list[str]] = None) -> bool:
     every row — it takes no per-symbol argument, so `symbols` is only logged.
     """
     from app.scrapers.daily_financial_indicators_scraper import run_scraper_and_save_to_db
-    from app.services.job_tracking import track_job
+    from app.services.job_tracking import track_job, with_result_handling
     if symbols:
         logger.info(f"  ℹ️ tasi_components scrape is whole-market; ignoring {len(symbols)} symbol filter")
     # Not routed through _run(), so the job_runs row is opened here.
     with track_job("scraper:tasi_components", "manual") as run:
-        ok = bool(run_scraper_and_save_to_db())
-        if not ok and run.status is None:
-            run.status = "failed"
-            run.error_message = "run_scraper_and_save_to_db() returned a falsy result"
+        # The scraper traps its own errors and returns {ok, rows, stage_failures}.
+        # A non-empty dict is truthy, so never wrap it in bool() — let
+        # with_result_handling read the explicit ok flag, exactly as scheduler._safe
+        # and _run() do for every other job.
+        result = with_result_handling(run, run_scraper_and_save_to_db() or {})
+        ok = bool(result.get("ok"))
+        if result.get("partial"):
+            logger.warning(f"  ⚠️ Partial Daily Financial Indicators page: "
+                           f"only {result.get('companies')} companies")
     _record("tasi_components", ok)
     return ok
 

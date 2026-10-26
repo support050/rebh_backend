@@ -216,6 +216,29 @@ def _close(handle: _JobHandle, status: str, error_message: Optional[str],
             db.close()
 
 
+def _apply_result(handle: "_JobHandle", result: Any) -> None:
+    """Shared rules for turning a job's return value into ledger fields.
+
+    Used by both @tracked_job and with_result_handling so the two doors cannot
+    drift apart on what gets recorded.
+    """
+    failure = _dict_failure(result)
+    if failure:
+        handle.status = "failed"
+        handle.error_message = failure
+        return
+    inferred = _infer_rows(result)
+    if inferred is not None and handle.rows_written is None:
+        handle.rows_written = inferred
+    # A job that finished on a degraded path declares it with partial=True.
+    # The run stays 'success' — it really did write — but the reason is
+    # persisted, otherwise a 1-row fallback snapshot is indistinguishable from
+    # a full grid in the Runbook (the zero-substitution honesty rule again).
+    if isinstance(result, dict) and result.get("partial"):
+        handle.error_message = (
+            f"PARTIAL: {result.get('note') or 'degraded source'}"[:4000])
+
+
 def tracked_job(job_name: str, triggered_by: str = "cron") -> Callable:
     """Decorator form of track_job for a whole function."""
     def decorator(fn: Callable) -> Callable:
@@ -224,14 +247,7 @@ def tracked_job(job_name: str, triggered_by: str = "cron") -> Callable:
             with track_job(job_name, triggered_by) as handle:
                 result = fn(*args, **kwargs)
                 # Honour dict-style "failed" returns and inferred row counts.
-                failure = _dict_failure(result)
-                if failure:
-                    handle.status = "failed"
-                    handle.error_message = failure
-                else:
-                    inferred = _infer_rows(result)
-                    if inferred is not None and handle.rows_written is None:
-                        handle.rows_written = inferred
+                _apply_result(handle, result)
                 return result
         return wrapper
     return decorator
@@ -243,14 +259,7 @@ def with_result_handling(handle: _JobHandle, result: Any) -> Any:
     Used by callers that wrap the job body themselves (scheduler._safe,
     scraper_service._run) and therefore cannot use @tracked_job.
     """
-    failure = _dict_failure(result)
-    if failure:
-        handle.status = "failed"
-        handle.error_message = failure
-    else:
-        inferred = _infer_rows(result)
-        if inferred is not None and handle.rows_written is None:
-            handle.rows_written = inferred
+    _apply_result(handle, result)
     return result
 
 

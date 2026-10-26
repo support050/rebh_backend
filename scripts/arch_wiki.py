@@ -20,10 +20,25 @@ from urllib.parse import urlparse
 
 
 _SCRIPT_PATH = Path(__file__).resolve()
-if (_SCRIPT_PATH.parent / "backend" / "app").exists():
-    REPO_ROOT = _SCRIPT_PATH.parent
-else:
-    REPO_ROOT = _SCRIPT_PATH.parent.parent
+
+
+def _resolve_repo_root() -> Path:
+    """The directory that actually contains backend/app.
+
+    Two copies of this scanner exist (repo root and backend/scripts/), and the
+    old two-step guess only worked for the root copy: run from backend/scripts/
+    it resolved REPO_ROOT=backend/, hence BACKEND_APP=backend/backend/app — a
+    directory that does not exist — and the scan would have rewritten
+    architecture.json with nothing in it. Walk up until backend/app is real.
+    """
+    here = _SCRIPT_PATH.parent
+    for candidate in (here, here.parent, here.parent.parent):
+        if (candidate / "backend" / "app").is_dir():
+            return candidate
+    return here.parent
+
+
+REPO_ROOT = _resolve_repo_root()
 BACKEND_APP = REPO_ROOT / "backend" / "app"
 MAIN_FILE = BACKEND_APP / "main.py"
 
@@ -35,6 +50,12 @@ SQL_SCAN_ROOTS = [BACKEND_APP]
 SQL_SIGNATURE_MAX = 120
 
 OUT_FILE = REPO_ROOT / "architecture.json"
+
+if not BACKEND_APP.is_dir():
+    # Never write a manifest built from a scan that found no source tree.
+    raise SystemExit(
+        f"arch_wiki: no backend/app under {REPO_ROOT} (run from the repo root or "
+        f"backend/scripts/) — refusing to overwrite {OUT_FILE}")
 
 
 def to_rel(path: Path) -> str:

@@ -16,6 +16,23 @@ class BalanceIdentityStatus(BaseModel):
     reason: Optional[str] = None
 
 
+class HealthReason(BaseModel):
+    code: str = Field(..., description="Stable machine code, e.g. STALE / BALANCE_IDENTITY / IMPLAUSIBLE_PB")
+    kind: str = Field(..., description="Frontend chip kind: stale / corruption / scale / empty-statement / no-filings / other")
+    label: str = Field(..., description="Human-readable reason shown in the rejection block")
+
+
+class HealthAssessment(BaseModel):
+    """Unified data-health gate (Errors 1b & 5): the single source of truth every
+    consumer checks before pricing. Computed identically by the engine and the
+    quarantine endpoint via app.services.rebh_health_service."""
+    ok: bool = Field(..., description="True only when every G1-G5 gate passes")
+    bucket: str = Field("OK", description="OK | STALE | CORRUPTION | SCALE")
+    reasons: List[str] = Field(default_factory=list)
+    structured: List[HealthReason] = Field(default_factory=list)
+    metrics: Dict[str, Any] = Field(default_factory=dict)
+
+
 class SafetyGradeDetail(BaseModel):
     name: str
     val: str
@@ -188,6 +205,9 @@ class CapitalStructure(BaseModel):
     enterprise_value: Optional[float] = None
     debt_to_equity_pct: Optional[float] = None
     net_debt: Optional[float] = None
+    # False = the issuer disclosed no borrowing line at all (a dash is the honest
+    # answer); True with total_debt 0 = a verified debt-free balance sheet.
+    borrowings_disclosed: Optional[bool] = None
     source_status: str = "° verified"
 
 
@@ -216,6 +236,7 @@ class RebhUniversalContract(BaseModel):
     fresh: bool
     stale_reason: Optional[str] = None
     quarantine_reason: Optional[str] = None
+    health: Optional[HealthAssessment] = None
     balance_identity: BalanceIdentityStatus
     income_statement_status: str
     quarterly: DiscreteQuarterSeries
@@ -233,6 +254,13 @@ class RebhUniversalContract(BaseModel):
     required_return: Optional[float] = None
     selected_growth: Dict[str, Any] = Field(default_factory=dict)
     nine_box: Optional[NineBoxMatrix] = None
+    # Cash-dividend evidence, independent of the valuation quarantine:
+    # the CFF 'Dividends Paid' line ÷ shares survives even when a corrupted
+    # EPS cell blocks nine-box/DCF pricing (dps is None when the CFF line is
+    # absent — never a proxy). diluted_shares mirrors nine_box for consumers.
+    dps: Optional[float] = None
+    dps_source: Optional[str] = None
+    diluted_shares: Optional[float] = None
     zones: Optional[PriceZones] = None
     cyclical_bands: Optional[CyclicalBands] = None
     ps_ladder: Optional[LossMakerPSLadder] = None

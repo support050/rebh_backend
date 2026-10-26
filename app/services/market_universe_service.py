@@ -1,7 +1,8 @@
 """
 REBH Market Universe & Watchlist Service
 Fetches, normalizes, and aggregates live market data and XBRL fundamentals:
-- Dynamic unit scale normalization (Exact SAR vs Thousands vs Millions)
+- Fixed SAR -> SAR-millions conversion driven by the artifact metadata contract
+  (meta.rounding == 'normalized_sar'); units are never inferred from magnitude
 - TTM and YoY Growth computation with like-period guards
 - Piotroski F-Score calculation
 - Live market stats & metrics caching
@@ -470,6 +471,73 @@ def get_khurafshi_live_market_stats(force_refresh: bool = False) -> Dict[str, An
     return result
 
 
+_DIV_LABELS = ("Dividends Paid", "Dividends paid to shareholders", "Cash Dividends Paid")
+# A distribution older than this is history, not a forward-looking yield a buyer
+# can act on, so the ratio is withheld (see _pick_dividends_paid).
+DIVIDEND_FRESH_MONTHS = 18
+
+
+def _months_since_period_end(period_label: Optional[str]) -> Optional[int]:
+    """Whole months between a period's calendar end and today."""
+    iso = _parse_period_end_date(period_label)
+    if not iso:
+        return None
+    try:
+        d = date.fromisoformat(iso)
+    except ValueError:
+        return None
+    today = date.today()
+    return (today.year - d.year) * 12 + (today.month - d.month)
+
+
+def _pick_dividends_paid(cf_items: Dict[str, Dict[str, Any]],
+                         cf_periods: List[str]) -> tuple:
+    """Most recent DISCLOSED cash distribution to shareholders — never extrapolated.
+
+    Saudi interim cash-flow statements are cumulative year-to-date, so multiplying a
+    3-month stub by 4 invents distributions that were never paid (STC's Q1-2026
+    payment of 1.196 bn read as 4.8 bn; 58 of 73 payers carried a partial period).
+    Choose between the latest 12-month statement and the latest year-to-date
+    interim figure: a complete distribution year wins while it is still current,
+    and a shorter YTD window (a lower bound, never an invention) steps in only when
+    no fresh annual statement exists. Returns (value_sar, period, basis) with basis
+    in {'annual', 'ytd-partial', 'stale', 'none'}.
+    """
+    def _val(p: str) -> Optional[float]:
+        for label in _DIV_LABELS:
+            v = cf_items.get(label, {}).get(p)
+            if v is not None and abs(v) > 0:
+                return v
+        return None
+
+    def _latest(widths, basis):
+        for p in reversed(cf_periods):
+            v = _val(p)
+            if v is not None and _detect_period_months(p) in widths:
+                return (v, p, basis)
+        return None
+
+    annual = _latest((12,), "annual")
+    partial = _latest((3, 6, 9), "ytd-partial")
+
+    def _fresh(c):
+        age = _months_since_period_end(c[1]) if c else None
+        return age is not None and age <= DIVIDEND_FRESH_MONTHS
+
+    if _fresh(annual):
+        return annual
+    if _fresh(partial):
+        return partial
+    # Nothing current: return the most recent disclosure anyway so the amount stays
+    # auditable, but label it 'stale' — its yield would be history dressed as a rate
+    # (SABIC's FY2021 distribution measured against today's cap reads 7.2%).
+    cands = [c for c in (annual, partial) if c]
+    if not cands:
+        return None, None, "none"
+    best = max(cands, key=lambda c: _parse_period_end_date(c[1]) or '')
+    return best[0], best[1], "stale"
+
+
 _UNIVERSE_CACHE: Optional[List[Dict[str, Any]]] = None
 _UNIVERSE_CACHE_TIMESTAMP: float = 0.0
 _UNIVERSE_CACHE_TTL = 300.0
@@ -478,7 +546,11 @@ _UNIVERSE_CACHE_TTL = 300.0
 def get_khurafshi_universe_data(force_refresh: bool = False) -> List[Dict[str, Any]]:
     """
     Get full market dataset calculated directly from live XBRL records and real prices.
-    Fully normalized to Millions SAR with unit-scale detection and period-matching.
+    Units come from the artifact metadata contract ONLY (XBRL_OUTPUT_POLICY.md):
+    every *_financials.json is stamped meta.rounding == 'normalized_sar', so all
+    monetary values are actual SAR and are divided by a fixed 1e6. No magnitude is
+    ever guessed — the retired anchor/threshold guessers lived here until
+    2026-10-18 and mis-scaled 126 of 257 companies (see system_registry issues).
     """
     global _UNIVERSE_CACHE, _UNIVERSE_CACHE_TIMESTAMP
     now = time.time()
@@ -525,6 +597,12 @@ def get_khurafshi_universe_data(force_refresh: bool = False) -> List[Dict[str, A
         fcf = None
         fcf_yield = None
         owner_yield = None
+        div_paid = None
+        div_yield = None
+        div_basis = "none"
+        div_period = None
+        scale_basis = "no-financials"
+        cf_annualised_from_stub = False
 
         if comp and comp.sections:
             std_bs = comp.sections.get("standardized_balance_sheet")
@@ -553,30 +631,20 @@ def get_khurafshi_universe_data(force_refresh: bool = False) -> List[Dict[str, A
                 if not latest_i:
                     latest_i = std_is.periods[-1]
 
-            # --- Scale Detection (Millions SAR normalization) ---
-            base_anchor = None
-            if std_bs and std_bs.items and latest_b:
-                bs_tmp = {it.label: it.values for it in std_bs.items}
-                ta_tmp = bs_tmp.get("Total Assets", {}).get(latest_b)
-                te_tmp = bs_tmp.get("Total Equity", {}).get(latest_b) or bs_tmp.get("Total Equity Attributable to Shareholders", {}).get(latest_b)
-                base_anchor = abs(ta_tmp or te_tmp or 0.0)
-
-            scale = 1_000_000.0
-            if base_anchor and mc and mc > 0:
-                ratio = mc / base_anchor
-                if ratio > 0.05:
-                    scale = 1.0        # Already in Millions SAR
-                elif ratio > 0.00005:
-                    scale = 1000.0     # In Thousands SAR -> divide by 1K
-                else:
-                    scale = 1_000_000.0 # In Exact SAR -> divide by 1M
-            elif base_anchor:
-                if base_anchor > 5_000_000_000:
-                    scale = 1_000_000.0
-                elif base_anchor > 20_000_000:
-                    scale = 1000.0
-                else:
-                    scale = 1.0
+            # --- Unit scale: metadata contract, never magnitude guessing ---------
+            # backend/output/*_financials.json are compiled to ACTUAL SAR and stamp
+            # meta.rounding == 'normalized_sar' (enforced by scripts/
+            # validate_xbrl_outputs.py). Consumers must not re-scale, so the only
+            # conversion needed here is SAR -> SAR millions.
+            SAR_TO_M = 1_000_000.0
+            rounding = getattr(getattr(comp, "meta", None), "rounding", None)
+            scale_basis = "declared_per_filing" if rounding == "normalized_sar" else "unverified"
+            if rounding != "normalized_sar":
+                # Honest, non-blocking: a file that violates the contract is
+                # reported rather than silently re-anchored to a guessed unit.
+                print(f"[universe] {sym}: meta.rounding={rounding!r} != "
+                      f"'normalized_sar' — treating values as actual SAR per "
+                      f"XBRL_OUTPUT_POLICY.md; artifact needs regeneration.")
 
             # --- Balance Sheet metrics ---
             if std_bs and std_bs.items and latest_b:
@@ -600,11 +668,16 @@ def get_khurafshi_universe_data(force_refresh: bool = False) -> List[Dict[str, A
                 lt_d_raw = bs_items.get("Long-term Borrowings & Debt", {}).get(latest_b) or 0.0
                 tot_d_raw = st_d_raw + lt_d_raw
 
-                ta = round(ta_raw / scale, 2) if ta_raw is not None else None
-                te = round(te_raw / scale, 2) if te_raw is not None else None
-                ca = round(ca_raw / scale, 2) if ca_raw is not None else None
-                cl = round(cl_raw / scale, 2) if cl_raw is not None else None
-                tot_d = round(tot_d_raw / scale, 2)
+                ta = round(ta_raw / SAR_TO_M, 2) if ta_raw is not None else None
+                te = round(te_raw / SAR_TO_M, 2) if te_raw is not None else None
+                ca = round(ca_raw / SAR_TO_M, 2) if ca_raw is not None else None
+                cl = round(cl_raw / SAR_TO_M, 2) if cl_raw is not None else None
+                tot_d = round(tot_d_raw / SAR_TO_M, 2)
+                # Raw actual-SAR copies: NCAV / ROE / ROA need ONE unit for every
+                # term, so they are computed from raw SAR, not from the
+                # millions-scaled figures above.
+                ta_sar = ta_raw
+                te_sar = te_raw
 
                 if te and te > 0:
                     de = round(tot_d / te, 2)
@@ -614,11 +687,16 @@ def get_khurafshi_universe_data(force_refresh: bool = False) -> List[Dict[str, A
                 if ta is not None or te is not None:
                     has_bs = True
 
-                # Graham Net-Net Current Asset Value (NCAV)
-                if ca is not None and ta is not None and te is not None:
-                    total_liab = ta - te
-                    ncav_raw = ca - total_liab
-                    ncav = round(ncav_raw, 2)
+                # Graham Net-Net: NCAV = CA - (TA - TE) = (CA - TA + TE) / SAR_TO_M.
+                # All three terms are the SAME scale (actual SAR) — the legacy
+                # formula mixed scaled `ca` with raw `ta`/`te`, which post-
+                # normalization is a 1e6 magnitude error dressed up as an economic
+                # number (it inflated 2060's NCAV to 106,932 M ≈ 18% of its own
+                # market cap). Identity check: with the divisor == SAR_TO_M the old
+                # and new formulas agree exactly, so this only removes the artifact
+                # of the migration — it does not change any genuine figure.
+                if ca_raw is not None and ta_sar is not None and te_sar is not None:
+                    ncav = round((ca_raw - ta_sar + te_sar) / SAR_TO_M, 2)
                     if mc and mc > 0 and ncav != 0:
                         pncav = round(mc / ncav, 2)
 
@@ -636,15 +714,11 @@ def get_khurafshi_universe_data(force_refresh: bool = False) -> List[Dict[str, A
                 annual_factor = (12.0 / period_len) if period_len in [3, 6, 9] else 1.0
 
                 def _norm_period_val(v: Optional[float]) -> Optional[float]:
-                    if v is None:
-                        return None
-                    av = abs(v)
-                    if av > 15_000_000:
-                        return v / 1_000_000.0  # Exact SAR -> M SAR
-                    elif av > 100_000:
-                        return v / 1000.0 if scale >= 1000.0 else v  # Thousands SAR -> M SAR
-                    else:
-                        return v / scale
+                    """Actual SAR -> SAR millions. Fixed divisor; the previous
+                    abs()-threshold branching put values in the SAR 1e5–1.5e7 band
+                    on a THOUSANDS scale while the caller read them as millions
+                    (a 1000x overstatement of revenue / ttm_net)."""
+                    return None if v is None else v / SAR_TO_M
 
                 quarterly_periods = [p for p in periods_is if _detect_period_months(p) == 3]
                 if len(quarterly_periods) >= 4:
@@ -668,13 +742,16 @@ def get_khurafshi_universe_data(force_refresh: bool = False) -> List[Dict[str, A
                 if ttm_net is not None and revenue and revenue > 0:
                     nm = round(ttm_net / revenue * 100.0, 1)
 
-                # ROE %
-                if ttm_net is not None and te and te > 0:
-                    roe = round(ttm_net / te * 100.0, 1)
+                # ROE % — ttm_net is SAR millions, so equity is converted to the
+                # same unit before the ratio (previously raw SAR equity was divided
+                # into millions earnings -> ROE understated by 1e6, i.e. every
+                # company read ~0% and the Profitability grade ladder was dead).
+                if ttm_net is not None and te_sar and te_sar > 0:
+                    roe = round((ttm_net * SAR_TO_M) / te_sar * 100.0, 1)
 
-                # ROA %
-                if ttm_net is not None and ta and ta > 0:
-                    roa = round(ttm_net / ta * 100.0, 1)
+                # ROA % — same unit alignment.
+                if ttm_net is not None and ta_sar and ta_sar > 0:
+                    roa = round((ttm_net * SAR_TO_M) / ta_sar * 100.0, 1)
 
                 # P/E
                 if mc is not None and ttm_net and ttm_net > 0:
@@ -708,6 +785,24 @@ def get_khurafshi_universe_data(force_refresh: bool = False) -> List[Dict[str, A
                 if not latest_cf:
                     latest_cf = std_cf.periods[-1]
 
+                # Prefer a COMPLETE 12-month cash-flow period. Annualising a
+                # 3-month stub multiplies a once-a-year cash distribution by 4
+                # (it read 7020's dividends as 4,783 M SAR against roughly 1.1 bn
+                # actually paid, and 58 of 73 dividend-bearing companies carried a
+                # partial period). Extrapolation stays only as the fallback when
+                # no annual statement exists, and is then disclosed via a flag.
+                cfo_labels = ("Net Cash from Operating Activities (CFO)",
+                              "Net Cash Flows from Operating Activities")
+                annual_cf = next((p for p in reversed(std_cf.periods)
+                                  if _detect_period_months(p) == 12
+                                  and any(cf_items.get(l, {}).get(p) is not None for l in cfo_labels)),
+                                 None)
+                cf_annualised_from_stub = False
+                if annual_cf:
+                    latest_cf = annual_cf
+                elif (_detect_period_months(latest_cf) or 12) != 12:
+                    cf_annualised_from_stub = True
+
                 cfo_raw = (
                     cf_items.get("Net Cash from Operating Activities (CFO)", {}).get(latest_cf)
                     or cf_items.get("Net Cash Flows from Operating Activities", {}).get(latest_cf)
@@ -722,22 +817,26 @@ def get_khurafshi_universe_data(force_refresh: bool = False) -> List[Dict[str, A
                     cf_period_len = _detect_period_months(latest_cf) or 3
                     cf_annual_factor = (12.0 / cf_period_len) if cf_period_len in [3, 6, 9] else 1.0
 
-                    cfo = round((cfo_raw * cf_annual_factor) / scale, 2)
-                    capex_val = round(abs(capex_raw * cf_annual_factor) / scale, 2)
+                    cfo = round((cfo_raw * cf_annual_factor) / SAR_TO_M, 2)
+                    capex_val = round(abs(capex_raw * cf_annual_factor) / SAR_TO_M, 2)
                     fcf = round(cfo - capex_val, 2)
 
                     if mc and mc > 0:
                         fcf_yield = round(fcf / mc * 100.0, 2)
 
-                    div_raw = (
-                        cf_items.get("Dividends Paid", {}).get(latest_cf)
-                        or cf_items.get("Dividends paid to shareholders", {}).get(latest_cf)
-                        or cf_items.get("Cash Dividends Paid", {}).get(latest_cf)
-                        or 0.0
-                    )
-                    div_paid = round(abs(div_raw * cf_annual_factor) / scale, 2)
+                    div_raw, div_period, div_basis = _pick_dividends_paid(cf_items, std_cf.periods)
+                    # Actual cash distributed, SAR millions, taken from the most
+                    # recent disclosure and NEVER extrapolated. Nothing reported
+                    # stays None so the UI prints an honest em-dash instead of a
+                    # fabricated 0.00%.
+                    if div_raw is not None:
+                        div_paid = round(abs(div_raw) / SAR_TO_M, 2)
+                    div_for_yield = div_paid if div_basis in ("annual", "ytd-partial") else None
                     if mc and mc > 0:
-                        owner_yield = round((fcf + div_paid) / mc * 100.0, 2)
+                        if div_for_yield is not None:
+                            div_yield = round(div_for_yield / mc * 100.0, 2)
+                        if fcf is not None:
+                            owner_yield = round((fcf + (div_for_yield or 0.0)) / mc * 100.0, 2)
 
         # --- P/B ratio ---
         pb = round(mc / te, 2) if (mc and te and te > 0) else None
@@ -788,6 +887,24 @@ def get_khurafshi_universe_data(force_refresh: bool = False) -> List[Dict[str, A
             flags.append("⚑incomplete-source")
         if f_score is not None and f_score <= 2:
             flags.append("⚑low-f-score")
+        # Net-net is only meaningful for industrial/commercial issuers: a bank or
+        # insurer funded by customer deposits has no positive NCAV by construction,
+        # so an absent/negative figure is disclosed, never hidden behind a grade.
+        if pncav is None or (pncav is not None and pncav <= 0):
+            flags.append("⚑pncav-not-graham-applicable")
+        if scale_basis == "unverified":
+            flags.append("⚑scale-unverified")
+        # Dividend taken from a year-to-date interim statement (no annual cash-flow
+        # line on file) — a real payment covering less than 12 months, so the
+        # trailing yield is a floor, not a full-year rate.
+        if div_basis == "ytd-partial":
+            flags.append("⚑dividend-ytd-window")
+        if div_basis == "stale":
+            flags.append("⚑dividend-stale")
+        # No annual cash-flow statement on file: cfo/fcf come from a partial
+        # period extrapolated to 12 months, so they are estimates.
+        if cf_annualised_from_stub:
+            flags.append("⚑cashflow-stub-annualised")
 
         actual_period = latest_i or latest_b
         actual_period_end = _parse_period_end_date(actual_period)
@@ -818,6 +935,11 @@ def get_khurafshi_universe_data(force_refresh: bool = False) -> List[Dict[str, A
             "fcf": fcf,
             "fcf_yield": fcf_yield,
             "owner_yield": owner_yield,
+            "div_paid": div_paid,
+            "div_yield": div_yield,
+            "div_basis": div_basis,
+            "div_period": div_period,
+            "scale_basis": scale_basis,
             "fresh": has_bs and has_is,
             "flags": flags,
             "bs_ok": has_bs,
@@ -876,6 +998,8 @@ def build_universe_snapshot(snapshot_date: Optional[date] = None, batch_id: Opti
         db.query(RebhUniverseSnapshot).filter(
             RebhUniverseSnapshot.is_latest.is_(True)
         ).update({RebhUniverseSnapshot.is_latest: False}, synchronize_session=False)
+        # Flush deletions to database immediately before inserting new rows
+        db.flush()
 
         for item in results:
             db.add(RebhUniverseSnapshot(

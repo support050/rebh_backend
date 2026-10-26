@@ -15,6 +15,13 @@ from datetime import datetime
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# The page lists every TASI component at once: the captured snapshot
+# daily_financial_indicators_companies_2026-08-25.csv held 270 company rows. Below
+# this floor the table was almost certainly truncated by a partial render, so the
+# run is still saved (the rows it did return are today's real values) but it is
+# flagged instead of being quietly reported as a complete market.
+MIN_COMPANIES_EXPECTED = int(os.environ.get("DFI_MIN_COMPANIES", "150"))
+
 
 def build_driver(headless=True):
     """
@@ -342,7 +349,12 @@ def save_to_csv(companies, sectors, market_total, report_date, output_dir="."):
 
 
 def save_to_db(companies):
-    """حفظ النتائج في قاعدة البيانات لتغذية صفحات Valuation"""
+    """حفظ النتائج في قاعدة البيانات لتغذية صفحات Valuation
+
+    Returns (added, updated). A DB error is re-raised after the rollback: the
+    caller turns it into ok=False, so a failed write can no longer be logged as
+    a green job (2026-10-13 substantial-shareholders bug class).
+    """
     import sys
     import os
     # Add backend directory to sys.path if not there
@@ -398,18 +410,62 @@ def save_to_db(companies):
                 
         db.commit()
         logger.info(f"✅ DB Update Complete: Added {added}, Updated {updated} companies.")
+        return added, updated
     except Exception as e:
         db.rollback()
         logger.error(f"❌ DB Error: {e}")
+        raise
     finally:
         db.close()
 
 
 def run_scraper_and_save_to_db():
+    """Scrape the Daily Financial Indicators page and upsert tasi_components.
+
+    Returns {"ok": bool, "rows": int, "companies": int, "report_date": str,
+    "stage_failures": [...]} — the shape job_tracking._dict_failure and
+    sp500_pe_scraper already speak, so the caller reads ok instead of truthiness
+    (a non-empty dict is truthy, which is exactly how the old bare `return True`
+    made an empty scrape look healthy).
+
+    No backfill is possible here: DailyFinancialIndicators_en.html serves only
+    the latest day and takes no date parameter, so a missed day is a real hole.
+    """
     companies, sectors, market_total, report_date = scrape_daily_financial_indicators(headless=True)
-    if companies:
-        save_to_db(companies)
-    return True
+
+    if not companies:
+        # scrape_daily_financial_indicators traps its own exceptions, so an empty
+        # table means the page never rendered the grid — a source failure, not
+        # "nothing to report today".
+        logger.error("❌ Daily Financial Indicators served 0 company rows — aborting as failure")
+        return {"ok": False, "rows": 0, "companies": 0, "updated": 0, "added": 0,
+                "report_date": report_date,
+                "stage_failures": [{"stage": "daily_financial_indicators",
+                                    "error": "page returned 0 company rows"}]}
+
+    if len(companies) < MIN_COMPANIES_EXPECTED:
+        logger.warning(f"⚠️ Only {len(companies)} company rows (< {MIN_COMPANIES_EXPECTED}) — "
+                       f"partial page; saving what came through and flagging it")
+
+    try:
+        added, updated = save_to_db(companies)
+    except Exception as e:
+        return {"ok": False, "rows": 0, "companies": len(companies),
+                "updated": 0, "added": 0, "report_date": report_date,
+                "stage_failures": [{"stage": "daily_financial_indicators",
+                                    "error": str(e)[:400]}]}
+
+    rows = added + updated
+    if rows == 0:
+        # Rows arrived but none carried a Symbol — nothing was written.
+        return {"ok": False, "rows": 0, "companies": len(companies),
+                "updated": 0, "added": 0, "report_date": report_date,
+                "stage_failures": [{"stage": "daily_financial_indicators",
+                                    "error": f"{len(companies)} rows, none with a Symbol"}]}
+
+    return {"ok": True, "rows": rows, "companies": len(companies),
+            "updated": updated, "added": added, "report_date": report_date,
+            "partial": len(companies) < MIN_COMPANIES_EXPECTED}
 
 
 if __name__ == "__main__":
@@ -429,4 +485,4 @@ if __name__ == "__main__":
     
     # تحديث قاعدة البيانات 
     if companies:
-        save_to_db(companies)
+        save_to_db(companies)

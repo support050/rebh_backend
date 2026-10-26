@@ -4,6 +4,11 @@
 import re
 from difflib import SequenceMatcher
 
+try:
+    from app.services import xbrl_catalog
+except ImportError:  # flat-module import context (standalone script use)
+    import xbrl_catalog
+
 STANDARD_TEMPLATE = {
     'IS-010': {'statement': 'income_statement', 'line_en': 'Revenue / Turnover', 'line_ar': 'الإيرادات / المبيعات', 'is_subtotal': False},
     'IS-020': {'statement': 'income_statement', 'line_en': 'Cost of Sales', 'line_ar': 'تكلفة المبيعات', 'is_subtotal': False},
@@ -168,6 +173,47 @@ PARAM_MAPPING = {
     'customer\'s deposits': ('BS-100', 1),
     'customers\' deposits': ('BS-100', 1),
     'debt securities, term loan, borrowings and sukuk in issue': ('BS-140', 1),
+    # Borrowing / lease-LIABILITY labels observed in the ingested XBRL artefacts
+    # (each verified against its '[abstract]' parent in the source filing, e.g.
+    # 'Non-current liabilities [abstract]'). They used to fall through as unmapped
+    # and were discarded, so Total Debt read 0 for 154+ issuers — Almarai's
+    # 13.1M finance-lease liability and Rajhi's 379.5B of borrowings included.
+    # Receivable/asset-side lookalikes are deliberately NOT listed here.
+    'borrowings': ('BS-140', 1),
+    'borrowings - current': ('BS-110', 1),
+    'borrowings - non-current': ('BS-140', 1),
+    'current portion of borrowings': ('BS-115', 1),
+    'current portion of islamic loan facilities': ('BS-115', 1),
+    'current portion of lease liabilities': ('BS-115', 1),
+    'current portion of lease liability': ('BS-115', 1),
+    'current portion of long-term borrowings.2': ('BS-115', 1),
+    'debt securities, term loans, borrowings and sukuks in issue': ('BS-140', 1),
+    'finance lease liabilities': ('BS-140', 1),
+    'finance leases, non-current': ('BS-140', 1),
+    'islamic loan facilities': ('BS-140', 1),
+    'lease liabilities': ('BS-140', 1),
+    'lease liabilities2': ('BS-140', 1),
+    'lease liabilities3': ('BS-140', 1),
+    'lease liability - current': ('BS-115', 1),
+    'lease liability - non current': ('BS-140', 1),
+    'loans and borrowings': ('BS-140', 1),
+    'loans and lease liabilities': ('BS-140', 1),
+    'loans and lease liablities': ('BS-140', 1),
+    'long term murabaha loans': ('BS-140', 1),
+    'long-term borrowings.3': ('BS-140', 1),
+    'non-current portion of lease liability': ('BS-140', 1),
+    'short term murabaha loans': ('BS-110', 1),
+    'sidf loan': ('BS-140', 1),
+    'subordinated debt': ('BS-140', 1),
+    'tier 1 sukuk': ('BS-140', 1),
+    'tier i sukuk': ('BS-140', 1),
+    # Income-statement labels with no canonical binding (Operating profit is
+    # disclosed under this wording by banks; the two cost-of-sales spellings and
+    # the 'Revenuee' typo left Revenue unbound for their issuers).
+    'cost of sale': ('IS-020', -1),
+    'sales cost': ('IS-020', -1),
+    'profit (loss) from operating activities': ('IS-070', 1),
+    'revenuee': ('IS-010', 1),
     'debt securities, term loans, borrowings and sukuks in issue': ('BS-140', 1),
     'decrease (increase) in operating assets': ('CF-040', 1),
     'deferred revenue, current': ('BS-125', 1),
@@ -668,12 +714,29 @@ def _build_lookup_indexes():
 _NORM_MAP, _TOKEN_MAP = _build_lookup_indexes()
 
 
-def resolve_mapping(label: str, statement: str = None):
+def resolve_mapping(label: str, statement: str = None, sector: str = None):
+    """Resolve a raw statement label to a canonical concept.
+
+    Milestone C2: the concept registry (``xbrl_catalog``) is the source of truth.
+    Returns ``(concept_id, direction, tier)`` or ``None``. Fuzzy >= threshold is
+    captured as a proposal by the catalog and intentionally NOT returned here.
+    Falls back to the legacy in-module cascade only if the catalog JSON has not
+    been built (a fresh checkout that has not run build_xbrl_catalog.py).
+    """
+    if xbrl_catalog.CONCEPTS:
+        return xbrl_catalog.resolve(label, statement=statement, sector=sector)
+    result = _legacy_resolve(label, statement)
+    if result:
+        return (result[0], result[1], "legacy")
+    return None
+
+
+def _legacy_resolve(label: str, statement: str = None):
     if not label:
         return None
     if _is_blocklisted(label):
         return None
-    
+
     def _is_valid_for_stmt(m):
         if not m or not statement:
             return True

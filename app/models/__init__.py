@@ -29,5 +29,5 @@ from app.models.rebh_user_data import AnalystNote, TradeJournal, UserWatchlist
 from app.models.rebh_engine_vintage import RebhEngineVintage
 from app.models.rebh_universe_snapshot import RebhUniverseSnapshot
 from app.models import breadth  # REBH Market Breadth engine tables (14 results + breadth_runs)
+from app.models.market_breadth import MarketBreadth  # legacy MA-breadth table for /stocks/market-breadth — registered so Base.metadata + Alembic manage it
 from app.models.job_run import JobRun  # job_runs — script run tracking
-from app.models.weekly_market_report import WeeklyMarketReport  # weekly_market_reports

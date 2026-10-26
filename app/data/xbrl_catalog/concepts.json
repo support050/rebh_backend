@@ -1,0 +1,1050 @@
+{
+  "BS-010": {
+    "aggregation": "ONE_OF",
+    "aliases": [
+      "BS-010"
+    ],
+    "direction": 1,
+    "is_subtotal": false,
+    "label_ar": "النقد وما يماثله",
+    "label_en": "Cash and Cash Equivalents",
+    "parent_labels": [],
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "unit_class": "monetary"
+  },
+  "BS-015": {
+    "aggregation": "ONE_OF",
+    "aliases": [
+      "BS-015"
+    ],
+    "direction": 1,
+    "is_subtotal": false,
+    "label_ar": "استثمارات قصيرة الأجل",
+    "label_en": "Short-term Investments",
+    "parent_labels": [],
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "unit_class": "monetary"
+  },
+  "BS-020": {
+    "aggregation": "ONE_OF",
+    "aliases": [
+      "BS-020"
+    ],
+    "direction": 1,
+    "is_subtotal": false,
+    "label_ar": "الذمم المدينة وأرصدة مدينة أخرى",
+    "label_en": "Trade and Other Receivables",
+    "parent_labels": [],
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "unit_class": "monetary"
+  },
+  "BS-030": {
+    "aggregation": "ONE_OF",
+    "aliases": [
+      "BS-030"
+    ],
+    "direction": 1,
+    "is_subtotal": false,
+    "label_ar": "المخزون",
+    "label_en": "Inventories",
+    "parent_labels": [],
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "unit_class": "monetary"
+  },
+  "BS-035": {
+    "aggregation": "ONE_OF",
+    "aliases": [
+      "BS-035"
+    ],
+    "direction": 1,
+    "is_subtotal": false,
+    "label_ar": "أصول متداولة أخرى",
+    "label_en": "Other Current Assets",
+    "parent_labels": [],
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "unit_class": "monetary"
+  },
+  "BS-040": {
+    "aggregation": "ONE_OF",
+    "aliases": [
+      "BS-040"
+    ],
+    "direction": 1,
+    "is_subtotal": true,
+    "label_ar": "إجمالي الأصول المتداولة",
+    "label_en": "Total Current Assets",
+    "parent_labels": [],
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "unit_class": "monetary"
+  },
+  "BS-050": {
+    "aggregation": "ONE_OF",
+    "aliases": [
+      "BS-050"
+    ],
+    "direction": 1,
+    "is_subtotal": false,
+    "label_ar": "العقارات والآلات والمعدات",
+    "label_en": "Property, Plant and Equipment (PPE)",
+    "parent_labels": [],
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "unit_class": "monetary"
+  },
+  "BS-060": {
+    "aggregation": "ONE_OF",
+    "aliases": [
+      "BS-060"
+    ],
+    "direction": 1,
+    "is_subtotal": false,
+    "label_ar": "العقارات الاستثمارية",
+    "label_en": "Investment Properties",
+    "parent_labels": [],
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "unit_class": "monetary"
+  },
+  "BS-070": {
+    "aggregation": "ONE_OF",
+    "aliases": [
+      "BS-070"
+    ],
+    "direction": 1,
+    "is_subtotal": false,
+    "label_ar": "الأصول غير الملموسة والشهرة",
+    "label_en": "Intangible Assets and Goodwill",
+    "parent_labels": [],
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "unit_class": "monetary"
+  },
+  "BS-075": {
+    "aggregation": "ONE_OF",
+    "aliases": [
+      "BS-075"
+    ],
+    "direction": 1,
+    "is_subtotal": false,
+    "label_ar": "الاستثمارات في شركات زميلة ومشاريع مشتركة",
+    "label_en": "Investments in Associates & Joint Ventures",
+    "parent_labels": [],
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "unit_class": "monetary"
+  },
+  "BS-080": {
+    "aggregation": "ONE_OF",
+    "aliases": [
+      "BS-080"
+    ],
+    "direction": 1,
+    "is_subtotal": false,
+    "label_ar": "أصول غير متداولة أخرى",
+    "label_en": "Other Non-Current Assets",
+    "parent_labels": [],
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "unit_class": "monetary"
+  },
+  "BS-090": {
+    "aggregation": "ONE_OF",
+    "aliases": [
+      "BS-090"
+    ],
+    "direction": 1,
+    "is_subtotal": true,
+    "label_ar": "إجمالي الأصول",
+    "label_en": "Total Assets",
+    "parent_labels": [],
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "unit_class": "monetary"
+  },
+  "BS-100": {
+    "aggregation": "ONE_OF",
+    "aliases": [
+      "BS-100"
+    ],
+    "direction": 1,
+    "is_subtotal": false,
+    "label_ar": "الذمم الدائنة وأرصدة دائنة أخرى",
+    "label_en": "Trade and Other Payables",
+    "parent_labels": [],
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "unit_class": "monetary"
+  },
+  "BS-110": {
+    "aggregation": "ONE_OF",
+    "aliases": [
+      "BS-110"
+    ],
+    "direction": 1,
+    "is_subtotal": false,
+    "label_ar": "قروض وتسهيلات قصيرة الأجل",
+    "label_en": "Short-term Borrowings & Debt",
+    "parent_labels": [],
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "unit_class": "monetary"
+  },
+  "BS-115": {
+    "aggregation": "ONE_OF",
+    "aliases": [
+      "BS-115"
+    ],
+    "direction": 1,
+    "is_subtotal": false,
+    "label_ar": "الجزء المتداول من القروض طويلة الأجل",
+    "label_en": "Current Portion of Long-term Debt",
+    "parent_labels": [],
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "unit_class": "monetary"
+  },
+  "BS-120": {
+    "aggregation": "ONE_OF",
+    "aliases": [
+      "BS-120"
+    ],
+    "direction": 1,
+    "is_subtotal": false,
+    "label_ar": "مخصص الزكاة والضريبة",
+    "label_en": "Zakat and Tax Liabilities",
+    "parent_labels": [],
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "unit_class": "monetary"
+  },
+  "BS-125": {
+    "aggregation": "ONE_OF",
+    "aliases": [
+      "BS-125"
+    ],
+    "direction": 1,
+    "is_subtotal": false,
+    "label_ar": "مطلوبات متداولة أخرى",
+    "label_en": "Other Current Liabilities",
+    "parent_labels": [],
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "unit_class": "monetary"
+  },
+  "BS-130": {
+    "aggregation": "ONE_OF",
+    "aliases": [
+      "BS-130"
+    ],
+    "direction": 1,
+    "is_subtotal": true,
+    "label_ar": "إجمالي المطلوبات المتداولة",
+    "label_en": "Total Current Liabilities",
+    "parent_labels": [],
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "unit_class": "monetary"
+  },
+  "BS-140": {
+    "aggregation": "ONE_OF",
+    "aliases": [
+      "BS-140"
+    ],
+    "direction": 1,
+    "is_subtotal": false,
+    "label_ar": "قروض وتسهيلات طويلة الأجل",
+    "label_en": "Long-term Borrowings & Debt",
+    "parent_labels": [],
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "unit_class": "monetary"
+  },
+  "BS-150": {
+    "aggregation": "ONE_OF",
+    "aliases": [
+      "BS-150"
+    ],
+    "direction": 1,
+    "is_subtotal": false,
+    "label_ar": "مخصص مستحقات نهاية الخدمة للموظفين",
+    "label_en": "Employees End of Service Benefits",
+    "parent_labels": [],
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "unit_class": "monetary"
+  },
+  "BS-155": {
+    "aggregation": "ONE_OF",
+    "aliases": [
+      "BS-155"
+    ],
+    "direction": 1,
+    "is_subtotal": false,
+    "label_ar": "مطلوبات غير متداولة أخرى",
+    "label_en": "Other Non-Current Liabilities",
+    "parent_labels": [],
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "unit_class": "monetary"
+  },
+  "BS-160": {
+    "aggregation": "ONE_OF",
+    "aliases": [
+      "BS-160"
+    ],
+    "direction": 1,
+    "is_subtotal": true,
+    "label_ar": "إجمالي المطلوبات",
+    "label_en": "Total Liabilities",
+    "parent_labels": [],
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "unit_class": "monetary"
+  },
+  "BS-170": {
+    "aggregation": "ONE_OF",
+    "aliases": [
+      "BS-170"
+    ],
+    "direction": 1,
+    "is_subtotal": false,
+    "label_ar": "رأس المال",
+    "label_en": "Share Capital",
+    "parent_labels": [],
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "unit_class": "monetary"
+  },
+  "BS-175": {
+    "aggregation": "ONE_OF",
+    "aliases": [
+      "BS-175"
+    ],
+    "direction": 1,
+    "is_subtotal": false,
+    "label_ar": "الاحتياطي النظامي",
+    "label_en": "Statutory Reserve",
+    "parent_labels": [],
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "unit_class": "monetary"
+  },
+  "BS-180": {
+    "aggregation": "ONE_OF",
+    "aliases": [
+      "BS-180"
+    ],
+    "direction": 1,
+    "is_subtotal": false,
+    "label_ar": "الأرباح المبقاة (الخسائر المتراكمة)",
+    "label_en": "Retained Earnings (Accumulated Losses)",
+    "parent_labels": [],
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "unit_class": "monetary"
+  },
+  "BS-182": {
+    "aggregation": "ONE_OF",
+    "aliases": [
+      "BS-182"
+    ],
+    "direction": 1,
+    "is_subtotal": false,
+    "label_ar": "احتياطيات أخرى",
+    "label_en": "Other Reserves",
+    "parent_labels": [],
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "unit_class": "monetary"
+  },
+  "BS-185": {
+    "aggregation": "ONE_OF",
+    "aliases": [
+      "BS-185"
+    ],
+    "direction": 1,
+    "is_subtotal": true,
+    "label_ar": "إجمالي حقوق الملكية الخاصة بمساهمي الشركة الأم",
+    "label_en": "Total Equity Attributable to Shareholders",
+    "parent_labels": [],
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "unit_class": "monetary"
+  },
+  "BS-188": {
+    "aggregation": "ONE_OF",
+    "aliases": [
+      "BS-188"
+    ],
+    "direction": 1,
+    "is_subtotal": false,
+    "label_ar": "الحصص غير المسيطرة",
+    "label_en": "Non-Controlling Interests",
+    "parent_labels": [],
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "unit_class": "monetary"
+  },
+  "BS-190": {
+    "aggregation": "ONE_OF",
+    "aliases": [
+      "BS-190"
+    ],
+    "direction": 1,
+    "is_subtotal": true,
+    "label_ar": "إجمالي حقوق الملكية",
+    "label_en": "Total Equity",
+    "parent_labels": [],
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "unit_class": "monetary"
+  },
+  "BS-200": {
+    "aggregation": "ONE_OF",
+    "aliases": [
+      "BS-200"
+    ],
+    "direction": 1,
+    "is_subtotal": true,
+    "label_ar": "إجمالي المطلوبات وحقوق الملكية",
+    "label_en": "Total Liabilities and Equity",
+    "parent_labels": [],
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "unit_class": "monetary"
+  },
+  "CF-010": {
+    "aggregation": "ONE_OF",
+    "aliases": [
+      "CF-010"
+    ],
+    "direction": 1,
+    "is_subtotal": false,
+    "label_ar": "صافي الربح قبل الزكاة والضريبة",
+    "label_en": "Net Profit Before Zakat and Tax",
+    "parent_labels": [],
+    "sector": "ALL",
+    "statement": "cash_flow",
+    "unit_class": "monetary"
+  },
+  "CF-020": {
+    "aggregation": "ONE_OF",
+    "aliases": [
+      "CF-020"
+    ],
+    "direction": 1,
+    "is_subtotal": false,
+    "label_ar": "الاستهلاك والإطفاء",
+    "label_en": "Depreciation and Amortization",
+    "parent_labels": [],
+    "sector": "ALL",
+    "statement": "cash_flow",
+    "unit_class": "monetary"
+  },
+  "CF-030": {
+    "aggregation": "ONE_OF",
+    "aliases": [
+      "CF-030"
+    ],
+    "direction": 1,
+    "is_subtotal": false,
+    "label_ar": "تعديلات غير نقدية أخرى",
+    "label_en": "Other Non-Cash Adjustments",
+    "parent_labels": [],
+    "sector": "ALL",
+    "statement": "cash_flow",
+    "unit_class": "monetary"
+  },
+  "CF-040": {
+    "aggregation": "ONE_OF",
+    "aliases": [
+      "CF-040"
+    ],
+    "direction": 1,
+    "is_subtotal": false,
+    "label_ar": "التغير في رأس المال العامل",
+    "label_en": "Changes in Working Capital",
+    "parent_labels": [],
+    "sector": "ALL",
+    "statement": "cash_flow",
+    "unit_class": "monetary"
+  },
+  "CF-050": {
+    "aggregation": "ONE_OF",
+    "aliases": [
+      "CF-050"
+    ],
+    "direction": 1,
+    "is_subtotal": false,
+    "label_ar": "الزكاة والضريبة المدفوعة",
+    "label_en": "Zakat and Tax Paid",
+    "parent_labels": [],
+    "sector": "ALL",
+    "statement": "cash_flow",
+    "unit_class": "monetary"
+  },
+  "CF-060": {
+    "aggregation": "ONE_OF",
+    "aliases": [
+      "CF-060"
+    ],
+    "direction": 1,
+    "is_subtotal": true,
+    "label_ar": "صافي النقد من الأنشطة التشغيلية",
+    "label_en": "Net Cash from Operating Activities (CFO)",
+    "parent_labels": [],
+    "sector": "ALL",
+    "statement": "cash_flow",
+    "unit_class": "monetary"
+  },
+  "CF-070": {
+    "aggregation": "ONE_OF",
+    "aliases": [
+      "CF-070"
+    ],
+    "direction": 1,
+    "is_subtotal": false,
+    "label_ar": "النفقات الرأسمالية (شراء عقارات ومعدات)",
+    "label_en": "Capital Expenditures (CapEx)",
+    "parent_labels": [],
+    "sector": "ALL",
+    "statement": "cash_flow",
+    "unit_class": "monetary"
+  },
+  "CF-080": {
+    "aggregation": "ONE_OF",
+    "aliases": [
+      "CF-080"
+    ],
+    "direction": 1,
+    "is_subtotal": false,
+    "label_ar": "أنشطة استثمارية أخرى",
+    "label_en": "Other Investing Activities",
+    "parent_labels": [],
+    "sector": "ALL",
+    "statement": "cash_flow",
+    "unit_class": "monetary"
+  },
+  "CF-090": {
+    "aggregation": "ONE_OF",
+    "aliases": [
+      "CF-090"
+    ],
+    "direction": 1,
+    "is_subtotal": true,
+    "label_ar": "صافي النقد من الأنشطة الاستثمارية",
+    "label_en": "Net Cash Used in Investing Activities (CFI)",
+    "parent_labels": [],
+    "sector": "ALL",
+    "statement": "cash_flow",
+    "unit_class": "monetary"
+  },
+  "CF-100": {
+    "aggregation": "ONE_OF",
+    "aliases": [
+      "CF-100"
+    ],
+    "direction": 1,
+    "is_subtotal": false,
+    "label_ar": "توزيعات الأرباح المدفوعة",
+    "label_en": "Dividends Paid",
+    "parent_labels": [],
+    "sector": "ALL",
+    "statement": "cash_flow",
+    "unit_class": "monetary"
+  },
+  "CF-110": {
+    "aggregation": "ONE_OF",
+    "aliases": [
+      "CF-110"
+    ],
+    "direction": 1,
+    "is_subtotal": false,
+    "label_ar": "صافي متحصلات (سداد) قروض",
+    "label_en": "Net Proceeds (Repayments) of Borrowings",
+    "parent_labels": [],
+    "sector": "ALL",
+    "statement": "cash_flow",
+    "unit_class": "monetary"
+  },
+  "CF-120": {
+    "aggregation": "ONE_OF",
+    "aliases": [
+      "CF-120"
+    ],
+    "direction": 1,
+    "is_subtotal": false,
+    "label_ar": "أنشطة تمويلية أخرى",
+    "label_en": "Other Financing Activities",
+    "parent_labels": [],
+    "sector": "ALL",
+    "statement": "cash_flow",
+    "unit_class": "monetary"
+  },
+  "CF-130": {
+    "aggregation": "ONE_OF",
+    "aliases": [
+      "CF-130"
+    ],
+    "direction": 1,
+    "is_subtotal": true,
+    "label_ar": "صافي النقد من الأنشطة التمويلية",
+    "label_en": "Net Cash from Financing Activities (CFF)",
+    "parent_labels": [],
+    "sector": "ALL",
+    "statement": "cash_flow",
+    "unit_class": "monetary"
+  },
+  "CF-140": {
+    "aggregation": "ONE_OF",
+    "aliases": [
+      "CF-140"
+    ],
+    "direction": 1,
+    "is_subtotal": true,
+    "label_ar": "صافي التغير في النقد وما يماثله",
+    "label_en": "Net Change in Cash and Cash Equivalents",
+    "parent_labels": [],
+    "sector": "ALL",
+    "statement": "cash_flow",
+    "unit_class": "monetary"
+  },
+  "CF-150": {
+    "aggregation": "ONE_OF",
+    "aliases": [
+      "CF-150"
+    ],
+    "direction": 1,
+    "is_subtotal": false,
+    "label_ar": "النقد وما يماثله في بداية الفترة",
+    "label_en": "Cash and Cash Equivalents at Beginning",
+    "parent_labels": [],
+    "sector": "ALL",
+    "statement": "cash_flow",
+    "unit_class": "monetary"
+  },
+  "CF-160": {
+    "aggregation": "ONE_OF",
+    "aliases": [
+      "CF-160"
+    ],
+    "direction": 1,
+    "is_subtotal": true,
+    "label_ar": "النقد وما يماثله في نهاية الفترة",
+    "label_en": "Cash and Cash Equivalents at End",
+    "parent_labels": [],
+    "sector": "ALL",
+    "statement": "cash_flow",
+    "unit_class": "monetary"
+  },
+  "CONCEPT.TAKAFUL_OPS_ASSETS": {
+    "aggregation": "ONE_OF",
+    "aliases": [
+      "CONCEPT.TAKAFUL_OPS_ASSETS"
+    ],
+    "direction": 1,
+    "is_subtotal": true,
+    "label_ar": "إجمالي أصول عمليات التأمن",
+    "label_en": "Total insurance/takaful operations assets",
+    "parent_labels": [],
+    "sector": "INSURANCE",
+    "statement": "balance_sheet",
+    "unit_class": "monetary"
+  },
+  "CONCEPT.TAKAFUL_OPS_LIABILITIES": {
+    "aggregation": "ONE_OF",
+    "aliases": [
+      "CONCEPT.TAKAFUL_OPS_LIABILITIES"
+    ],
+    "direction": 1,
+    "is_subtotal": true,
+    "label_ar": "إجمالي مطلوبات عمليات التأمن",
+    "label_en": "Total insurance/takaful operations liabilities",
+    "parent_labels": [],
+    "sector": "INSURANCE",
+    "statement": "balance_sheet",
+    "unit_class": "monetary"
+  },
+  "CONCEPT.TAKAFUL_OPS_LIAB_SURPLUS": {
+    "aggregation": "ONE_OF",
+    "aliases": [
+      "CONCEPT.TAKAFUL_OPS_LIAB_SURPLUS"
+    ],
+    "direction": 1,
+    "is_subtotal": true,
+    "label_ar": "إجمالي مطلوبات عمليات التأمن والفضل",
+    "label_en": "Total insurance/takaful operations liabilities and surplus (deficit)",
+    "parent_labels": [],
+    "sector": "INSURANCE",
+    "statement": "balance_sheet",
+    "unit_class": "monetary"
+  },
+  "CONCEPT.TAKAFUL_SHAREHOLDERS_ASSETS": {
+    "aggregation": "ONE_OF",
+    "aliases": [
+      "CONCEPT.TAKAFUL_SHAREHOLDERS_ASSETS"
+    ],
+    "direction": 1,
+    "is_subtotal": true,
+    "label_ar": "إجمالي أصول المساهمين",
+    "label_en": "Total shareholders assets",
+    "parent_labels": [],
+    "sector": "INSURANCE",
+    "statement": "balance_sheet",
+    "unit_class": "monetary"
+  },
+  "CONCEPT.TAKAFUL_SHAREHOLDERS_LIABILITIES": {
+    "aggregation": "ONE_OF",
+    "aliases": [
+      "CONCEPT.TAKAFUL_SHAREHOLDERS_LIABILITIES"
+    ],
+    "direction": 1,
+    "is_subtotal": true,
+    "label_ar": "إجمالي مطلوبات المساهمين",
+    "label_en": "Total shareholders liabilities",
+    "parent_labels": [],
+    "sector": "INSURANCE",
+    "statement": "balance_sheet",
+    "unit_class": "monetary"
+  },
+  "CONCEPT.TL_E_SHAREHOLDERS": {
+    "aggregation": "ONE_OF",
+    "aliases": [
+      "CONCEPT.TL_E_SHAREHOLDERS"
+    ],
+    "direction": 1,
+    "is_subtotal": true,
+    "label_ar": "إجمالي مطلوبات وحقوق المساهمين",
+    "label_en": "Total shareholders liabilities and equity",
+    "parent_labels": [],
+    "sector": "INSURANCE",
+    "statement": "balance_sheet",
+    "unit_class": "monetary"
+  },
+  "CONCEPT.TOTAL_NON_CURRENT_ASSETS": {
+    "aggregation": "ONE_OF",
+    "aliases": [
+      "CONCEPT.TOTAL_NON_CURRENT_ASSETS"
+    ],
+    "direction": 1,
+    "is_subtotal": true,
+    "label_ar": "إجمالي الأصول غير المتداولة",
+    "label_en": "Total non-current assets",
+    "parent_labels": [],
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "unit_class": "monetary"
+  },
+  "CONCEPT.TOTAL_NON_CURRENT_LIABILITIES": {
+    "aggregation": "ONE_OF",
+    "aliases": [
+      "CONCEPT.TOTAL_NON_CURRENT_LIABILITIES"
+    ],
+    "direction": 1,
+    "is_subtotal": true,
+    "label_ar": "إجمالي المطلوبات غير المتداولة",
+    "label_en": "Total non-current liabilities",
+    "parent_labels": [],
+    "sector": "ALL",
+    "statement": "balance_sheet",
+    "unit_class": "monetary"
+  },
+  "CONCEPT.TOTAL_OPERATING_EXPENSES": {
+    "aggregation": "ONE_OF",
+    "aliases": [
+      "CONCEPT.TOTAL_OPERATING_EXPENSES"
+    ],
+    "direction": 1,
+    "is_subtotal": true,
+    "label_ar": "إجمالي المصاريف التشغيلية",
+    "label_en": "Total operating expenses",
+    "parent_labels": [],
+    "sector": "ALL",
+    "statement": "income_statement",
+    "unit_class": "monetary"
+  },
+  "IS-010": {
+    "aggregation": "PARENT_CHILD",
+    "aliases": [
+      "IS-010"
+    ],
+    "direction": 1,
+    "is_subtotal": false,
+    "label_ar": "الإيرادات / المبيعات",
+    "label_en": "Revenue / Turnover",
+    "parent_labels": [
+      "total revenue",
+      "revenue",
+      "total revenues",
+      "total income",
+      "net revenue",
+      "net revenues",
+      "gross premiums written",
+      "insurance revenue"
+    ],
+    "sector": "ALL",
+    "statement": "income_statement",
+    "unit_class": "monetary"
+  },
+  "IS-020": {
+    "aggregation": "ONE_OF",
+    "aliases": [
+      "IS-020"
+    ],
+    "direction": 1,
+    "is_subtotal": false,
+    "label_ar": "تكلفة المبيعات",
+    "label_en": "Cost of Sales",
+    "parent_labels": [],
+    "sector": "ALL",
+    "statement": "income_statement",
+    "unit_class": "monetary"
+  },
+  "IS-030": {
+    "aggregation": "ONE_OF",
+    "aliases": [
+      "IS-030"
+    ],
+    "direction": 1,
+    "is_subtotal": true,
+    "label_ar": "إجمالي الربح",
+    "label_en": "Gross Profit",
+    "parent_labels": [],
+    "sector": "ALL",
+    "statement": "income_statement",
+    "unit_class": "monetary"
+  },
+  "IS-040": {
+    "aggregation": "ONE_OF",
+    "aliases": [
+      "IS-040"
+    ],
+    "direction": 1,
+    "is_subtotal": false,
+    "label_ar": "مصاريف البيع والتوزيع",
+    "label_en": "Selling and Distribution Expenses",
+    "parent_labels": [],
+    "sector": "ALL",
+    "statement": "income_statement",
+    "unit_class": "monetary"
+  },
+  "IS-050": {
+    "aggregation": "PARENT_CHILD",
+    "aliases": [
+      "IS-050"
+    ],
+    "direction": 1,
+    "is_subtotal": false,
+    "label_ar": "المصاريف العمومية والإدارية",
+    "label_en": "General and Administrative Expenses",
+    "parent_labels": [
+      "general and administrative expenses",
+      "general and administration expenses"
+    ],
+    "sector": "ALL",
+    "statement": "income_statement",
+    "unit_class": "monetary"
+  },
+  "IS-060": {
+    "aggregation": "ONE_OF",
+    "aliases": [
+      "IS-060"
+    ],
+    "direction": 1,
+    "is_subtotal": false,
+    "label_ar": "إيرادات / مصاريف تشغيلية أخرى",
+    "label_en": "Other Operating Income / Expenses",
+    "parent_labels": [],
+    "sector": "ALL",
+    "statement": "income_statement",
+    "unit_class": "monetary"
+  },
+  "IS-070": {
+    "aggregation": "ONE_OF",
+    "aliases": [
+      "IS-070"
+    ],
+    "direction": 1,
+    "is_subtotal": true,
+    "label_ar": "الربح التشغيلي (الربح قبل الفوائد والضرائب)",
+    "label_en": "Operating Income (EBIT)",
+    "parent_labels": [],
+    "sector": "ALL",
+    "statement": "income_statement",
+    "unit_class": "monetary"
+  },
+  "IS-080": {
+    "aggregation": "ONE_OF",
+    "aliases": [
+      "IS-080"
+    ],
+    "direction": 1,
+    "is_subtotal": false,
+    "label_ar": "تكاليف التمويل",
+    "label_en": "Finance Costs",
+    "parent_labels": [],
+    "sector": "ALL",
+    "statement": "income_statement",
+    "unit_class": "monetary"
+  },
+  "IS-090": {
+    "aggregation": "ONE_OF",
+    "aliases": [
+      "IS-090"
+    ],
+    "direction": 1,
+    "is_subtotal": false,
+    "label_ar": "إيرادات التمويل",
+    "label_en": "Finance Income",
+    "parent_labels": [],
+    "sector": "ALL",
+    "statement": "income_statement",
+    "unit_class": "monetary"
+  },
+  "IS-100": {
+    "aggregation": "ONE_OF",
+    "aliases": [
+      "IS-100"
+    ],
+    "direction": 1,
+    "is_subtotal": false,
+    "label_ar": "حصة في أرباح شركات زميلة ومشاريع مشتركة",
+    "label_en": "Share of Profit of Associates & Joint Ventures",
+    "parent_labels": [],
+    "sector": "ALL",
+    "statement": "income_statement",
+    "unit_class": "monetary"
+  },
+  "IS-110": {
+    "aggregation": "ONE_OF",
+    "aliases": [
+      "IS-110"
+    ],
+    "direction": 1,
+    "is_subtotal": true,
+    "label_ar": "الربح قبل الزكاة والضريبة",
+    "label_en": "Profit Before Zakat and Tax",
+    "parent_labels": [],
+    "sector": "ALL",
+    "statement": "income_statement",
+    "unit_class": "monetary"
+  },
+  "IS-120": {
+    "aggregation": "ONE_OF",
+    "aliases": [
+      "IS-120"
+    ],
+    "direction": 1,
+    "is_subtotal": false,
+    "label_ar": "مصروف الزكاة",
+    "label_en": "Zakat Expense",
+    "parent_labels": [],
+    "sector": "ALL",
+    "statement": "income_statement",
+    "unit_class": "monetary"
+  },
+  "IS-125": {
+    "aggregation": "ONE_OF",
+    "aliases": [
+      "IS-125"
+    ],
+    "direction": 1,
+    "is_subtotal": false,
+    "label_ar": "مصروف ضريبة الدخل",
+    "label_en": "Income Tax Expense",
+    "parent_labels": [],
+    "sector": "ALL",
+    "statement": "income_statement",
+    "unit_class": "monetary"
+  },
+  "IS-130": {
+    "aggregation": "ONE_OF",
+    "aliases": [
+      "IS-130"
+    ],
+    "direction": 1,
+    "is_subtotal": true,
+    "label_ar": "صافي الربح من العمليات المستمرة",
+    "label_en": "Profit from Continuing Operations",
+    "parent_labels": [],
+    "sector": "ALL",
+    "statement": "income_statement",
+    "unit_class": "monetary"
+  },
+  "IS-135": {
+    "aggregation": "ONE_OF",
+    "aliases": [
+      "IS-135"
+    ],
+    "direction": 1,
+    "is_subtotal": false,
+    "label_ar": "صافي الربح من العمليات غير المستمرة",
+    "label_en": "Profit from Discontinued Operations",
+    "parent_labels": [],
+    "sector": "ALL",
+    "statement": "income_statement",
+    "unit_class": "monetary"
+  },
+  "IS-140": {
+    "aggregation": "ONE_OF",
+    "aliases": [
+      "IS-140"
+    ],
+    "direction": 1,
+    "is_subtotal": true,
+    "label_ar": "صافي الربح للفترة",
+    "label_en": "Net Profit for the Period",
+    "parent_labels": [],
+    "sector": "ALL",
+    "statement": "income_statement",
+    "unit_class": "monetary"
+  },
+  "IS-150": {
+    "aggregation": "ONE_OF",
+    "aliases": [
+      "IS-150"
+    ],
+    "direction": 1,
+    "is_subtotal": true,
+    "label_ar": "صافي الربح العائد لمساهمي الشركة الأم",
+    "label_en": "Net Profit Attributable to Shareholders of Parent",
+    "parent_labels": [],
+    "sector": "ALL",
+    "statement": "income_statement",
+    "unit_class": "monetary"
+  },
+  "IS-160": {
+    "aggregation": "ONE_OF",
+    "aliases": [
+      "IS-160"
+    ],
+    "direction": 1,
+    "is_subtotal": false,
+    "label_ar": "ربحية السهم الأساسية",
+    "label_en": "Basic Earnings per Share (EPS)",
+    "parent_labels": [],
+    "sector": "ALL",
+    "statement": "income_statement",
+    "unit_class": "per_share"
+  },
+  "IS-170": {
+    "aggregation": "ONE_OF",
+    "aliases": [
+      "IS-170"
+    ],
+    "direction": 1,
+    "is_subtotal": false,
+    "label_ar": "المتوسط المرجح لعدد الأسهم",
+    "label_en": "Weighted Average Number of Shares",
+    "parent_labels": [],
+    "sector": "ALL",
+    "statement": "income_statement",
+    "unit_class": "count"
+  }
+}

@@ -139,15 +139,6 @@ app.include_router(screeners.router, prefix="/api")  # Stock Screeners (PUBLIC)
 app.include_router(market_breadth.router, prefix="/api")  # /api/market-breadth/*
 app.include_router(market_reports.router, prefix="/api/market-reports", tags=["Market Reports"])
 
-# ── Weekly Market Update (Bug 3 fix) ──
-# This router existed since the weekly-report build but was never included, so
-# every /api/weekly-market-update/* call from frontend/app/weekly-update/page.tsx
-# returned 404. The router carries its own prefix ('/weekly-market-update'), so
-# it is mounted under '/api' to match the frontend paths.
-# protected (not admin): the page is reachable by any logged-in user; middleware
-# already gates /weekly-update behind a session cookie.
-from app.api.routes import weekly_market_update as weekly_market_update_router  # noqa: E402
-app.include_router(weekly_market_update_router.router, prefix="/api", dependencies=protected_dependencies)  # /api/weekly-market-update/*
 
 app.include_router(economic_indicators.router, prefix="/api/economic-indicators", tags=["Economic Indicators"])
 app.include_router(xbrl_companies.router, dependencies=protected_dependencies)
@@ -161,8 +152,6 @@ app.include_router(mansfield_rs_router.router, prefix="/api/indicators/mansfield
 app.include_router(sata_router.router, prefix="/api/indicators/sata", tags=["SATA & Stage Analysis"], dependencies=protected_dependencies)
 app.include_router(tasi_settings_router.router, prefix="/api/tasi-settings", tags=["TASI Settings"])
 
-from app.api.routes import aporia as aporia_router
-app.include_router(aporia_router.router, prefix="/api/aporia", tags=["Aporia Analytics"], dependencies=protected_dependencies)
 
 from app.api.routes import rebh_engine as rebh_engine_router
 app.include_router(rebh_engine_router.router)

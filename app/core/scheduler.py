@@ -76,8 +76,12 @@ def job_monthly_scrapers():
     for key in MONTHLY_SCRAPER_KEYS:
         _safe_job(key)
 
-    # GuruFocus uses heavy headless Chrome Selenium which consumes high RAM/CPU on server.
-    # Kept available in app/scrapers/gurufocus_scraper.py for manual on-demand triggers.
+    # GuruFocus was left off cron because it used to cost a headless Chrome run.
+    # Since 2026-10-23 it is one impersonated HTTP GET plus a pure-Python decode
+    # of the page's Nuxt payload (Selenium removed), so the cost argument is gone —
+    # these lines stay commented only because putting a monthly writer on live
+    # SP500_EY/SP500_PE is a data decision, not a performance one. Until that
+    # call is made, the admin "Run Now" key 'manual:gurufocus' is the trigger.
     # _safe("GuruFocus EY", lambda: __import__(
     #     "app.scrapers.gurufocus_scraper", fromlist=["scrape_gurufocus_indicator"]
     # ).scrape_gurufocus_indicator(
@@ -330,6 +334,45 @@ def _gurufocus():
     return out
 
 
+def _load_script_sync(filename: str):
+    """importlib-load a backend/scripts module by path. Both files carry a
+    literal '&' in their names (Sukuk&Bonds.py / SAMA&GaStat.py), so they are not
+    importable as normal modules — same trick daily_market_update used."""
+    import importlib.util
+    from pathlib import Path
+    script = Path(__file__).resolve().parents[2] / "scripts" / filename
+    spec = importlib.util.spec_from_file_location(
+        filename.replace("&", "_").replace(".py", ""), script)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def _sukuk_sync():
+    """Sukuk & Bonds snapshot refresh. run_sukuk_sync() returns an int (rows
+    upserted) so job_tracking infers rows_written directly. 0 means the live grid
+    was blocked and even the seed produced nothing — surfaced as a visible 0-row
+    success in the last-run chip, exactly as the script's __main__ records it."""
+    return _load_script_sync("Sukuk&Bonds.py").run_sukuk_sync()
+
+
+def _macro_sync():
+    """Latest-only SAMA/GaStat + Buffett refresh (write_db=True, history=False —
+    the CLI '--execute --no-history' equivalent): appends just the newest
+    observation per series, which is all a monthly cadence normally needs. The
+    full history re-pull is offered as the Copy-command only. run_economic_sync
+    returns {written, degraded, ...}, keys job_tracking does not read, so
+    normalise to {rows} and flag a degraded (fallback-only) run as partial."""
+    res = _load_script_sync("SAMA&GaStat.py").run_economic_sync(
+        write_db=True, history=False)
+    out = {"rows": int(res.get("written") or 0)}
+    degraded = res.get("degraded") or []
+    if degraded:
+        out["partial"] = True
+        out["note"] = "degraded sources: " + ", ".join(str(d) for d in degraded)
+    return out
+
+
 JOB_CALLABLES: Dict[str, Callable[[], Any]] = {
     # scrapers (steps of the daily / weekly / monthly groups)
     "sp500": _sp500,
@@ -351,10 +394,22 @@ JOB_CALLABLES: Dict[str, Callable[[], Any]] = {
     "breadth_daily": _breadth_daily_body,
     # economy-rates manual jobs — Run Now-able and tracked in job_runs under
     # the same keys the registry lists (deliberately NOT on any cron: their
-    # sources block datacenter IPs / need headless Chrome)
+    # sources sit behind Cloudflare/Akamai, so a scheduled run from the datacenter
+    # IP can fail even when the same call succeeds locally — eurodollar in
+    # particular stays fingerprint-intermittent. gurufocus and the sukuk grid now
+    # answer a plain HTTP replay, so they are the cheapest of the three to
+    # schedule once their data cadence is decided.)
     "manual:eurodollar": _eurodollar,
     "manual:cme_fedwatch": _cme_fedwatch,
     "manual:gurufocus": _gurufocus,
+    # sukuk + macro: retired from cron 2026-10-13 and pulled out of the daily
+    # pipeline 2026-10-26; registered here so the Admin Schedule tab can Run Now,
+    # tracked under the SAME 'sukuk_importer' / 'macro_importer' keys their
+    # __main__ uses. Deliberately NOT on any cron — weekly/monthly cadence, and
+    # their sources sit behind Akamai, so a datacenter-IP cron can fail while the
+    # same manual click from a workstation succeeds.
+    "sukuk_importer": _sukuk_sync,
+    "macro_importer": _macro_sync,
 }
 
 # Human labels, so refactoring the group functions did not change the logs.
@@ -376,6 +431,8 @@ JOB_LABELS: Dict[str, str] = {
     "manual:eurodollar": "Eurodollar Futures (Investing.com)",
     "manual:cme_fedwatch": "CME FedWatch (QuikStrike)",
     "manual:gurufocus": "GuruFocus (SP500 EY + SP500 PE)",
+    "sukuk_importer": "Sukuk & Bonds (Tadawul)",
+    "macro_importer": "SAMA & GaStat Macro + Buffett",
 }
 
 # Jobs whose output is served through a Redis cache. The cron groups clear it
@@ -385,6 +442,9 @@ JOB_LABELS: Dict[str, str] = {
 # caches as well, so they join the clear list even though no cron fires them.
 MANUAL_ECONOMIC_KEYS: Tuple[str, ...] = (
     "manual:eurodollar", "manual:cme_fedwatch", "manual:gurufocus",
+    # macro_importer writes saudi_economic_indicators, served through the
+    # economic:* cache — clear it after a manual run so the UI shows fresh numbers.
+    "macro_importer",
 )
 ECONOMIC_CACHE_JOBS: Tuple[str, ...] = DAILY_SCRAPER_KEYS + WEEKLY_SCRAPER_KEYS + MONTHLY_SCRAPER_KEYS + MANUAL_ECONOMIC_KEYS
 

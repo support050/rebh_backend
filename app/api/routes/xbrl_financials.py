@@ -1,6 +1,7 @@
 from fastapi import APIRouter, HTTPException, Query
 
 from app.services import xbrl_data_service
+from app.services.xbrl_parser import sort_period_keys
 
 router = APIRouter(prefix="/api/financials", tags=["XBRL Financials"])
 
@@ -53,7 +54,7 @@ def get_kpis(symbol: str, section: str = Query("income_statement")):
     if not sec:
         raise HTTPException(404, detail=f"Section '{section}' not found")
 
-    periods = sorted(sec.periods)
+    periods = sort_period_keys(sec.periods)
     latest, prev = (periods[-1], periods[-2]) if len(periods) >= 2 else (periods[-1], None)
     items_raw = [i.model_dump() for i in sec.items]
 
@@ -90,7 +91,7 @@ def get_chart_data(
     if not sec:
         raise HTTPException(404, detail=f"Section '{section}' not found")
 
-    all_periods = sorted(sec.periods)
+    all_periods = sort_period_keys(sec.periods)
     active_periods = [p for p in all_periods if p in periods] if periods else all_periods
     items_raw = [i.model_dump() for i in sec.items]
 
@@ -126,7 +127,7 @@ def get_summary(symbol: str):
         sec = company.sections.get(section_key)
         if not sec:
             continue
-        periods = sorted(sec.periods)
+        periods = sort_period_keys(sec.periods)
         latest = periods[-1]
         items_raw = [i.model_dump() for i in sec.items]
         section_summary = {}

@@ -20,11 +20,26 @@ import io
 import requests
 import time
 import logging
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
+from typing import Optional
+from sqlalchemy import func
+
 from app.core.database import SessionLocal
 from app.models.economic_indicators import TreasuryYieldCurve
 
 logger = logging.getLogger(__name__)
+
+# ── Smart Incremental Backfill knobs ──────────────────────────────────────────
+# Safety margin re-covered on every run: covers holidays, a late publication,
+# and Treasury's own next-day revisions around the newest stored date.
+TREASURY_LOOKBACK_BUFFER_DAYS = int(os.getenv("TREASURY_LOOKBACK_BUFFER_DAYS", "7"))
+# Where an empty table starts from (Treasury's daily CSV runs back to 1990, but
+# this system's consumers only need the modern series).
+TREASURY_DEFAULT_START = date(2010, 1, 1)
+# Guard rail: a two-year outage must not silently turn the routine job into a
+# multi-thousand-request full backfill. Beyond this the run fetches the window
+# and logs that an explicit backfill mode is required.
+TREASURY_MAX_INCREMENTAL_MONTHS = int(os.getenv("TREASURY_MAX_INCREMENTAL_MONTHS", "24"))
 
 BASE_URL = (
     "https://home.treasury.gov/resource-center/data-chart-center/"
@@ -121,15 +136,35 @@ def fetch_treasury_csv(year: int, month: int) -> list[dict]:
     return []
 
 
+def _months_covering(start: date, end: date) -> list[tuple[int, int]]:
+    """Inclusive list of (year, month) buckets from `start` to `end`."""
+    if start > end:
+        return []
+    months, y, m = [], start.year, start.month
+    while (y, m) <= (end.year, end.month):
+        months.append((y, m))
+        m += 1
+        if m == 13:
+            y, m = y + 1, 1
+    return months
+
+
+def _last_report_date(db) -> Optional[date]:
+    """Newest closing date already stored for the yield curve."""
+    return db.query(func.max(TreasuryYieldCurve.report_date)).scalar()
+
+
 def scrape_treasury_gov(mode: str = "incremental") -> dict:
     """
     Fetch all maturity data from Treasury.gov
     and UPDATE existing rows or INSERT new rows in the DB.
 
     Modes:
-      - "incremental": Current month + previous month.
+      - "incremental": everything from (last stored date − buffer) to today —
+        i.e. every month that covers the gap, not just the current one.
       - "backfill_recent": Last 5 years.
-      - "backfill": All months from 1990 to today.
+      - "backfill": All months from 2018 to today.
+      - "full": All months from 1990 to today.
 
     Returns {"ok": bool, "rows": n_written, "updated": .., "skipped": ..} —
     the shape job_tracking.with_result_handling turns into rows_written / a
@@ -141,34 +176,38 @@ def scrape_treasury_gov(mode: str = "incremental") -> dict:
     try:
         today = date.today()
         months_to_fetch = []
+        incremental_from = None
 
         if mode == "last5days" or mode == "incremental":
-            # Fetch current month; if we're in the first 5 days, also fetch previous month
-            months_to_fetch.append((today.year, today.month))
-            if today.day <= 5:
-                if today.month == 1:
-                    months_to_fetch.append((today.year - 1, 12))
-                else:
-                    months_to_fetch.append((today.year, today.month - 1))
+            # Smart incremental: ask the DB how far behind we actually are, then
+            # fetch EVERY month that spans the gap. A skipped week of scheduling
+            # closes by itself on the next run instead of leaving holes.
+            last = _last_report_date(db)
+            start = (last - timedelta(days=TREASURY_LOOKBACK_BUFFER_DAYS)
+                     if last else TREASURY_DEFAULT_START)
+            incremental_from = max(start, TREASURY_DEFAULT_START)
+            months_to_fetch = _months_covering(incremental_from, today)
+            if len(months_to_fetch) > TREASURY_MAX_INCREMENTAL_MONTHS:
+                logger.warning(
+                    f"  ⚠️ Gap spans {len(months_to_fetch)} months (> "
+                    f"{TREASURY_MAX_INCREMENTAL_MONTHS} cap). Fetching only the "
+                    f"newest {TREASURY_MAX_INCREMENTAL_MONTHS}; run mode=backfill "
+                    f"to close the older part.")
+                months_to_fetch = months_to_fetch[-TREASURY_MAX_INCREMENTAL_MONTHS:]
+                incremental_from = date(*months_to_fetch[0], 1)
+            logger.info(f"  📅 Last stored date: {last} → fetching "
+                        f"{len(months_to_fetch)} month(s) from {incremental_from}")
 
         elif mode == "full":
             # سحب كل البيانات التاريخية من 1990
-            for year in range(1990, today.year + 1):
-                end_month = today.month if year == today.year else 12
-                for month in range(1, end_month + 1):
-                    months_to_fetch.append((year, month))
+            months_to_fetch = _months_covering(date(1990, 1, 1), today)
 
         elif mode == "backfill":
-            for year in range(2018, today.year + 1):
-                end_month = today.month if year == today.year else 12
-                for month in range(1, end_month + 1):
-                    months_to_fetch.append((year, month))
+            months_to_fetch = _months_covering(date(2018, 1, 1), today)
 
         elif mode == "backfill_recent":
-            for year in range(today.year - 5, today.year + 1):
-                end_month = today.month if year == today.year else 12
-                for month in range(1, end_month + 1):
-                    months_to_fetch.append((year, month))
+            months_to_fetch = _months_covering(
+                date(today.year - 5, today.month, 1), today)
 
         logger.info(f"  📅 Will fetch {len(months_to_fetch)} month(s)")
 
@@ -237,6 +276,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Treasury.gov Yield Curve Scraper")
     parser.add_argument("--mode", default="incremental",
                         choices=["incremental", "last5days", "full", "backfill", "backfill_recent"],
-                        help="incremental: الشهر الحالي | full: من 1990 | backfill: من 2018 | backfill_recent: آخر 5 سنوات")
+                        help="incremental: آخر تاريخ في القاعدة ← اليوم | full: من 1990 | "
+                             "backfill: من 2018 | backfill_recent: آخر 5 سنوات")
     args = parser.parse_args()
     scrape_treasury_gov(mode=args.mode)
