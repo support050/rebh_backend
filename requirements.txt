@@ -87,12 +87,19 @@ xlrd
 # (eurodollar, gurufocus, SAMA bulletin, sukuk grid). Verified 2026-10-23 with
 # this exact venv: `pip check` clean on anyio 3.7.1, because scrapling 0.5's own
 # requirements are cssselect/lxml/orjson/tld/typing_extensions/w3lib — no anyio.
-# The pin above (anyio==3.7.1) must stay: a bare `pip install scrapling[fetchers]`
-# in a fresh resolver can still drag anyio to 4.x, and fastapi 0.104.1 requires
-# anyio<4.0.0. Re-run `pip check` after any change here.
-# No `scrapling install` step is needed: the browser paths reuse the image's
-# google-chrome-stable (see Dockerfile GOOGLE_CHROME_BIN / CHROME_BIN).
-scrapling[fetchers]==0.5
+# The `[fetchers]` extra is intentionally NOT installed on the web build:
+# scrapling[fetchers] 0.5 resolves its engines to anyio>=4.14, which collides
+# with fastapi 0.104.1 (anyio<4.0.0) -> pip ResolutionImpossible, Render build
+# fail (2026-10-26). The BASE wheel below is parse-only and pulls NO anyio (its
+# deps are cssselect/lxml/orjson/tld/typing_extensions/w3lib), so the anyio==3.7.1
+# pin stays and fastapi/the web app are untouched.
+# scrapling_fetch.py imports the fetchers inside a try/except, so without the
+# extra it degrades gracefully (HAVE_SCRAPLING=False) and the stealth/HTTP
+# scrapers (eurodollar, gurufocus, SAMA, sukuk) fall back to their non-scrapling
+# paths — all of which are IP-blocked from Render's datacenter IP anyway, so run
+# those fetches locally. The standalone curl_cffi/patchright/playwright pins below
+# are kept (none of them requires anyio>=4).
+scrapling==0.5
 curl_cffi==0.16.3
 patchright==1.64.2
 browserforge==1.2.4
