@@ -482,6 +482,19 @@ def export_rs_hub_data(target_date: date = None):
             json.dump(output_json, f, ensure_ascii=False, indent=2)
             
         logger.info(f"✅ Successfully exported RS Hub data to {json_path}")
+
+        # Invalidate the API-side Redis copy (rs_hub:latest_data, TTL 24h) so
+        # GET /rs/hub-data rebuilds from the freshly written file instead of
+        # serving yesterday's snapshot for up to a full day.
+        try:
+            import redis as sync_redis
+            redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+            _r = sync_redis.from_url(redis_url, decode_responses=True, socket_timeout=5)
+            _r.unlink("rs_hub:latest_data")   # non-blocking eviction
+            _r.close()
+            logger.info("🗑️ Invalidated rs_hub:latest_data cache key")
+        except Exception as cache_err:
+            logger.warning(f"⚠️ rs_hub cache invalidation skipped: {cache_err}")
         
         # 11. رفع الملف إلى Cloudflare R2
         r2_account_id = os.getenv("R2_ACCOUNT_ID")

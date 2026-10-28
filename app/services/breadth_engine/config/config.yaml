@@ -176,6 +176,34 @@ momentum:
   d34_days: 34
   d34_pct: 0.13                     # +/- 13% in 34 days
 
+# ---------------------------------------------------------------- Guru Stock Scans (9 columns, latest-day snapshot)
+# Each scan is a per-stock membership on the newest trading day; a stock may appear
+# in several columns (the dashboard orders columns by how many scans it passed).
+# Thresholds are TASI-adapted; the US "9 point" mover becomes a relative 9% move.
+guru:
+  qullamaggie:
+    lookback_days: 252              # pivot = PRIOR 52-week high (window shifted off today)
+    fresh_days: 5                   # a breakout counts while it happened within the last N sessions
+    vol_mult: 1.5                   # breakout-day volume >= 1.5 x prior-50-session average
+  sb_9m:
+    move_pct: 0.09                  # relative-adapted "9-point" mover: daily move >= 9%
+    require_volume_up: true
+  sb_weekly:
+    days: 5                         # one trading week
+    move_pct: 0.20                  # >= 20% over the week
+  club_97:
+    pct_off_high: 0.03              # within 3% of the 52-week high (>= 97%)
+    recent_high_days: 10            # the 52-week high was set within the last N sessions
+  hvc:
+    top_n: 20                       # highest relative-volume names (today vol / prior-50d avg)
+    vol_window: 50
+  canslim:
+    rs_min: 80                      # RS rating >= 80, IN ADDITION to the Minervini trend template
+    q_mom_pct: 0.20                 # and 3-month (63d) return >= 20%
+  tml:
+    eps_growth_min: 25.0            # latest-quarter EPS YoY >= 25% (percent), from eps_growth_service
+    require_quarterly: true         # ignore basis='annual' records (TML is a quarterly-growth scan)
+
 # ---------------------------------------------------------------- Phase 4: sectors, concentration, divergences
 sectors:
   group_field: "industry_group"       # TASI industry groups (closest to Tadawul sector indices)

@@ -12,7 +12,7 @@ read ONLY by API routes.
 
 from sqlalchemy import (
     JSON, BigInteger, Boolean, Column, Date, DateTime, Index, Integer,
-    Numeric, String, Text, func,
+    Numeric, String, Text, UniqueConstraint, func,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 
@@ -301,6 +301,34 @@ class BreadthCompositePercentiles(Base):
     median_score = _n("median_score"); trin_10 = _n("trin_10")
     ratio_10_inv = _n("ratio_10_inv"); pct_down_x_10d = _n("pct_down_x_10d")
     lowry95_down_recent = _n("lowry95_down_recent"); thrust_recent = _n("thrust_recent")
+
+
+class UserDashboard(Base):
+    """CR3 Custom Dashboard persistence (client md §2: user_dashboards).
+
+    One row per (user, dashboard name). `items` is the cdExport layout array
+    — [{w: widgetId, c: cols 3..12, h: px}] — ported verbatim from the
+    reference template; the frontend owns widget ids, the backend only stores.
+    `is_default` marks the tab opened first (one per user, enforced by the API).
+    Written ONLY by /api/rebh/breadth/dashboards; deleted with the user by
+    app.services.user_cleanup.
+    """
+
+    __tablename__ = "user_dashboards"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, nullable=False, index=True)
+    name = Column(String(120), nullable=False)
+    items = Column(JSONB, nullable=False, default=list)
+    is_default = Column(Boolean, nullable=False, default=False)
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
+
+    __table_args__ = (
+        UniqueConstraint("user_id", "name", name="uq_user_dashboards_user_name"),
+    )
+
+    def __repr__(self):
+        return f"<UserDashboard(user_id={self.user_id}, name={self.name})>"
 
 
 class BreadthData(Base):

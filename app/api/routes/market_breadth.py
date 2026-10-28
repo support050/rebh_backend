@@ -12,6 +12,7 @@ import pandas as pd
 import urllib.parse
 
 from app.core.database import get_db
+from app.core.cache_config import CACHE_TTL_LEGACY_BREADTH
 from app.core.cache_helpers import cache_read_through
 from app.models.static_stock_info import StaticStockInfo
 from app.models.price import Price
@@ -19,8 +20,9 @@ from app.models.rs_daily import RSDaily
 
 router = APIRouter(prefix="/market-breadth", tags=["Market Breadth"])
 
-AD_RATING_CACHE_TTL = 86400  # 24 hours
-DASHBOARD_CACHE_TTL = 86400  # 24 hours
+# Both legacy cache families share the same 24h TTL (cache_config.CACHE_TTL_LEGACY_BREADTH).
+AD_RATING_CACHE_TTL = CACHE_TTL_LEGACY_BREADTH
+DASHBOARD_CACHE_TTL = CACHE_TTL_LEGACY_BREADTH
 DEFAULT_CHART_LIMIT = 3000
 
 

@@ -14,7 +14,7 @@ from app.services.bank_analytics_service import calculate_bank_metrics
 from app.services import khurafshi_engine_service
 from app.services import course_labs_service
 from app.services.xbrl_data_service import get_company, list_companies
-from app.api.deps import get_current_user, get_current_user_optional
+from app.api.deps import get_current_admin, get_current_user, get_current_user_optional
 from app.core.database import get_db
 from app.core.cache_helpers import cache_read_through, make_rebh_engine_key
 from app.core.cache_config import CACHE_TTL_REBH_ENGINE
@@ -48,7 +48,8 @@ async def get_engine_company(
     """
     Primary Production Company Endpoint: GET /api/engine/{symbol}.
     Returns the complete RebhUniversalContract payload directly.
-    Read-through Redis cache (1h TTL); the heavy XBRL+engine computation
+    Read-through Redis cache (CACHE_TTL_REBH_ENGINE — 3-day safety net,
+    busted daily by the pipeline flush); the heavy XBRL+engine computation
     runs in the thread pool so the event loop never blocks.
     """
     try:
@@ -129,7 +130,7 @@ async def get_rebh_company(
 ) -> Dict[str, Any]:
     """
     Universal Company Engine Endpoint (Compatibility Alias).
-    Read-through cached (1h TTL) in the same key space as GET /api/engine/{symbol}.
+    Read-through cached (same TTL, same key space) as GET /api/engine/{symbol}.
     """
     try:
         return await cache_read_through(
@@ -1945,13 +1946,17 @@ def get_classification_route(symbol: str) -> Dict[str, Any]:
     return rebh_classification_service.get_company_classification(symbol=sym, sector=sector)
 
 
-@router.post("/classification/{symbol}")
+@router.post("/classification/{symbol}", dependencies=[Depends(get_current_admin)])
 def save_classification_override_route(
     symbol: str,
     payload: ClassificationOverrideIn
 ) -> Dict[str, Any]:
     """
     Persists an owner-editable classification override for a company.
+
+    Admin-only: the override feeds the sector-relative grades and screen
+    membership shown to every customer, and the company page only reads it
+    (``GET /api/rebh/classification/{symbol}``).
     """
     sym = symbol.strip().upper()
     return rebh_classification_service.save_company_classification_override(

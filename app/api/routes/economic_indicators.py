@@ -5,6 +5,7 @@ from starlette.concurrency import run_in_threadpool
 from sqlalchemy.orm import Session
 from sqlalchemy import desc, func
 
+from app.api.deps import get_current_admin
 from app.core.database import get_db
 from app.models.economic_indicators import EconomicIndicator, TreasuryYieldCurve, SP500History, EurodollarFutures, CmeFedwatch
 from app.schemas.economic_indicators import EconomicIndicatorResponse, TreasuryYieldCurveResponse, SP500HistoryResponse, EurodollarFuturesResponse, CmeFedwatchResponse
@@ -18,6 +19,7 @@ import threading
 
 from app.core.security import verify_internal_key
 from app.core.redis import redis_cache
+from app.core.cache_config import CACHE_TTL_ECONOMIC_INDICATORS
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -69,7 +71,7 @@ async def get_sp500_history(
     res = await run_in_threadpool(fetch_sp500_db, db, start_date, end_date, limit)
     
     try:
-        await redis_cache.set(cache_key, res, expire=3600)  # cache for 1 hour
+        await redis_cache.set(cache_key, res, expire=CACHE_TTL_ECONOMIC_INDICATORS)  # cache for 1 hour
     except Exception as e:
         logger.warning(f"Failed to cache SP500 data: {e}")
     
@@ -126,7 +128,7 @@ async def get_yield_curve(
     res = await run_in_threadpool(fetch_yield_curve_db, db, start_date, end_date, limit)
         
     try:
-        await redis_cache.set(cache_key, res, expire=3600)  # cache for 1 hour
+        await redis_cache.set(cache_key, res, expire=CACHE_TTL_ECONOMIC_INDICATORS)  # cache for 1 hour
     except Exception as e:
         logger.warning(f"Failed to cache yield curve data: {e}")
     
@@ -146,14 +148,17 @@ def trigger_scrape_treasury_gov(mode: str = Query("incremental", description="in
     _start_tracked("treasury_gov", scrape_treasury_gov, mode)
     return {"message": f"Treasury.gov CSV scraper started (mode={mode}). This fetches all maturities and fills missing days."}
 
-@router.get("/clear-cache")
+@router.post("/clear-cache", dependencies=[Depends(get_current_admin)])
 async def clear_yield_cache():
-    """Clear all cached economic indicator data from Redis."""
-    keys = await redis_cache.keys("economic:*")
-    count = 0
-    for key in keys:
-        await redis_cache.delete(key)
-        count += 1
+    """Clear all cached economic indicator data from Redis.
+
+    Admin-only POST: it was a public GET, so any crawler or third-party page
+    could purge the whole `economic:*` namespace and force every reader to hit
+    the DB at once (the CSRF middleware cannot protect a GET).
+    """
+    # SCAN + batched non-blocking UNLINK (was blocking KEYS + per-key DELETE).
+    keys = await redis_cache.scan_iter("economic:*")
+    count = await redis_cache.unlink(*keys) if keys else 0
     return {"message": f"Cleared {count} cached keys."}
 
 # ──────────────────── Eurodollar Futures (Investing.com) ────────────────────

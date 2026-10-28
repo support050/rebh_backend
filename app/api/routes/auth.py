@@ -26,6 +26,7 @@ from app.core.auth import (
     decode_token,
     generate_token,
     get_password_hash,
+    get_refresh_generation,
     hash_token,
     invalidate_all_sessions,
     invalidate_refresh_token,
@@ -39,6 +40,7 @@ from app.core.auth import (
     verify_token_exists,
 )
 from app.core.config import settings
+from app.core.audit_log import audit_event
 from app.core.database import SessionLocal, get_db
 from app.core.limiter import limiter
 from app.core.redis import RedisUnavailableError, redis_cache
@@ -48,8 +50,13 @@ from app.core.redis import (
     store_verification_token,
 )
 from app.models.user import User
+from app.services.account_lock import (
+    is_temporarily_locked as _account_is_temporarily_locked,
+    resolve_lockout as _resolve_lockout,
+)
 from app.services.user_cleanup import delete_user_related_data
 from app.schemas.auth import (
+    DeleteAccountRequest,
     ForgetPasswordRequest,
     OAuthConfirmLinkRequest,
     ResetPasswordRequest,
@@ -57,6 +64,7 @@ from app.schemas.auth import (
     UserRegister,
     UserResponse,
     UserUpdate,
+    normalize_email,
 )
 from app.services.email_service import send_email
 
@@ -84,7 +92,9 @@ def validate_password_strength(password: str):
 
 
 def _cookie_secure() -> bool:
-    return settings.ENVIRONMENT == "production"
+    # Single fail-secure definition (app.core.config). Reading the raw string
+    # here meant `ENVIRONMENT=prod` silently dropped `Secure`.
+    return settings.cookie_secure
 
 
 def set_csrf_cookie(response: Response, token: str | None = None) -> str:
@@ -147,15 +157,15 @@ def set_pending_cookie(response: Response, pending_token: str):
 
 async def create_and_store_tokens(user: User):
     try:
-        access_token = create_access_token(
-            data={
-                "sub": str(user.id),
-                "email": user.email,
-                "is_approved": user.is_approved,
-                "is_admin": user.is_admin,
-            }
+        # Claims carry the subject only. is_admin / is_approved are re-read from
+        # the database on every request, and a JWT payload is merely base64 —
+        # putting the address or the privilege flag in it was pure leakage.
+        access_token = create_access_token(data={"sub": str(user.id)})
+        # `gen` pins the token to the current refresh family so a reuse incident
+        # can invalidate every outstanding refresh token with one Redis bump.
+        refresh_token = create_refresh_token(
+            data={"sub": str(user.id), "gen": await get_refresh_generation(user.id)}
         )
-        refresh_token = create_refresh_token(data={"sub": str(user.id), "email": user.email})
         await store_token_in_redis(user.id, access_token)
         await store_refresh_token_in_redis(user.id, refresh_token)
         return access_token, refresh_token
@@ -178,6 +188,35 @@ async def create_oauth_state(provider: str):
         if not ok:
             raise service_unavailable()
     return state, verifier
+
+
+def set_oauth_state_cookie(response: Response, provider: str, state: str) -> None:
+    """Bind an OAuth handshake to the browser that started it.
+
+    The `state` value itself has to travel through the provider, so it is visible
+    in the redirect URL and in history; the copy in this HttpOnly cookie is not.
+    A handshake started by another origin (a link, a form POST from a foreign
+    page) cannot write this cookie for our site, so the callback can tell the two
+    apart. Absent cookie = no proof either way (front and back on different
+    sites, or the login GET was answered elsewhere), so the check degrades to the
+    previous behaviour instead of breaking the flow.
+    """
+    response.set_cookie(
+        key=f"oauth_state_{provider}",
+        value=state,
+        httponly=True,
+        secure=_cookie_secure(),
+        samesite="lax",
+        max_age=600,
+        path="/",
+    )
+
+
+def _oauth_state_bound_to_browser(request: Request, provider: str, state: str) -> bool:
+    presented = request.cookies.get(f"oauth_state_{provider}")
+    if not presented:
+        return True
+    return secrets.compare_digest(presented, state)
 
 
 async def consume_oauth_state(provider: str, state: str):
@@ -217,6 +256,8 @@ async def _resolve_oauth_login(
     Never auto-attaches OAuth to a verified password account by email alone.
     """
     subject_field = "google_sub" if provider == "google" else "facebook_id"
+    # Providers may return a mixed-case address; store and look up the canonical form.
+    email = normalize_email(email)
 
     user = db.query(User).filter(getattr(User, subject_field) == provider_subject).first()
     if user:
@@ -250,35 +291,77 @@ async def _resolve_oauth_login(
     return None, link_token
 
 
-def _account_is_temporarily_locked(user: User) -> bool:
-    if user.locked_until and user.locked_until > datetime.utcnow():
-        return True
-    if user.is_locked and user.locked_until and user.locked_until <= datetime.utcnow():
-        # Auto-unlock expired lockouts
-        user.is_locked = False
-        user.locked_until = None
-        user.failed_login_attempts = 0
-        return False
-    if user.is_locked and not user.locked_until:
-        # Legacy permanent lock — treat as locked (admin must unlock)
-        return True
-    return False
+def _account_is_locked(db: Session, user: User) -> bool:
+    """Lock check that PERSISTS an expired lockout (see account_lock).
+
+    The old code cleared the fields in memory and let the caller's
+    ``db.commit()`` decide — but that commit sat inside the ``if locked:``
+    branch, so the auto-unlock was rolled back when the session closed and the
+    row stayed locked for good.
+    """
+    return _resolve_lockout(db, user)
 
 
-async def _register_failed_login(db: Session, user: User) -> None:
-    """Increment failure counter and apply temporary lockout. Uses row lock."""
+async def _note_failed_login_for_ip(user_id: int, client_ip: str | None) -> int | None:
+    """Count failed logins per (IP, account); None when it cannot be determined.
+
+    Fail-soft on purpose: a Redis outage must not turn into a 500 on the login
+    form. Returning None makes the caller fall back to the plain per-account
+    counter, i.e. the pre-existing (stricter) behaviour.
+    """
+    if not client_ip:
+        return None
+    key = f"loginfail:{user_id}:{hashlib.sha256(client_ip.encode()).hexdigest()[:16]}"
+    try:
+        return await redis_cache.incr_with_expire(
+            key, settings.LOCKOUT_DURATION_MINUTES * 60
+        )
+    except RedisUnavailableError:
+        logger.warning("Failed-login IP counter unavailable user_id=%s", user_id)
+        return None
+
+
+async def _register_failed_login(
+    db: Session, user: User, client_ip: str | None = None
+) -> None:
+    """Increment the failure counter and apply a temporary lockout.
+
+    Lockout needs two dimensions, because a plain per-account counter is itself
+    a denial-of-service: anyone typing five wrong passwords for someone else's
+    email locks that person out (OWASP A07 / ASVS 2.2.1 - lockouts must not
+    become a weapon).
+
+    * same IP reached ``MAX_FAILED_LOGIN_ATTEMPTS`` (5) -> lock, the classic
+      brute-force case;
+    * any mix of IPs reaching ``MAX_FAILED_LOGIN_ATTEMPTS_SOFT_CAP`` (15) ->
+      still lock, so a distributed attempt is not free;
+    * no client IP / Redis down -> fall back to the plain account counter.
+    """
     locked_user = db.query(User).filter(User.id == user.id).with_for_update().first()
     if not locked_user:
         return
     locked_user.failed_login_attempts = (locked_user.failed_login_attempts or 0) + 1
+    attempts = locked_user.failed_login_attempts
+    same_ip_failures = await _note_failed_login_for_ip(locked_user.id, client_ip)
+
+    reached_same_ip = (
+        attempts >= settings.MAX_FAILED_LOGIN_ATTEMPTS
+        and (same_ip_failures is None or same_ip_failures >= settings.MAX_FAILED_LOGIN_ATTEMPTS)
+    )
+    reached_soft_cap = attempts >= settings.MAX_FAILED_LOGIN_ATTEMPTS_SOFT_CAP
+
     just_locked = False
-    if locked_user.failed_login_attempts >= settings.MAX_FAILED_LOGIN_ATTEMPTS:
+    if reached_same_ip or reached_soft_cap:
         locked_user.is_locked = True
         locked_user.locked_until = datetime.utcnow() + timedelta(
             minutes=settings.LOCKOUT_DURATION_MINUTES
         )
         just_locked = True
-        logger.warning("Account temporarily locked after failed logins user_id=%s", locked_user.id)
+        logger.warning(
+            "Account temporarily locked after failed logins user_id=%s attempts=%s "
+            "same_ip=%s soft_cap=%s",
+            locked_user.id, attempts, same_ip_failures, reached_soft_cap,
+        )
     db.commit()
     if just_locked:
         try:
@@ -299,16 +382,13 @@ def _reset_failed_login(db: Session, user: User) -> None:
 
 async def _issue_pending_response(user: User) -> JSONResponse:
     try:
+        # Subject + scope only: a pending token must advertise nothing about the
+        # account, and it is stored on its own concurrency index so waiting for
+        # approval cannot consume one of the five real session slots.
         temp_token = create_access_token(
-            data={
-                "sub": str(user.id),
-                "email": user.email,
-                "is_approved": False,
-                "is_admin": False,
-                "scope": "check_approval_only",
-            }
+            data={"sub": str(user.id), "scope": "check_approval_only"}
         )
-        await store_token_in_redis(user.id, temp_token)
+        await store_token_in_redis(user.id, temp_token, session_kind="pending")
     except RedisUnavailableError:
         raise service_unavailable()
 
@@ -422,7 +502,11 @@ async def refresh_token_endpoint(request: Request, response: Response, db: Sessi
     await consume_refresh_token(user_id, raw_refresh)
 
     user = db.query(User).filter(User.id == user_id).first()
-    if not user or _account_is_temporarily_locked(user):
+    # A locked row must not keep receiving fresh access tokens, even when the
+    # lock has no expiry (administrative unlock): this endpoint used to consult
+    # only the temporary-lock helper, so a locked account could refresh forever
+    # while every authenticated call answered 401.
+    if not user or _account_is_locked(db, user):
         raise HTTPException(status_code=401, detail="Refresh token expired or revoked")
     if not user.is_approved:
         raise HTTPException(status_code=403, detail="Account pending admin approval")
@@ -454,20 +538,38 @@ async def login(request: Request, response: Response, user: UserLogin, db: Sessi
             burn_password_hash_cpu(user.password)
             raise HTTPException(status_code=401, detail=GENERIC_AUTH_ERROR)
 
-        if _account_is_temporarily_locked(db_user):
-            db.commit()  # persist auto-unlock if any
+        if _account_is_locked(db, db_user):
             # Same error as wrong password — no lock enumeration
             burn_password_hash_cpu(user.password)
             raise HTTPException(status_code=401, detail=GENERIC_AUTH_ERROR)
 
         if not verify_password(user.password, db_user.hashed_password):
-            await _register_failed_login(db, db_user)
+            client_ip = request.client.host if request.client else None
+            await _register_failed_login(db, db_user, client_ip=client_ip)
             raise HTTPException(status_code=401, detail=GENERIC_AUTH_ERROR)
 
         _reset_failed_login(db, db_user)
 
         if not db_user.is_approved:
             return await _issue_pending_response(db_user)
+
+        # M-6: enforcement is ON as the permanent default since 2026-10-29 —
+        # the only approved-unverified accounts were 12 zero-data test
+        # throwaways (audited, backed up, purged). Unapproved users never
+        # reach this gate (pending response is returned above). The setting
+        # remains overridable only as an emergency kill-switch (e.g. the
+        # verification-mail provider being down); do not turn it off casually.
+        if settings.ENFORCE_EMAIL_VERIFICATION and not db_user.is_verified:
+            audit_event(
+                "login_blocked_unverified",
+                actor_id=db_user.id,
+                actor_email=db_user.email,
+                outcome="failure",
+            )
+            raise HTTPException(
+                status_code=403,
+                detail="يجب تأكيد البريد الإلكتروني قبل تسجيل الدخول",
+            )
 
         access_token, refresh_token = await create_and_store_tokens(db_user)
         set_auth_cookies(response, access_token, refresh_token)
@@ -525,7 +627,9 @@ async def logout(
 
 
 @router.post("/logout-all")
+@limiter.limit("10/minute")
 async def logout_all(
+    request: Request,
     response: Response,
     current_user: User = Depends(require_current_user),
 ):
@@ -543,7 +647,9 @@ async def get_me(current_user: User = Depends(require_current_user)):
 
 
 @router.put("/profile", response_model=UserResponse)
+@limiter.limit("30/minute")
 async def update_profile(
+    request: Request,
     user_update: UserUpdate,
     current_user: User = Depends(require_current_user),
     db: Session = Depends(get_db),
@@ -569,31 +675,88 @@ async def update_profile(
         existing_user = db.query(User).filter(User.email == user_update.email).first()
         if existing_user and existing_user.id != current_user.id:
             raise HTTPException(status_code=400, detail="البريد الإلكتروني مستخدم بالفعل")
+
+        # The old address must stop authenticating immediately: revoke every live
+        # session first (fail-closed, same ordering as the password branch below),
+        # so the user signs back in with the new email and nothing stale survives.
+        try:
+            await invalidate_all_sessions(db_user.id)
+        except RedisUnavailableError:
+            raise service_unavailable()
+
         db_user.email = user_update.email
         db_user.is_verified = False
+        audit_event(
+            "email_changed",
+            actor_id=db_user.id,
+            target_user_id=db_user.id,
+            note="sessions revoked, verification required again",
+        )
 
     if user_update.password:
+        # Prove knowledge of the current secret first. Without it, any stolen
+        # session cookie (or an unlocked browser) was enough to take the account
+        # over: the new hash was written immediately, and every session was then
+        # revoked — kicking the real owner out while the attacker kept the new
+        # password. OWASP A07 / ASVS 3.3.2.
+        if not user_update.current_password:
+            raise HTTPException(
+                status_code=400,
+                detail="يجب إدخال كلمة المرور الحالية لتغيير كلمة المرور",
+            )
+        if not verify_password(user_update.current_password, db_user.hashed_password):
+            raise HTTPException(status_code=400, detail="كلمة المرور الحالية غير صحيحة")
+        if user_update.password == user_update.current_password:
+            raise HTTPException(
+                status_code=400, detail="كلمة المرور الجديدة يجب أن تختلف عن الحالية"
+            )
         validate_password_strength(user_update.password)
         try:
             await invalidate_all_sessions(db_user.id)
         except RedisUnavailableError:
             raise service_unavailable()
         db_user.hashed_password = get_password_hash(user_update.password)
+        audit_event(
+            "password_changed",
+            actor_id=db_user.id,
+            target_user_id=db_user.id,
+            note="all sessions revoked",
+        )
 
     db.commit()
     db.refresh(db_user)
     return db_user
 
 
-@router.delete("/delete-account")
+@router.post("/delete-account")
+@limiter.limit("5/hour")
 async def delete_account(
+    request: Request,
     response: Response,
+    payload: DeleteAccountRequest,
     current_user: User = Depends(require_current_user),
     db: Session = Depends(get_db),
 ):
+    """Delete the signed-in account and every row attached to it.
+
+    POST rather than DELETE because the proof-of-identity has to travel in a
+    body, and the irreversible action now demands re-authentication: a session
+    cookie alone used to be enough to erase an account permanently.
+    """
     db_user = db.query(User).filter(User.id == current_user.id).first()
     if not db_user:
         raise HTTPException(status_code=404, detail="المستخدم غير موجود")
+
+    if not verify_password(payload.password, db_user.hashed_password):
+        # Same shape as a wrong login, and deliberately no hint about why.
+        burn_password_hash_cpu(payload.password)
+        audit_event(
+            "account_delete_denied",
+            actor_id=db_user.id,
+            target_user_id=db_user.id,
+            outcome="failure",
+        )
+        raise HTTPException(status_code=400, detail="كلمة المرور غير صحيحة")
 
     if db_user.is_admin:
         admin_count = db.query(User).filter(User.is_admin == True).count()  # noqa: E712
@@ -601,17 +764,33 @@ async def delete_account(
             raise HTTPException(status_code=400, detail="لا يمكن حذف آخر حساب مدير")
 
     # Invalidate sessions first
-    await invalidate_all_sessions(current_user.id)
+    try:
+        await invalidate_all_sessions(current_user.id)
+    except RedisUnavailableError:
+        raise service_unavailable()
     clear_auth_cookies(response)
 
+    actor_id, actor_email = db_user.id, db_user.email
     try:
         delete_user_related_data(db, current_user.id)
         db.delete(db_user)
         db.commit()
     except Exception:
         db.rollback()
+        audit_event(
+            "account_delete",
+            actor_id=actor_id,
+            target_user_id=actor_id,
+            outcome="failure",
+        )
         raise
 
+    audit_event(
+        "account_delete",
+        actor_id=actor_id,
+        actor_email=actor_email,
+        target_user_id=actor_id,
+    )
     return {"message": "تم حذف الحساب بنجاح"}
 
 
@@ -650,6 +829,7 @@ async def forget_password(
         user_id=user.id,
         purpose="password_reset",
     )
+    audit_event("password_reset_requested", actor_id=user.id, target_user_id=user.id)
     return {"message": GENERIC_RESET_MESSAGE}
 
 
@@ -689,10 +869,12 @@ async def reset_password(request: Request, payload: ResetPasswordRequest, db: Se
     user.locked_until = None
     db.commit()
 
+    audit_event("password_reset_completed", actor_id=user.id, target_user_id=user.id)
     return {"message": "تم تغيير كلمة المرور بنجاح"}
 
 
 @router.post("/activate-session")
+@limiter.limit("10/minute")
 async def activate_session(request: Request, db: Session = Depends(get_db)):
     """Convert pending_token into a full session after admin approval."""
     pending_token = request.cookies.get("pending_token")
@@ -749,6 +931,7 @@ async def activate_session(request: Request, db: Session = Depends(get_db)):
 
 
 @router.get("/pending-status/check")
+@limiter.limit("60/minute")
 async def pending_status_check(request: Request):
     """Polling endpoint — short-lived DB session only. Requires valid Redis JTI."""
     pending_token = request.cookies.get("pending_token")
@@ -776,6 +959,7 @@ async def pending_status_check(request: Request):
 
 
 @router.get("/pending-status/stream")
+@limiter.limit("10/minute")
 async def pending_status_stream(request: Request):
     """
     SSE approval notifications.
@@ -809,37 +993,74 @@ async def pending_status_stream(request: Request):
         db.close()
 
     async def event_generator():
-        yield f'data: {{"approved": {str(initially_approved).lower()}}}\n\n'
+        """Bounded on three axes (the previous stream was unbounded):
+
+        * total lifetime — one held connection is a held Redis pubsub and a slot
+          in the worker's connection pool, so a ceiling per stream is mandatory
+          once the endpoint is reachable by cookie-authenticated visitors;
+        * freshness of the credential — the JTI is re-checked, so approval or a
+          revoke ends the stream in seconds instead of after a full token TTL;
+        * client abandonment — every loop step asks `is_disconnected()`.
+        """
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + settings.PENDING_SSE_MAX_SECONDS
+
+        def sse(approved: bool) -> str:
+            return f'data: {{"approved": {"true" if approved else "false"}}}\n\n'
+
+        yield sse(initially_approved)
         if initially_approved:
             return
 
         pubsub = await redis_cache.pubsub()
         if not pubsub:
             # Fallback polling with short-lived sessions
-            while True:
+            while loop.time() < deadline:
                 if await request.is_disconnected():
-                    break
-                await asyncio.sleep(10)
+                    return
+                await asyncio.sleep(settings.SSE_RECHECK_SECONDS)
+                try:
+                    if not await verify_token_exists(user_id, pending_token):
+                        return
+                except RedisUnavailableError:
+                    return
                 poll_db = SessionLocal()
                 try:
                     u = poll_db.query(User).filter(User.id == user_id).first()
                     approved = bool(u and u.is_approved)
                 finally:
                     poll_db.close()
-                yield f'data: {{"approved": {str(approved).lower()}}}\n\n'
+                yield sse(approved)
                 if approved:
-                    break
+                    return
+            yield "event: timeout\ndata: {}\n\n"
             return
 
         channel_name = f"user_approval_{user_id}"
         try:
             await pubsub.subscribe(channel_name)
-            async for message in pubsub.listen():
+            while loop.time() < deadline:
                 if await request.is_disconnected():
-                    break
-                if message.get("type") == "message" and message.get("data") == "approved":
-                    yield 'data: {"approved": true}\n\n'
-                    break
+                    return
+                try:
+                    message = await pubsub.get_message(
+                        ignore_subscribe_messages=True,
+                        timeout=settings.SSE_RECHECK_SECONDS,
+                    )
+                except Exception:
+                    # Redis hiccup: end the stream; the client re-subscribes with
+                    # a freshly validated token rather than streaming on trust.
+                    return
+                if message and message.get("type") == "message" and message.get("data") == "approved":
+                    yield sse(True)
+                    return
+                # Idle wake-up: re-validate the credential that opened this stream.
+                try:
+                    if not await verify_token_exists(user_id, pending_token):
+                        return
+                except RedisUnavailableError:
+                    return
+            yield "event: timeout\ndata: {}\n\n"
         finally:
             try:
                 await pubsub.unsubscribe(channel_name)
@@ -866,6 +1087,7 @@ async def verify_email(request: Request, token: str, db: Session = Depends(get_d
     # Email verification must NOT grant admin approval
     db.commit()
     await delete_verification_token(token)
+    audit_event("email_verified", actor_id=user.id, target_user_id=user.id)
     return {"message": "تم التحقق من البريد الإلكتروني بنجاح"}
 
 
@@ -901,8 +1123,7 @@ async def oauth_confirm_link(
     if not user or not verify_password(payload.password, user.hashed_password):
         raise HTTPException(status_code=401, detail=GENERIC_AUTH_ERROR)
 
-    if _account_is_temporarily_locked(user):
-        db.commit()
+    if _account_is_locked(db, user):
         raise HTTPException(status_code=401, detail=GENERIC_AUTH_ERROR)
 
     subject_field = "google_sub" if provider == "google" else "facebook_id"
@@ -938,11 +1159,12 @@ async def oauth_confirm_link(
 
 
 @router.get("/google/login")
-async def google_login():
+async def google_login(response: Response):
     if not settings.GOOGLE_CLIENT_ID:
         raise HTTPException(status_code=500, detail="Google OAuth configuration is missing")
     redirect_uri = f"{settings.FRONTEND_URL}/auth/callback/google"
     state, verifier = await create_oauth_state("google")
+    set_oauth_state_cookie(response, "google", state)
     challenge = _pkce_challenge(verifier)
     params = {
         "response_type": "code",
@@ -964,6 +1186,9 @@ async def google_callback(
     try:
         verifier = await consume_oauth_state("google", state)
         if not verifier:
+            raise HTTPException(status_code=400, detail="Invalid OAuth state")
+        if not _oauth_state_bound_to_browser(request, "google", state):
+            # State is valid but this browser never started the handshake.
             raise HTTPException(status_code=400, detail="Invalid OAuth state")
 
         if not settings.GOOGLE_CLIENT_ID or not settings.GOOGLE_CLIENT_SECRET:
@@ -1007,6 +1232,15 @@ async def google_callback(
             raise HTTPException(status_code=400, detail="لم تقدم Google بريدك الإلكتروني")
         if not google_sub:
             raise HTTPException(status_code=400, detail="Google identity subject missing")
+        # Never provision an account from an address the provider has not
+        # confirmed. Without this, whoever can register a Google account under
+        # somebody else's unverified address would be offered a link challenge
+        # — or, for a brand-new address, a fresh account — for it.
+        if user_info.get("email_verified") is False:
+            raise HTTPException(
+                status_code=400,
+                detail="Google did not confirm this email address",
+            )
 
         user, link_token = await _resolve_oauth_login(
             db,
@@ -1027,8 +1261,7 @@ async def google_callback(
                 },
             )
 
-        if _account_is_temporarily_locked(user):
-            db.commit()
+        if _account_is_locked(db, user):
             raise HTTPException(status_code=401, detail=GENERIC_AUTH_ERROR)
 
         if not user.is_approved:
@@ -1057,11 +1290,12 @@ async def google_callback(
 # ── Social Login - Facebook ──────────────────────────────────────────────
 
 @router.get("/facebook/login")
-async def facebook_login():
+async def facebook_login(response: Response):
     if not settings.FACEBOOK_CLIENT_ID:
         raise HTTPException(status_code=500, detail="Facebook OAuth configuration is missing")
     redirect_uri = f"{settings.FRONTEND_URL}/auth/callback/facebook"
     state, _ = await create_oauth_state("facebook")
+    set_oauth_state_cookie(response, "facebook", state)
     params = {
         "client_id": settings.FACEBOOK_CLIENT_ID,
         "redirect_uri": redirect_uri,
@@ -1079,6 +1313,8 @@ async def facebook_callback(
     try:
         verifier = await consume_oauth_state("facebook", state)
         if not verifier:
+            raise HTTPException(status_code=400, detail="Invalid OAuth state")
+        if not _oauth_state_bound_to_browser(request, "facebook", state):
             raise HTTPException(status_code=400, detail="Invalid OAuth state")
 
         if not settings.FACEBOOK_CLIENT_ID or not settings.FACEBOOK_CLIENT_SECRET:
@@ -1125,6 +1361,10 @@ async def facebook_callback(
             raise HTTPException(status_code=400, detail="لم تقدم Facebook بريدك الإلكتروني")
         if not facebook_id:
             raise HTTPException(status_code=400, detail="Facebook identity missing")
+        # Graph does not return a trustworthy email_verified flag (the field is
+        # not readable on /me). Facebook only exposes an address once the
+        # account has confirmed it, so there is nothing equivalent to assert
+        # here; Google's `email_verified` above is the real guard.
 
         user, link_token = await _resolve_oauth_login(
             db,
@@ -1145,8 +1385,7 @@ async def facebook_callback(
                 },
             )
 
-        if _account_is_temporarily_locked(user):
-            db.commit()
+        if _account_is_locked(db, user):
             raise HTTPException(status_code=401, detail=GENERIC_AUTH_ERROR)
 
         if not user.is_approved:

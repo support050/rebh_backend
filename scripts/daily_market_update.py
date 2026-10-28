@@ -1420,7 +1420,7 @@ def update_daily(target_date_str=None):
                     while True:
                         cursor, keys = r.scan(cursor=cursor, match=f"{_prefix}:*", count=500)
                         if keys:
-                            r.delete(*keys)
+                            r.unlink(*keys)   # non-blocking; TTL is the backstop
                             _n += len(keys)
                         if cursor == 0:
                             break

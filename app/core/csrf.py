@@ -29,9 +29,12 @@ class CSRFMiddleware(BaseHTTPMiddleware):
                 "/api/public",
                 "/api/ingest",
                 "/api/reports/admin",
-                "/api/rebh",
-                "/api/engine",
             )
+            # /api/rebh and /api/engine used to be listed here. They are not:
+            # both mount cookie-authenticated user writes (analyst notes, trade
+            # journal, watchlist, council checklists), so exempting them left the
+            # whole surface resting on `SameSite=Lax` alone. Machine callers use
+            # /api/scraper and /api/ingest (X-Internal-Key), which stay exempt.
             if not any(path_for_match.startswith(prefix) for prefix in excluded_prefixes):
                 csrf_header = request.headers.get("x-csrf-token")
                 csrf_cookie = request.cookies.get(CSRF_COOKIE_NAME)
@@ -92,7 +95,7 @@ class CSRFMiddleware(BaseHTTPMiddleware):
         handler_sets_csrf = path.endswith("/auth/csrf")
         if CSRF_COOKIE_NAME not in request.cookies and not handler_sets_csrf:
             try:
-                is_secure = settings.ENVIRONMENT == "production"
+                is_secure = settings.cookie_secure
                 response.set_cookie(
                     key=CSRF_COOKIE_NAME,
                     value=secrets.token_urlsafe(32),

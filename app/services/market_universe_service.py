@@ -12,6 +12,11 @@ from datetime import date
 import calendar
 import re
 import time
+from app.core.cache_config import (
+    IN_MEMORY_TTL_UNIVERSE_LIST,
+    IN_MEMORY_TTL_UNIVERSE_SNAPSHOT,
+    IN_MEMORY_TTL_UNIVERSE_STATS,
+)
 from app.services.xbrl_data_service import list_companies, get_company
 
 
@@ -372,7 +377,7 @@ def _grade_metric(value: Optional[float], thresholds: List[tuple]) -> Dict[str, 
 
 _STATS_CACHE: Optional[Dict[str, Any]] = None
 _STATS_CACHE_TIMESTAMP: float = 0.0
-_STATS_CACHE_TTL_SECONDS: float = 300.0
+_STATS_CACHE_TTL_SECONDS: float = IN_MEMORY_TTL_UNIVERSE_STATS
 
 
 def get_khurafshi_live_market_stats(force_refresh: bool = False) -> Dict[str, Any]:
@@ -540,7 +545,7 @@ def _pick_dividends_paid(cf_items: Dict[str, Dict[str, Any]],
 
 _UNIVERSE_CACHE: Optional[List[Dict[str, Any]]] = None
 _UNIVERSE_CACHE_TIMESTAMP: float = 0.0
-_UNIVERSE_CACHE_TTL = 300.0
+_UNIVERSE_CACHE_TTL = IN_MEMORY_TTL_UNIVERSE_LIST
 
 
 def get_khurafshi_universe_data(force_refresh: bool = False) -> List[Dict[str, Any]]:
@@ -966,7 +971,7 @@ def get_khurafshi_universe_data(force_refresh: bool = False) -> List[Dict[str, A
 # ══════════════════════════════════════════════════════════════════════════
 
 _UNIVERSE_SNAPSHOT_MEMCACHE: Dict[str, Any] = {"timestamp": 0.0, "data": None}
-_SNAPSHOT_MEMCACHE_TTL = 120.0  # seconds — rows are light, cheap to reload
+_SNAPSHOT_MEMCACHE_TTL = IN_MEMORY_TTL_UNIVERSE_SNAPSHOT  # rows are light, cheap to reload
 
 
 def _normalize_sector(sector: Optional[str]) -> str:

@@ -12,6 +12,7 @@ from typing import Optional, List
 import json
 
 from app.core.database import get_db
+from app.core.cache_config import CACHE_TTL_FINANCIALS
 from app.core.redis import redis_cache
 from app.core.security import verify_internal_key
 from app.models.scraped_reports import Company, FinancialReport, PeriodType, ReportType
@@ -24,7 +25,7 @@ from app.schemas.scraped_financials import (
 
 router = APIRouter(prefix="/api/scraper", tags=["Scraper Integration"])
 
-FINANCIALS_CACHE_TTL = 7 * 24 * 60 * 60  # 7 days
+FINANCIALS_CACHE_TTL = CACHE_TTL_FINANCIALS  # 7 days (canonical value in cache_config.py)
 
 
 # ==================== Ingest Endpoints ====================
@@ -103,17 +104,17 @@ async def ingest_scraped_data(
         db.commit()
         
         # 3. Invalidate Redis cache for this symbol
-        fin_key = f"scraper:financials:{request.company_symbol}"
-        deleted = await redis_cache.delete(fin_key)
-        print(f"🗑️ Cache delete '{fin_key}': {'found & deleted' if deleted else 'key not found (already expired or never cached)'}")
-        
-        table_keys = await redis_cache.keys(f"scraper:table:{request.company_symbol}:*")
-        if table_keys:
-            print(f"🗑️ Deleting {len(table_keys)} table cache keys for {request.company_symbol}")
-            for k in table_keys:
-                await redis_cache.delete(k)
-        else:
-            print(f"🗑️ No table cache keys found for {request.company_symbol}")
+        # Pattern (not exact-key) delete: the retrieval endpoints cache under the
+        # URL symbol as typed, so "1150" and "1150.SR" must both be swept.
+        # scan_iter instead of keys(): KEYS blocks Redis for the whole instance;
+        # UNLINK evicts without stalling the event loop on the shared instance.
+        sym = request.company_symbol.upper()
+        for _pattern in (f"scraper:financials:*{sym}*", f"scraper:table:*{sym}*"):
+            _keys = await redis_cache.scan_iter(_pattern)
+            if _keys:
+                await redis_cache.unlink(*_keys)
+        print(f"🗑️ Cache bust for {request.company_symbol}: "
+              f"financials+table keyspaces swept (SCAN-based)")
             
         from app.core.cache_helpers import (
             invalidate_prices_latest,

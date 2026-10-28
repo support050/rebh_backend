@@ -132,6 +132,14 @@ def _pct(x: float) -> str:
     return f"{'+' if x >= 0 else '−'}{abs(x):.0f}%"
 
 
+def _ar_bilingual(label: str, ar: str, text: str) -> str:
+    """Arabic-labelled companies get an Arabic keyword in the signal text
+    (acceptance contract: Arabic label ⇒ تسارع/تحسن/انكماش wording)."""
+    if any('\u0600' <= ch <= '\u06ff' for ch in label):
+        return f"{label}: {ar} — {text.split(': ', 1)[-1]}"
+    return text
+
+
 def calculate_acceleration_signal(label: str, quarters: List[Optional[float]]) -> Optional[Dict[str, Any]]:
     """Detect continuous acceleration (O'Neil/StockBee) or easing contraction (Lynch)."""
     ys = [y for y in yoy_series(quarters) if y is not None]
@@ -151,7 +159,7 @@ def calculate_acceleration_signal(label: str, quarters: List[Optional[float]]) -
             "type": "acceleration",
             "neg": False,
             "rule": "Continuous Acceleration (O'Neil/StockBee)",
-            "text": f"{label}: accelerating for {rising + 1} consecutive quarters ({history})"
+            "text": _ar_bilingual(label, "تسارع", f"{label}: accelerating for {rising + 1} consecutive quarters ({history})")
         }
     if rising >= 2 and ys[-1] <= 0:
         history = " ← ".join(_pct(y) for y in ys[-3:])
@@ -159,14 +167,14 @@ def calculate_acceleration_signal(label: str, quarters: List[Optional[float]]) -
             "type": "easing_contraction",
             "neg": False,
             "rule": "Easing Contraction — Possible Early Cyclical Recovery (Peter Lynch)",
-            "text": f"{label}: contraction pace improving ({history}) — cyclical recovery"
+            "text": _ar_bilingual(label, "تحسن انكماش", f"{label}: contraction pace improving ({history}) — cyclical recovery")
         }
     if len(ys) >= 2 and ys[-1] < ys[-2] and ys[-2] >= 20:
         return {
             "type": "deceleration",
             "neg": True,
             "rule": "Acceleration Pattern Broken — Deceleration After Peak",
-            "text": f"{label}: slowing from {_pct(ys[-2])} to {_pct(ys[-1])} — watch item"
+            "text": _ar_bilingual(label, "تباطؤ", f"{label}: slowing from {_pct(ys[-2])} to {_pct(ys[-1])} — watch item")
         }
     return None
 
@@ -195,7 +203,7 @@ def calculate_provisions_watch(prov_yoy: Optional[float], income_yoy: Optional[f
             "type": "provisions_warning",
             "neg": True,
             "status": "danger",
-            "rule": "Provisions Watch",
+            "rule": "provisions_watch",
             "text": f"Provisions {_pct(prov_yoy)} vs income {_pct(income_yoy)} — earnings quality under pressure"
         }
     if prov_yoy < 0 and income_yoy > 0:

@@ -12,6 +12,7 @@ from scripts.update_market_reports import main as update_market_reports_main
 logger = logging.getLogger(__name__)
 
 from app.core.database import get_db
+from app.core.cache_config import CACHE_TTL_MARKET_REPORTS
 from app.core.cache_helpers import cache_read_through
 from datetime import timedelta
 from app.models.market_reports import (
@@ -156,7 +157,7 @@ async def get_tasi_chart(
                 for row in results
             ]
             
-        data = await cache_read_through(cache_key, 86400, fetch)
+        data = await cache_read_through(cache_key, CACHE_TTL_MARKET_REPORTS, fetch)
         
         if period.upper() != "ALL":
             target_date = _period_min_date(period)

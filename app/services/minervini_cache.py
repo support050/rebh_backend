@@ -5,6 +5,7 @@ No heavy SQL on API requests — run scripts/backfill_screener_daily_trend.py on
 import asyncio
 import logging
 
+from app.core.cache_config import CACHE_TTL_HISTORICAL_TREND
 from app.core.database import SessionLocal
 from app.core.redis import redis_cache
 from app.services.screener_daily_trend_service import build_payload, row_count
@@ -12,7 +13,9 @@ from app.services.screener_daily_trend_service import build_payload, row_count
 logger = logging.getLogger(__name__)
 
 HISTORICAL_TREND_CACHE_KEY = "screener:historical:trend_v5"
-HISTORICAL_TREND_CACHE_TTL = 86400
+# Backward-compatible alias; canonical value lives in cache_config.py
+# (kept because scripts/backfill_screener_daily_trend.py imports it).
+HISTORICAL_TREND_CACHE_TTL = CACHE_TTL_HISTORICAL_TREND
 
 
 def _load_from_db(limit: int) -> dict:

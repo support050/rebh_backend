@@ -20,7 +20,11 @@ from app.core.cache_helpers import (
     cache_read_through,
     make_screener_key,
 )
-from app.core.cache_config import CACHE_TTL_SCREENERS
+from app.core.cache_config import (
+    CACHE_TTL_SCREENERS,
+    CACHE_TTL_HISTORICAL_SCREENER,
+    CACHE_TTL_HISTORICAL_TREND,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -524,7 +528,7 @@ async def get_power_play(
 HISTORICAL_TREND_CACHE_KEY = "screener:historical:trend_v4"
 HISTORICAL_TREND_COMPUTING_KEY = "screener:historical:trend:computing"
 HISTORICAL_TREND_FULL_LIMIT = 6000  # full history for chart — one Redis entry for all periods
-HISTORICAL_TREND_CACHE_TTL = 86400  # 24h — data updates once daily
+# TTL is centralized as CACHE_TTL_HISTORICAL_TREND (24h — data updates once daily)
 
 
 def _compute_historical_trend_sync(limit: int, *, verbose: bool = False) -> dict:
@@ -840,7 +844,7 @@ async def get_historical_ad_rating(
             "total_dates": len(series),
         }
 
-    result = await cache_read_through(cache_key, 3600, fetch_historical)
+    result = await cache_read_through(cache_key, CACHE_TTL_HISTORICAL_SCREENER, fetch_historical)
     return result
 
 

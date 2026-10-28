@@ -1,5 +1,4 @@
 from fastapi import APIRouter, Depends, Query, HTTPException
-from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from sqlalchemy import desc, asc
 from typing import List, Optional
@@ -23,15 +22,6 @@ from app.core.cache_config import CACHE_TTL_PRICES_HISTORY, CACHE_TTL_PRICES_LAT
 
 logger = logging.getLogger(__name__)
 
-
-class StaticStockInfoImportRequest(BaseModel):
-    file1_path: str  # Excel with symbol, approval_with_controls, purge_amount
-    file2_path: str  # Excel with symbol, company_name, marginable_percent
-    symbol_column: str = 'Symbol'  # Default column name in sheets
-    approval_column: str = 'موافقة مع الضوابط'
-    purge_amount_column: str = 'مبلغ التطهير'
-    marginable_column: str = 'Marginable %'
-
 router = APIRouter(prefix="/prices", tags=["Prices"])
 
 import csv
@@ -48,7 +38,7 @@ async def get_price_history(
     Get historical OHLCV + all oscillator data for a symbol.
     prices table: pure OHLCV
     stock_indicators: everything else (RSI, MCAs, SMA, 52w, etc.)
-    Cached with 60-minute TTL.
+    Cached with 24-hour TTL (CACHE_TTL_PRICES_HISTORY).
     """
     cache_key = make_prices_history_key(symbol, limit)
     
@@ -329,89 +319,6 @@ async def get_tasi_history(
             raise HTTPException(status_code=500, detail=str(e))
 
     return await cache_read_through(cache_key, CACHE_TTL_PRICES_HISTORY, fetch_tasi)
-
-
-@router.post("/static-info/import")
-async def import_static_stock_info(request: StaticStockInfoImportRequest, db: Session = Depends(get_db)):
-    """Import quarterly static columns from two Excel files."""
-    try:
-        # Sheet 1: symbol, approval_with_controls, purge_amount
-        df1 = pd.read_excel(request.file1_path, engine='openpyxl')
-        # Sheet 2: symbol, company_name (optional), marginable_percent
-        df2 = pd.read_excel(request.file2_path, engine='openpyxl')
-
-        # Normalize symbol column
-        sym_key = request.symbol_column
-        if sym_key not in df1.columns or sym_key not in df2.columns:
-            raise HTTPException(status_code=400, detail="Symbol column not found in one of the files")
-
-        df1 = df1.rename(columns={
-            sym_key: 'symbol',
-            request.approval_column: 'approval_with_controls',
-            request.purge_amount_column: 'purge_amount'
-        })
-
-        df2 = df2.rename(columns={
-            sym_key: 'symbol',
-            request.marginable_column: 'marginable_percent'
-        })
-
-        df1['symbol'] = df1['symbol'].astype(str).str.strip()
-        df2['symbol'] = df2['symbol'].astype(str).str.strip()
-
-        # Merge static data
-        merged = df1[['symbol', 'approval_with_controls', 'purge_amount']].merge(
-            df2[['symbol', 'marginable_percent']], on='symbol', how='outer')
-            
-        from app.models.static_stock_info import StaticStockInfo
-        from sqlalchemy.dialects.postgresql import insert
-
-        updated = 0
-        for _, row in merged.iterrows():
-            symbol = str(row['symbol']).strip()
-            if not symbol:
-                continue
-
-            values = {
-                "approval_with_controls": row.get('approval_with_controls'),
-                "purge_amount": pd.to_numeric(row.get('purge_amount'), errors='coerce'),
-                "marginable_percent": pd.to_numeric(row.get('marginable_percent'), errors='coerce')
-            }
-            # Clean NaNs
-            values = {k: (v if not pd.isna(v) else None) for k, v in values.items()}
-
-            stmt = insert(StaticStockInfo).values(symbol=symbol, **values)
-            stmt = stmt.on_conflict_do_update(
-                index_elements=['symbol'],
-                set_=values
-            )
-            db.execute(stmt)
-            updated += 1
-            
-        db.commit()
-
-        # Invalidate related caches
-        from app.core.cache_helpers import (
-            invalidate_industry_groups_data, 
-            invalidate_prices_latest, 
-            invalidate_screener_data, 
-            invalidate_technical_screener_data
-        )
-        await invalidate_industry_groups_data()
-        await invalidate_prices_latest()
-        await invalidate_screener_data()
-        await invalidate_technical_screener_data()
-
-        return {
-            "success": True,
-            "updated_rows": updated,
-            "timestamp": date.today().isoformat(),
-            "message": "Static stock data imported successfully"
-        }
-    except Exception as e:
-        db.rollback()
-        print(f"Error importing static stock info: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("/latest", response_model=LatestPricesResponse)

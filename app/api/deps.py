@@ -2,12 +2,21 @@
 
 from __future__ import annotations
 
+from typing import Optional
+
 from fastapi import Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
-from app.core.auth import parse_user_id, verify_token
+from app.core.auth import (
+    RedisUnavailableError,
+    decode_token,
+    parse_user_id,
+    verify_token,
+    verify_token_exists,
+)
 from app.core.database import get_db
 from app.models.user import User
+from app.services.account_lock import resolve_lockout
 
 
 def get_token_payload(request: Request, token: str = Depends(verify_token)) -> dict:
@@ -51,8 +60,10 @@ def get_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    if getattr(user, "is_locked", False):
-        # Locked accounts cannot use the API even with a still-valid JWT
+    # A lock blocks the API even with a still-valid JWT — but an EXPIRED lockout
+    # is cleared and committed here first, otherwise this hot path would 401 a
+    # user forever while login/refresh believed them unlocked.
+    if resolve_lockout(db, user):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="بيانات الدخول غير صحيحة",
@@ -77,16 +88,29 @@ def get_current_admin(current_user: User = Depends(get_current_user)) -> User:
     return current_user
 
 
-def get_current_user_optional(
+async def get_current_user_optional(
     request: Request,
     db: Session = Depends(get_db)
 ) -> Optional[User]:
     """
-    Returns the authenticated User if valid token present, otherwise None.
+    Returns the authenticated User if a usable token is present, otherwise None.
     Does not raise 401, permitting guest mode with fallback.
+
+    "Optional" loosens the RESPONSE (401 -> None), never the IDENTITY CHECKS: every
+    guarantee of get_current_user still applies here — access-type tokens only, the
+    pending `check_approval_only` token rejected, the Redis JTI allowlist enforced
+    (so logged-out / revoked sessions stop resolving), and both lock and approval
+    state honoured. Anything unverifiable yields None, i.e. a guest.
+
+    Deliberately fail-closed on Redis outage (-> guest) rather than 503: these
+    endpoints serve optional personalisation on top of public data, so degrading
+    to anonymous keeps the page working. Write paths still answer 401.
     """
     auth_header = request.headers.get("Authorization")
-    cookie_token = request.cookies.get("access_token")
+    # Cookie name must match what verify_token reads and set_auth_cookies writes:
+    # the access JWT lives in `session_token` (there has never been an `access_token`
+    # cookie, so reading one silently disabled cookie-auth for every guest-fallback route).
+    cookie_token = request.cookies.get("session_token")
     raw_token = None
     if auth_header and auth_header.startswith("Bearer "):
         raw_token = auth_header.split(" ", 1)[1].strip()
@@ -97,13 +121,22 @@ def get_current_user_optional(
         return None
 
     try:
-        from app.core.auth import decode_token
         payload = decode_token(raw_token)
+        if payload.get("type") != "access":
+            return None
+        if payload.get("scope") == "check_approval_only":
+            # Pending-approval token: identity, but no account access yet.
+            return None
         user_id = parse_user_id(payload)
-        if user_id:
-            user = db.query(User).filter(User.id == user_id).first()
-            if user and not getattr(user, "is_locked", False):
-                return user
-    except Exception:
-        pass
-    return None
+        if not await verify_token_exists(user_id, raw_token):
+            return None
+        user = db.query(User).filter(User.id == user_id).first()
+    except Exception:  # noqa: BLE001 — covers unauthorized() (401), the
+                       # RedisUnavailableError raised by the JTI allowlist, and the
+                       # 401 HTTPException from decode/parse. Guest fallback must
+                       # never surface as a 500.
+        return None
+
+    if not user or resolve_lockout(db, user) or not user.is_approved:
+        return None
+    return user

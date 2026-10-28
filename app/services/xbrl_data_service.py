@@ -1,6 +1,7 @@
 import json
-import os
 import logging
+import os
+import re
 from pathlib import Path
 import boto3
 from botocore.config import Config
@@ -13,6 +14,17 @@ _DEFAULT_OUTPUT = Path(__file__).resolve().parent.parent.parent / "output"
 OUTPUT_DIR = Path(os.getenv("OUTPUT_DIR", str(_DEFAULT_OUTPUT)))
 if not OUTPUT_DIR.exists() and _DEFAULT_OUTPUT.exists():
     OUTPUT_DIR = _DEFAULT_OUTPUT
+
+# A Tadawul symbol is a bare alphanumeric code; anything else (path separators,
+# '..', absolute paths) must never reach a filesystem path or an R2 key built
+# from it. Both the write and the read side validate through this helper.
+_SYMBOL_RE = re.compile(r"[A-Z0-9]{3,6}")
+
+
+def _safe_symbol(symbol: str) -> str:
+    """Return `symbol` unchanged when it is a plain code, else ''."""
+    cleaned = str(symbol).strip().upper()
+    return cleaned if _SYMBOL_RE.fullmatch(cleaned) else ""
 
 # R2 Configuration
 R2_ACCOUNT_ID = os.getenv("R2_ACCOUNT_ID")
@@ -131,6 +143,10 @@ def list_companies() -> list[CompanyListItem]:
 
 
 def get_company(symbol: str) -> CompanyFinancials | None:
+    symbol = _safe_symbol(symbol)
+    if not symbol:
+        return None
+
     # 1. Local fallback first (fastest)
     fp = OUTPUT_DIR / f"{symbol}_financials.json"
     if fp.exists():
@@ -162,8 +178,18 @@ def get_company(symbol: str) -> CompanyFinancials | None:
 
 
 def save_company(symbol: str, data: dict) -> Path:
+    """Persist financials JSON for one company.
+
+    `symbol` builds the output filename, so it is validated here as well as at
+    the HTTP edge: ``../../etc/passwd`` would otherwise escape OUTPUT_DIR for
+    every caller of this function.
+    """
+    safe_symbol = str(symbol).strip().upper()
+    if not _SYMBOL_RE.fullmatch(safe_symbol):
+        raise ValueError(f"Invalid company symbol for storage: {symbol!r}")
+
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-    fp = OUTPUT_DIR / f"{symbol}_financials.json"
+    fp = OUTPUT_DIR / f"{safe_symbol}_financials.json"
     with open(fp, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
     return fp

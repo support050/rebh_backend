@@ -98,6 +98,21 @@ class RedisCache:
             logger.error("Redis delete failed: %s", type(e).__name__)
             return False
 
+    async def unlink(self, *keys: str) -> int:
+        """Non-blocking DELETE of many keys (Redis 4.0+): memory is reclaimed
+        in background threads, so shared-instance sweeps never stall live
+        requests. Fail-soft like delete(): 0 on unavailable/error — the
+        caller's keys then age out via their TTL safety net."""
+        if not keys:
+            return 0
+        if not await self.ensure_connection():
+            return 0
+        try:
+            return int(await self.redis_client.unlink(*keys))
+        except Exception as e:
+            logger.error("Redis unlink failed (%s): %s", type(e).__name__, keys[:3])
+            return 0
+
     async def exists(self, key: str) -> bool:
         if not await self.ensure_connection():
             return False
@@ -113,6 +128,8 @@ class RedisCache:
         "access_jti:",
         "refresh_token:",
         "refresh_jti:",
+        "refresh_gen:",
+        "refresh_used:",
         "session_index:",
         "oauth_state:",
         "oauth_link:",
@@ -299,17 +316,10 @@ class RedisCache:
 redis_cache = RedisCache()
 
 
-async def store_reset_token(user_id: int, token: str, expire_minutes: int = 15):
-    await redis_cache.set(f"reset_token:{token}", str(user_id), expire=expire_minutes * 60)
-
-
-async def get_reset_token(token: str) -> Optional[int]:
-    result = await redis_cache.get(f"reset_token:{token}")
-    return int(result) if result else None
-
-
-async def delete_reset_token(token: str):
-    await redis_cache.delete(f"reset_token:{token}")
+# NOTE: reset tokens used to live in Redis (store/get/delete_reset_token). They
+# were removed on 2026-10-28 — the reset flow stores a SHA-256 hash on the user
+# row instead, and the leftover helpers were an unused second source of truth
+# that a future caller could pick by mistake.
 
 
 async def store_verification_token(user_id: int, token: str, expire_minutes: int = 60):

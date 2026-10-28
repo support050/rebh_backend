@@ -33,7 +33,7 @@ def _s(x: pd.Series, nd=2):
     return [None if np.isnan(a) else round(float(a), nd) for a in v]
 
 
-def build(cfg: dict) -> str:
+def build(cfg: dict, eps_growth: dict | None = None) -> str:
     st = ROOT / cfg["paths"]["storage_dir"]
     F = {n: pd.read_parquet(st / "features" / f"{n}.parquet") for n in
          ["participation", "advance_decline", "thrusts", "momentum", "sectors", "sectors_summary", "concentration", "divergences", "composite"]}
@@ -195,6 +195,7 @@ def build(cfg: dict) -> str:
          **({"n": int(today.loc[s_, "n"]), "pct50": round(float(today.loc[s_, "pct50"]), 0), "pct200": round(float(today.loc[s_, "pct200"]), 0),
              "nhnl": round(float(today.loc[s_, "nhnl"]), 0), "ad10": round(float(today.loc[s_, "ad10"]), 0), "mom10": None if pd.isna(today.loc[s_, "mom10"]) else round(float(today.loc[s_, "mom10"]), 0)}
             if s_ in today.index else {})} for s_, r in piv.iterrows()]}
+    _heat_rows = D["sectors"]["rows"]   # RS fields are merged in after the group RS is computed below
 
     # ---- sector performance: equal-weight index per industry group -> Theme Tracker + Industry Ranks
     from breadth.indicators.common import build_panels
@@ -220,10 +221,21 @@ def build(cfg: dict) -> str:
     keep = [c for c in now.index if gcnt.iloc[-1][c] >= 3 and c != "Unknown"]
     now, prev = now.loc[keep], prev.loc[keep]
     ranks_now = now.rank(ascending=False).astype(int); ranks_prev = prev.rank(ascending=False).astype(int)
+    # group RS rating 1-99: 2x3M + 6M + 9M + 12M return of the group EW index, percentile-ranked across groups each day
+    gi = gidx[keep]
+    gscore = 2 * (gi / gi.shift(63) - 1) + (gi / gi.shift(126) - 1) + (gi / gi.shift(189) - 1) + (gi / gi.shift(252) - 1)
+    grs = (gscore.rank(axis=1, pct=True) * 99).round()
+    def grs_row(name):
+        if name not in grs.columns or pd.isna(grs[name].iloc[-1]): return {"rs": None, "rs21": None, "rsh": None}
+        h = grs[name].iloc[-30:]
+        return {"rs": int(grs[name].iloc[-1]), "rs21": None if pd.isna(grs[name].iloc[-22]) else int(grs[name].iloc[-1] - grs[name].iloc[-22]),
+                "rsh": [None if pd.isna(v) else int(v) for v in h.to_numpy()]}
     D["sector_perf"] = {"periods": list(H.keys()) + ["YTD"], "rows": [
-        {"name": sname, **{k: round(float(now.loc[sname, k]), 2) for k in now.columns},
+        {"name": sname, **{k: round(float(now.loc[sname, k]), 2) for k in now.columns}, **grs_row(sname),
          "rank": {k: int(ranks_now.loc[sname, k]) for k in now.columns}, "rank_chg": {k: int(ranks_prev.loc[sname, k] - ranks_now.loc[sname, k]) for k in now.columns},
          "stocks": int(gcnt.iloc[-1][sname])} for sname in keep]}
+    for r_ in _heat_rows:
+        r_.update(grs_row(r_["sector"]))
     # market EW for reference
     ewr = pn.ret.mean(axis=1); ewi = (1 + ewr.fillna(0)).cumprod()
     D["sector_perf"]["market"] = {k: round(100 * float(ewi.iloc[-1] / ewi.iloc[-1 - h] - 1), 2) for k, h in H.items()}
@@ -268,7 +280,8 @@ def build(cfg: dict) -> str:
         return None if pd.isna(v) else round(mult * float(v), nd)
     stocks = {}; allrows = []
     active_syms = set(master.loc[master["status"] == "active", "symbol"])
-    tt_last = tt_mask.iloc[last_i]; rs_last = rs.iloc[last_i]
+    tt_last = tt_mask.iloc[last_i]; rs_last = rs.iloc[last_i]; rs_5 = rs.iloc[last_i - 5]; rs_21 = rs.iloc[last_i - 21]
+    rs_hist = rs.iloc[-30:]   # 30-day RS history per stock for the sparkline
     for sym in pn.ret.columns:
         if sym not in active_syms:
             continue
@@ -280,7 +293,10 @@ def build(cfg: dict) -> str:
                "hi52": f(cl[sym] / hi52[sym] - 1, 1, 100) if not pd.isna(hi52.get(sym)) else None,
                "lo52": f(cl[sym] / lo52[sym] - 1, 1, 100) if not pd.isna(lo52.get(sym)) else None,
                "stage": stage(sym), "rvol": None if (pd.isna(vavg.get(sym)) or vavg[sym] == 0) else round(float(vol[sym] / vavg[sym]), 2),
-               "rs": None if pd.isna(rs_last.get(sym)) else int(rs_last[sym]), "tt": bool(tt_last.get(sym, False)),
+               "rs": None if pd.isna(rs_last.get(sym)) else int(rs_last[sym]),
+               "rs5": None if (pd.isna(rs_last.get(sym)) or pd.isna(rs_5.get(sym))) else int(rs_last[sym] - rs_5[sym]),
+               "rs21": None if (pd.isna(rs_last.get(sym)) or pd.isna(rs_21.get(sym))) else int(rs_last[sym] - rs_21[sym]),
+               "rsh": [None if pd.isna(v) else int(v) for v in rs_hist[sym].to_numpy()] if sym in rs_hist.columns else None, "tt": bool(tt_last.get(sym, False)),
                "nh": bool(nh_today.get(sym, False)), "nhv": bool(nhv_today.get(sym, False)), "bo": bo_ratio.get(sym),
                "traded": bool(traded[sym])}
         stocks.setdefault(gname, []).append(row); allrows.append(row)
@@ -342,6 +358,21 @@ def build(cfg: dict) -> str:
                   "regime_since": reg_chg.index[-1].strftime("%Y-%m-%d"), "n_universe": int(master["in_universe"].sum()),
                   "fam": {"A": round(float(c.loc[d0, "A_participation"]), 0), "B": round(float(c.loc[d0, "B_advance_decline"]), 0), "E": round(float(c.loc[d0, "E_sectors"]), 0)},
                   "hlli": round(float(clsc.loc[d0, "hlli"]), 2), "hindenburg_recent": int(clsc["hindenburg"].loc[:d0].tail(36).sum()), "bpi": round(float(bp.loc[d0, "bpi"]), 1), "bpi_status": str(bp.loc[d0, "bpi_status"])}
+
+    # ---- Guru Stock Scans: an INDEPENDENT leaderboard payload (9 columns + RS/Stage
+    # badges only). compute_guru works on the same `pn` Panels, so its RS/stage match
+    # the Leaders rows by construction. eps_growth (optional, injected by breadth_job
+    # from app.services.eps_growth_service) gates the TML column; without it TML is
+    # empty but every other column still lands. A failure here must never poison the
+    # proven snapshot, so the error is recorded in-band and read back by the API.
+    from breadth.indicators.guru import compute_guru
+    try:
+        guru = compute_guru(pn, cfg, eps_growth)
+        for sym, row in guru["rows"].items():
+            row["name"] = str(names.get(int(sym), ""))
+        D["guru"] = guru
+    except Exception as exc:                                   # noqa: BLE001
+        D["guru"] = {"error": f"{type(exc).__name__}: {str(exc)[:180]}"}
     html = TEMPLATE.read_text(encoding="utf-8").replace("/*__DATA__*/", "const DATA=" + json.dumps(D, separators=(",", ":")) + ";")
     out = st / "reports"; out.mkdir(exist_ok=True)
     p = out / "breadth_dashboard.html"; p.write_text(html, encoding="utf-8")

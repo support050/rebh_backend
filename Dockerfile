@@ -58,5 +58,12 @@ COPY . .
 # Expose port
 EXPOSE 8000
 
+# Render forwards requests through its own proxy, so the real visitor lives in
+# X-Forwarded-For. Without this uvicorn reports the proxy as request.client.host,
+# which collapses every visitor into one slowapi bucket ("5 logins/minute for the
+# whole platform") and makes the auth rate limits useless. Overridable to pin
+# trusted proxy CIDRs instead of "*" if the app is ever exposed directly.
+ENV FORWARDED_ALLOW_IPS="*"
+
 # Run the application
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers"]

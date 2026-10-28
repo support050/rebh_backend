@@ -27,12 +27,12 @@ def _is_protected_key(key: str) -> bool:
 async def _delete_matching(patterns: list) -> int:
     deleted = 0
     for pattern in patterns:
-        keys = await redis_cache.keys(pattern)
-        for key in keys:
-            if _is_protected_key(key):
-                continue
-            if await redis_cache.delete(key):
-                deleted += 1
+        # scan_iter (not the blocking KEYS command) + batched UNLINK (not
+        # per-key DELETE) so admin cache clears never stall the shared instance.
+        keys = await redis_cache.scan_iter(pattern)
+        keys = [k for k in keys if not _is_protected_key(k)]
+        if keys:
+            deleted += await redis_cache.unlink(*keys)
     return deleted
 
 

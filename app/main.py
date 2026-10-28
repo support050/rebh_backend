@@ -1,6 +1,7 @@
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.api.routes import stocks, cache, auth, contact, rs, rs_v2, admin, scraper, official_filings, prices, technical_screener, screeners, market_breadth, market_reports, economic_indicators, xbrl_companies, xbrl_financials, xbrl_upload
+from typing import Annotated
+from app.api.routes import stocks, cache, auth, contact, rs, rs_v2, admin, scraper, official_filings, prices, technical_screener, screeners, market_breadth, market_reports, economic_indicators, xbrl_companies, xbrl_financials
 from app.api.routes import market_pulse as market_pulse_router
 from app.api.routes import rs_line as rs_line_router
 from app.api.routes import mansfield_rs as mansfield_rs_router
@@ -11,6 +12,8 @@ from app.api.routes import tasi_settings as tasi_settings_router
 
 from app.core.redis import redis_cache
 from app.core.database import create_tables
+from app.api.deps import get_current_admin
+from app.models.user import User
 from app.services.rs_rating import calculate_all_rs_ratings
 import asyncio
 import logging
@@ -67,6 +70,24 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def no_store_for_auth(request, call_next):
+    """Never let an auth response be cached.
+
+    These calls set session/refresh cookies and, on failure, describe account
+    state. A shared cache or a proxy holding one would hand the next reader
+    either live credentials or the fact that an address exists.
+
+    Scoped to /api/auth rather than all of /api: the data endpoints are large
+    read-only payloads where caching is the whole point of the Redis layer.
+    """
+    response = await call_next(request)
+    if request.url.path.startswith("/api/auth"):
+        response.headers["Cache-Control"] = "no-store"
+        response.headers["Pragma"] = "no-cache"
+    return response
 
 async def _calculate_and_save_rs(symbols: list):
     """دالة خلفية لحساب RS وحفظه في DB"""
@@ -143,7 +164,10 @@ app.include_router(market_reports.router, prefix="/api/market-reports", tags=["M
 app.include_router(economic_indicators.router, prefix="/api/economic-indicators", tags=["Economic Indicators"])
 app.include_router(xbrl_companies.router, dependencies=protected_dependencies)
 app.include_router(xbrl_financials.router, dependencies=protected_dependencies)
-app.include_router(xbrl_upload.router, dependencies=protected_dependencies)
+# /api/upload/xbrl (xbrl_upload) was retired 2026-10-29: zero callers anywhere
+# (the frontend useUpload chain was dead and its raw fetch carried no CSRF or
+# credentials). Workbook ingestion runs through the scripts in backend/scripts
+# which share the same xbrl_parser / xbrl_data_service layer.
 from app.api.routes import terminal as terminal_router
 app.include_router(terminal_router.router, dependencies=protected_dependencies)
 app.include_router(market_pulse_router.router, prefix="/api/market-pulse", tags=["Market Pulse"])
@@ -190,7 +214,14 @@ async def startup_event():
     print("🚀 Starting Saudi Stocks API...")
     
 
-    create_tables()
+    # Alembic owns the schema (the Procfile and Dockerfile both run
+    # `alembic upgrade head`). create_all() beside it hides drift: a missing
+    # column or table gets quietly added at boot, so a broken migration ships
+    # unnoticed. Off in production via AUTO_CREATE_TABLES=false.
+    if settings.AUTO_CREATE_TABLES:
+        create_tables()
+    else:
+        print("ℹ️ create_tables() skipped — Alembic is the schema authority (AUTO_CREATE_TABLES=false)")
     
     redis_connected = await redis_cache.init_redis()
     if not redis_connected:
@@ -219,18 +250,37 @@ async def root():
 
 @app.get("/health")
 async def health_check():
-    """فحص صحة التطبيق وحالة المستوردين وتكامل البيانات"""
+    """Liveness probe — safe to keep public.
+
+    Render polls this, and an unauthenticated endpoint is the right place for a
+    yes/no answer only. Row counts, importer names and per-source status used to
+    be published here: a free map of the data estate and of how stale each
+    source is. They live on /health/detail behind the admin guard.
+    """
+    import datetime
+
+    redis_ok = bool(redis_cache.redis_client)
+    return {
+        "status": "healthy",
+        "redis": "connected" if redis_ok else "disconnected",
+        "timestamp": datetime.datetime.utcnow().isoformat() + "Z",
+        "message": "API is running" + (" with cache" if redis_ok else " without cache"),
+    }
+
+
+@app.get("/health/detail")
+async def health_detail(current_admin: Annotated[User, Depends(get_current_admin)]):
+    """Diagnostics: importer status + database totals. Admin only."""
     import datetime
     from app.services.rebh_importers_service import get_importers_health_status
-    
-    redis_status = "connected" if redis_cache.redis_client else "disconnected"
+
+    redis_ok = bool(redis_cache.redis_client)
     importers_status = get_importers_health_status()
-    
+    overall = importers_status.get("overall_status")
     return {
-        "status": "healthy" if importers_status.get("overall_status") in ("healthy", "ok") else "degraded",
-        "redis": redis_status,
+        "status": "healthy" if overall in ("healthy", "ok") else "degraded",
+        "redis": "connected" if redis_ok else "disconnected",
         "importers": importers_status.get("importers"),
         "totals": importers_status.get("database_totals"),
         "timestamp": datetime.datetime.utcnow().isoformat() + "Z",
-        "message": "API is running" + (" with cache" if redis_cache.redis_client else " without cache")
     }

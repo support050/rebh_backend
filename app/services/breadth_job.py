@@ -246,6 +246,32 @@ def snapshot_only() -> dict:
     return _run_loader(snapshot_html=html, snapshot_only=True)
 
 
+def _load_eps_growth_map() -> dict | None:
+    """Quarterly basic-EPS YoY map for the Guru TML scan, from the XBRL artifacts.
+
+    Imported by file path (not ``from app.services...``) because this worker runs in
+    the root venv with a bare sys.path and the engine must stay decoupled from the app
+    package; the service is stdlib-only. Returns ``{symbol: {...}}`` (the ``growth`` key
+    of ``load_eps_growth_map``) or None when unavailable — TML then lands empty while
+    every other Guru column still computes (no synthetic fallback). A single source of
+    truth: compute_guru only accepts a symbol whose basis is quarterly and clears the
+    cfg.tml.eps_growth_min threshold.
+    """
+    import importlib.util
+    try:
+        spec = importlib.util.spec_from_file_location(
+            "eps_growth_service", HERE / "eps_growth_service.py")
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        growth = mod.load_eps_growth_map()["growth"]
+        print(f"[eps_growth] {len(growth)} symbols with a YoY pair", flush=True)
+        return growth or None
+    except Exception as exc:  # noqa: BLE001
+        print(f"[warn] eps_growth map unavailable, TML column will be empty: "
+              f"{type(exc).__name__}: {exc}", file=sys.stderr, flush=True)
+        return None
+
+
 def run(skip_load: bool = False) -> dict:
     import breadth.daily as daily
     import breadth.data.build as bld
@@ -262,7 +288,8 @@ def run(skip_load: bool = False) -> dict:
     bld.load_index_csv = lambda path: index_df
     bld.file_sha256 = lambda path: stamp
 
-    status = daily.run(prices="db", index="db")   # args feed cfg paths only; loaders are patched
+    eps_growth = _load_eps_growth_map()
+    status = daily.run(prices="db", index="db", eps_growth=eps_growth)   # args feed cfg paths only; loaders are patched
     status["source"] = {"mode": "db-direct", "rows_prices": int(len(prices)),
                         "rows_index": int(len(index_df)), "asof": asof}
     print("[engine] done: " + json.dumps(status.get("summary", {}), ensure_ascii=False,

@@ -296,7 +296,7 @@ SYSTEMS: List[Dict[str, Any]] = [
             _b("route", "backend/app/api/routes/admin.py",
                "POST /api/admin/pipeline/daily-market-update/run|status|unlock"),
             _b("route", "backend/app/api/routes/prices.py",
-               "GET /api/prices/history/{symbol} · /latest · POST /static-info/import · "
+               "GET /api/prices/history/{symbol} · /latest · "
                "GET /api/prices/seasonality/{symbol} (month-end close → MoM aggregates, "
                "Redis read-through; added Phase 3 2026-10-15) · "
                "GET /api/prices/tasi/history?days= (TRUE TASI index closes from the "
@@ -1655,7 +1655,8 @@ SYSTEMS: List[Dict[str, Any]] = [
                "market-machine, quant-lab, sector-templates, company-fundamental"),
             _b("route", "backend/app/api/routes/xbrl_companies.py", "/api/companies/*"),
             _b("route", "backend/app/api/routes/xbrl_financials.py", "/api/financials/*"),
-            _b("route", "backend/app/api/routes/xbrl_upload.py", "/api/upload/*"),
+            # xbrl_upload.py (/api/upload/*) retired 2026-10-29 — zero callers;
+            # ingestion goes through backend/scripts on the same parser/service layer.
             _b("service", "backend/app/services/xbrl_data_service.py",
                "financial statements served from Cloudflare R2 XBRL JSON, not Postgres"),
             _b("frontend", "frontend/app/terminal/page.tsx", "terminal shell"),
@@ -1668,11 +1669,6 @@ SYSTEMS: List[Dict[str, Any]] = [
             _j("daily_market_update", "backend/scripts/daily_market_update.py",
                "NOT SCHEDULED — see market-data", None, "manual",
                writes=["prices", "stock_indicators", "rs_daily_v2"]),
-            _j("xbrl_upload", "backend/app/api/routes/xbrl_upload.py",
-               "manual upload from the admin/XBRL flow, not wrapped by track_job",
-               None, "manual", tracked=False,
-               note="POST /api/upload/* — the report of what was imported is written to "
-                    "logs, not to job_runs"),
         ],
         "tables": [
             _t("prices", "date", 1, "daily_market_update"),
@@ -1702,9 +1698,13 @@ SYSTEMS: List[Dict[str, Any]] = [
                  "only subsystem with its own per-run detail table (breadth_runs).",
         "built": [
             _b("route", "backend/app/api/routes/rebh_breadth.py",
-               "/api/rebh/breadth/today|series|events (protected)"),
+               "/api/rebh/breadth/today|series|events|guru (protected)"),
             _b("service", "backend/app/services/breadth_job.py",
                "the orchestrator the cron job actually spawns"),
+            _b("service", "backend/app/services/eps_growth_service.py",
+               "XBRL quarterly basic-EPS YoY map feeding the Guru TML column"),
+            _b("indicator", "backend/app/services/breadth_engine/breadth/indicators/guru.py",
+               "Guru Stock Scans: 9 membership filters + RS/Stage, stored in breadth_data"),
             _b("service", "backend/app/services/breadth_loader.py",
                "parquet → SQLAlchemy upserts + the breadth_data JSONB snapshot"),
             _b("service", "backend/app/services/breadth_engine/",

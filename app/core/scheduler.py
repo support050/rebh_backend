@@ -106,6 +106,9 @@ def job_market_reports_scrapers():
     logger.info("=" * 50)
     logger.info("📊 [Scheduler] MARKET REPORTS scrapers starting…")
     _safe_job("market_reports")
+    # The TASI chart endpoint caches market_reports:* for 3 days; without this
+    # bust the freshly scraped reports stay invisible until the TTL lapses.
+    _clear_market_reports_cache()
     logger.info("📊 [Scheduler] MARKET REPORTS scrapers finished.")
 
 
@@ -188,19 +191,56 @@ def job_breadth_daily():
         raise                                              # let _safe/APScheduler record it
 
 
+def _scan_delete(r, pattern: str) -> int:
+    """Unlink every key matching ``pattern`` via chunked SCAN.
+
+    SCAN (count=500) instead of the blocking KEYS command: KEYS is O(N) over
+    the whole keyspace and stalls Redis for every other request.
+    UNLINK instead of DELETE: reclamation happens in Redis background threads,
+    so batch evictions never block the single event loop on our shared instance.
+    """
+    deleted = 0
+    cursor = 0
+    while True:
+        cursor, keys = r.scan(cursor=cursor, match=pattern, count=500)
+        if keys:
+            r.unlink(*keys)
+            deleted += len(keys)
+        if cursor == 0:
+            break
+    return deleted
+
+
 def _clear_breadth_cache():
     """Invalidate rebh:breadth:* Redis keys so the API rebuilds from fresh tables."""
     try:
         import redis as sync_redis
         redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
         r = sync_redis.from_url(redis_url, decode_responses=True, socket_timeout=5)
-        keys = r.keys("rebh:breadth:*")
-        if keys:
-            r.delete(*keys)
-        logger.info(f"  🗑️ Cleared {len(keys)} breadth cache keys")
+        n = _scan_delete(r, "rebh:breadth:*")
+        logger.info(f"  🗑️ Cleared {n} breadth cache keys")
         r.close()
     except Exception as e:
         logger.warning(f"  ⚠️ Breadth cache clear skipped: {e}")
+
+
+def _clear_market_reports_cache():
+    """Invalidate market_reports:* keys after the Tadawul reports scrape.
+
+    Served by GET /market-reports/tasi-chart (CACHE_TTL_MARKET_REPORTS = 3 days
+    safety net); the daily cron and the admin Run Now (job_runner._post_run_hooks)
+    both funnel through here so a finished scrape is visible immediately.
+    """
+    try:
+        from app.core.cache_config import PREFIX_MARKET_REPORTS
+        import redis as sync_redis
+        redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+        r = sync_redis.from_url(redis_url, decode_responses=True, socket_timeout=5)
+        n = _scan_delete(r, f"{PREFIX_MARKET_REPORTS}:*")
+        logger.info(f"  🗑️ Cleared {n} market-reports cache keys")
+        r.close()
+    except Exception as e:
+        logger.warning(f"  ⚠️ Market-reports cache clear skipped: {e}")
 
 
 # ─── Helpers ───────────────────────────────────────────────────
@@ -466,10 +506,8 @@ def _clear_cache():
 
         redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
         r = sync_redis.from_url(redis_url, decode_responses=True, socket_timeout=5)
-        keys = r.keys("economic:*")
-        if keys:
-            r.delete(*keys)
-        logger.info(f"  🗑️ Cleared {len(keys)} cache keys")
+        n = _scan_delete(r, "economic:*")
+        logger.info(f"  🗑️ Cleared {n} cache keys")
         r.close()
     except Exception as e:
         logger.warning(f"  ⚠️ Cache clear skipped: {e}")

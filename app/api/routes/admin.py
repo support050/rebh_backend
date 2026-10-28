@@ -10,12 +10,13 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_admin
-from app.core.auth import invalidate_all_sessions
+from app.core.audit_log import audit_event
+from app.core.auth import RedisUnavailableError, invalidate_all_sessions, service_unavailable
 from app.core.database import get_db
 from app.core.limiter import limiter
 from app.core.redis import redis_cache
 from app.models.user import User
-from app.schemas.auth import UserResponse
+from app.schemas.auth import AdminRoleUpdate, UserResponse
 from app.services.user_cleanup import delete_user_related_data
 
 router = APIRouter(prefix="/admin", tags=["Admin"])
@@ -298,6 +299,12 @@ async def approve_user(
     user.approved_by = current_admin.id
     db.commit()
 
+    audit_event(
+        "admin_approve_user",
+        actor_id=current_admin.id,
+        actor_email=current_admin.email,
+        target_user_id=user.id,
+    )
     await redis_cache.publish(f"user_approval_{user.id}", "approved")
     return {"message": f"User {user.email} approved successfully"}
 
@@ -330,7 +337,10 @@ async def revoke_user(
     email = user.email
 
     # 1) Invalidate all sessions FIRST (fail-closed: if Redis fails, abort before DB changes)
-    await invalidate_all_sessions(user_id)
+    try:
+        await invalidate_all_sessions(user_id)
+    except RedisUnavailableError:
+        raise service_unavailable()
 
     # 2) Delete all FK-dependent data, then the user — single transaction
     try:
@@ -341,7 +351,90 @@ async def revoke_user(
         db.rollback()
         raise
 
+    audit_event(
+        "admin_revoke_user",
+        actor_id=current_admin.id,
+        actor_email=current_admin.email,
+        target_user_id=user_id,
+        detail_email=email,
+    )
     return {"message": f"User {email} has been revoked and deleted successfully"}
+
+
+@router.post("/users/{user_id}/role", response_model=UserResponse)
+@limiter.limit("10/minute")
+async def update_user_role(
+    request: Request,
+    user_id: int,
+    payload: AdminRoleUpdate,
+    current_admin: User = Depends(get_current_admin),
+    db: Session = Depends(get_db),
+):
+    """منح أو سحب صلاحية المدير — المسار الوحيد في النظام لتغيير is_admin.
+
+    الصلاحية تُقرأ من قاعدة البيانات مع كل طلب، لذلك العزل يسري فورياً حتى لو
+    كانت هناك جلسة حيّة؛ ومع ذلك نُلغي جلسات المعزول كدفاع إضافي.
+    """
+    _ = request
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    # No self-service privilege changes: an admin must never demote themselves
+    # into the "zero admins" state, nor promote themselves through this endpoint.
+    if user.id == current_admin.id:
+        raise HTTPException(status_code=400, detail="لا يمكنك تغيير صلاحيات حسابك")
+
+    if user.is_admin and not payload.is_admin:
+        admin_count = db.query(User).filter(User.is_admin == True).count()  # noqa: E712
+        if admin_count <= 1:
+            raise HTTPException(
+                status_code=400,
+                detail="لا يمكن سحب صلاحية آخر حساب مدير في النظام",
+            )
+
+    if user.is_admin == payload.is_admin:
+        return user  # idempotent — no session churn for a no-op
+
+    if not payload.is_admin:
+        # Fail-closed ordering (same as revoke-user): abort before DB changes.
+        try:
+            await invalidate_all_sessions(user.id)
+        except RedisUnavailableError:
+            raise service_unavailable()
+
+    user.is_admin = payload.is_admin
+    auto_approved = False
+    if payload.is_admin and not user.is_approved:
+        # An administrator that cannot sign in is worse than useless.
+        user.is_approved = True
+        user.approved_at = datetime.utcnow()
+        user.approved_by = current_admin.id
+        auto_approved = True
+
+    try:
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+    db.refresh(user)
+
+    logger.info(
+        "[Admin] %s set is_admin=%s for user_id=%s%s",
+        current_admin.email, payload.is_admin, user.id,
+        " (auto-approved)" if auto_approved else "",
+    )
+    audit_event(
+        "admin_update_role",
+        actor_id=current_admin.id,
+        actor_email=current_admin.email,
+        target_user_id=user.id,
+        is_admin=payload.is_admin,
+        auto_approved=auto_approved,
+    )
+    if auto_approved:
+        await redis_cache.publish(f"user_approval_{user.id}", "approved")
+    return user
 
 
 @router.delete("/users/{user_id}")
@@ -372,7 +465,10 @@ async def delete_user(
     email = user.email
 
     # Invalidate sessions first (no-op if user had no active sessions)
-    await invalidate_all_sessions(user_id)
+    try:
+        await invalidate_all_sessions(user_id)
+    except RedisUnavailableError:
+        raise service_unavailable()
 
     # Delete all FK-dependent data, then the user
     try:
@@ -383,6 +479,13 @@ async def delete_user(
         db.rollback()
         raise
 
+    audit_event(
+        "admin_delete_user",
+        actor_id=current_admin.id,
+        actor_email=current_admin.email,
+        target_user_id=user_id,
+        detail_email=email,
+    )
     return {"message": f"تم حذف المستخدم {email} بنجاح"}
 
 
@@ -396,7 +499,6 @@ async def unlock_user(
 ):
     """إلغاء قفل حساب مستخدم بعد محاولات فاشلة"""
     _ = request
-    _ = current_admin
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -404,6 +506,12 @@ async def unlock_user(
     user.locked_until = None
     user.failed_login_attempts = 0
     db.commit()
+    audit_event(
+        "admin_unlock_user",
+        actor_id=current_admin.id,
+        actor_email=current_admin.email,
+        target_user_id=user.id,
+    )
     return {"message": f"User {user.email} unlocked"}
 
 
@@ -422,17 +530,13 @@ async def refresh_stock_data(
     _ = current_admin
     _ = page
     try:
-        stock_keys = await redis_cache.keys("tadawul_stocks:*")
+        # SCAN (not blocking KEYS) + batched non-blocking UNLINK (not per-key
+        # DELETE) so an admin cache clear never stalls the shared Redis instance.
         deleted = 0
-        for key in stock_keys:
-            if await redis_cache.delete(key):
-                deleted += 1
-
-        # Also clear common tadawul bulk keys
-        tadawul_keys = await redis_cache.keys("tadawul:*")
-        for key in tadawul_keys:
-            if await redis_cache.delete(key):
-                deleted += 1
+        for _pattern in ("tadawul_stocks:*", "tadawul:*"):
+            _keys = await redis_cache.scan_iter(_pattern)
+            if _keys:
+                deleted += await redis_cache.unlink(*_keys)
 
         return {
             "message": f"✅ تم مسح كاش الأسهم ({deleted} مفتاح)",
@@ -497,13 +601,12 @@ async def force_api_refresh(
         ]
         deleted = 0
         for pattern in patterns:
-            keys = await redis_cache.keys(pattern)
-            for key in keys:
-                if await redis_cache.delete(key):
-                    deleted += 1
+            keys = await redis_cache.scan_iter(pattern)
+            if keys:
+                deleted += await redis_cache.unlink(*keys)
 
         # Exact common key form used elsewhere
-        await redis_cache.delete(f"tadawul_stocks:symbol:{clean}")
+        await redis_cache.unlink(f"tadawul_stocks:symbol:{clean}")
 
         return {
             "message": f"✅ تم مسح كاش السهم {clean}",

@@ -3,8 +3,12 @@ market_pulse.py
 ===============
 FastAPI router for /api/market-pulse.
 
-Uses the existing project auth system (get_current_user) instead of
-a standalone security layer.
+Reads are public (the TASI regime table is shown on the landing page and the
+/market-pulse screen). Every write is admin-only: the rows are the single
+source of truth for the index series that RS, breadth and the analytics
+pipeline read from, and the daily scripts write them straight to the database
+(``scripts/backfill_market_pulse.py``) — no legitimate caller uses these HTTP
+mutations.
 """
 
 from typing import Optional
@@ -13,6 +17,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status, Background
 from sqlalchemy import func, and_
 from sqlalchemy.orm import Session
 
+from app.api.deps import get_current_admin
 from app.core.database import get_db
 from app.models.market_pulse import MarketPulse
 from app.schemas.market_pulse import (
@@ -196,6 +201,7 @@ def run_full_recalculation(db: Session):
     "/recalculate-all",
     status_code=status.HTTP_202_ACCEPTED,
     summary="Recalculate all market pulse data from historical reports in the background",
+    dependencies=[Depends(get_current_admin)],
 )
 def recalculate_all_data(background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     # We run this in the background because it might take a few seconds
@@ -211,6 +217,7 @@ def recalculate_all_data(background_tasks: BackgroundTasks, db: Session = Depend
     response_model=MarketPulseRead,
     status_code=status.HTTP_201_CREATED,
     summary="Ingest a new daily OHLCV bar and compute all signals",
+    dependencies=[Depends(get_current_admin)],
 )
 def ingest_new_day(payload: OHLCVCreate, db: Session = Depends(get_db)):
     # Idempotency check
@@ -371,6 +378,7 @@ def get_record(record_id: int, db: Session = Depends(get_db)):
     "/",
     response_model=MarketPulseRead,
     status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(get_current_admin)],
 )
 def create_record(payload: MarketPulseCreate, db: Session = Depends(get_db)):
     if db.query(MarketPulse).filter(MarketPulse.date == payload.date).first():
@@ -391,6 +399,7 @@ def create_record(payload: MarketPulseCreate, db: Session = Depends(get_db)):
 @router.patch(
     "/{record_id}",
     response_model=MarketPulseRead,
+    dependencies=[Depends(get_current_admin)],
 )
 def update_record(record_id: int, payload: MarketPulseUpdate, db: Session = Depends(get_db)):
     record = _get_or_404(db, record_id)
@@ -407,6 +416,7 @@ def update_record(record_id: int, payload: MarketPulseUpdate, db: Session = Depe
 @router.delete(
     "/{record_id}",
     status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[Depends(get_current_admin)],
 )
 def delete_record(record_id: int, db: Session = Depends(get_db)):
     record = _get_or_404(db, record_id)

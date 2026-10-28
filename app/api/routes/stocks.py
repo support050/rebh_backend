@@ -15,15 +15,13 @@ async def clear_redis_cache(
     🗑️ مسح جميع مفاتيح Redis المتعلقة بالأسهم
     """
     try:
-        keys = await redis_cache.keys(pattern)
+        keys = await redis_cache.scan_iter(pattern)
         
         if not keys:
             return {"success": True, "message": "لم يتم العثور على مفاتيح مطابقة", "deleted_count": 0}
         
-        deleted_count = 0
-        for key in keys:
-            deleted = await redis_cache.delete(key)
-            deleted_count += deleted
+        # Batched non-blocking UNLINK (SCAN above) — no KEYS, no per-key DELETE.
+        deleted_count = await redis_cache.unlink(*keys)
         
         print(f"🗑️ Redis: deleted {deleted_count} keys matching '{pattern}'")
         

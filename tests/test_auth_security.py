@@ -174,6 +174,13 @@ class TestRedisFailClosed:
 
     @pytest.mark.asyncio
     async def test_consume_refresh_atomic_second_fails(self):
+        """Batch-3 (M-8) semantics: the second use of a rotated JTI is a REPLAY.
+
+        The Batch-2 version only stubbed auth_getdel, letting the epoch read hit
+        a live Redis. Now every consume consults refresh_gen and the tombstone,
+        so all Redis touches are stubbed here and the replay path additionally
+        bumps the epoch and revokes the family.
+        """
         token = create_refresh_token({"sub": "9"})
         calls = {"n": 0}
 
@@ -183,13 +190,34 @@ class TestRedisFailClosed:
                 return "9"
             return None
 
+        async def auth_get(key):
+            if key.startswith("refresh_gen"):
+                return "0"
+            if key.startswith("refresh_used"):
+                # The first consume wrote this tombstone; its presence is the alarm.
+                return "1"
+            return None
+
         with patch("app.core.auth.redis_cache.auth_getdel", side_effect=getdel_once):
-            with patch("app.core.auth.redis_cache.delete", new_callable=AsyncMock):
-                jti = await consume_refresh_token(9, token)
-                assert jti
-                with pytest.raises(HTTPException) as exc:
-                    await consume_refresh_token(9, token)
-                assert exc.value.status_code == 401
+            with patch("app.core.auth.redis_cache.auth_get", side_effect=auth_get):
+                with patch("app.core.auth.redis_cache.auth_set", new_callable=AsyncMock):
+                    with patch("app.core.auth.redis_cache.delete", new_callable=AsyncMock):
+                        with patch(
+                            "app.core.auth.redis_cache.incr_with_expire",
+                            new_callable=AsyncMock,
+                            return_value=1,
+                        ) as bump:
+                            with patch(
+                                "app.core.auth.invalidate_all_sessions",
+                                new_callable=AsyncMock,
+                            ) as revoke:
+                                jti = await consume_refresh_token(9, token)
+                                assert jti
+                                with pytest.raises(HTTPException) as exc:
+                                    await consume_refresh_token(9, token)
+                                assert exc.value.status_code == 401
+                                bump.assert_awaited()
+                                revoke.assert_awaited()
 
 
 # ─────────────────────────────────────────────────────────────────────────

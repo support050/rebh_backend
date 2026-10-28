@@ -336,8 +336,9 @@ async def invalidate_patterns(patterns: List[str]) -> None:
         try:
             keys_to_delete = await redis_cache.scan_iter(pattern)
             if keys_to_delete:
-                for key in keys_to_delete:
-                    await redis_cache.delete(key)
+                # Batched UNLINK (non-blocking reclamation) instead of one
+                # DELETE per key — one round-trip, zero event-loop stalls.
+                await redis_cache.unlink(*keys_to_delete)
                 logger.info(
                     "cache_invalidate",
                     extra={

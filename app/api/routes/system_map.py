@@ -13,7 +13,7 @@ Design rules (all of them hard requirements from the Runbook spec):
      that may not exist; a failed statement poisons the session that ran it.
      Owning one session for the whole snapshot (and rolling back per probe)
      keeps that damage inside this module.
-  3. One build per ``CACHE_TTL_SECONDS`` for the whole map. Opening the page
+  3. One build per ``IN_MEMORY_TTL_SYSTEM_MAP`` for the whole map. Opening the page
      fires /systems and then /systems/{id} for the selected system; both are
      served from the same snapshot, so the sidebar and the detail never disagree.
   4. SQL identifiers come from the registry, never from the client. Only the
@@ -37,13 +37,16 @@ from sqlalchemy.orm import Session
 
 from app import system_registry as registry
 from app.api.deps import get_current_admin
+from app.core.cache_config import IN_MEMORY_TTL_SYSTEM_MAP
 from app.core.database import SessionLocal
 from app.services import job_runner
 
 router = APIRouter(prefix="/admin/system-map", tags=["Admin — System Map"])
 logger = logging.getLogger(__name__)
 
-CACHE_TTL_SECONDS = 60
+# Canonical value lives in cache_config.IN_MEMORY_TTL_SYSTEM_MAP (frontend
+# app/admin/system-map polls with the same interval).
+CACHE_TTL_SECONDS = IN_MEMORY_TTL_SYSTEM_MAP
 REGISTRY_FILE = "backend/app/system_registry.py"
 
 # Every probe runs inside its own transaction with this timeout, so one slow

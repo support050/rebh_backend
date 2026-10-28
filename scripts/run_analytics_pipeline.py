@@ -452,29 +452,48 @@ def run_pipeline_for_date(target_date: datetime.date):
 
 
 def flush_redis_cache():
-    """Invalidate Redis cache at the very end."""
+    """Invalidate Redis cache at the very end.
+
+    Evict BY PREFIX, mirroring daily_market_update step 10: the old
+    match="*" sweep (minus a hand-maintained auth list) deleted every
+    non-auth key in the instance — rate-limit buckets included.
+    """
     logger.info("🧹 Invalidating application caches (Redis)...")
     try:
         import redis as sync_redis
+        from app.core.cache_config import (
+            PREFIX_INDUSTRY_GROUPS,
+            PREFIX_MARKET_REPORTS,
+            PREFIX_PRICES,
+            PREFIX_REBH,
+            PREFIX_RS,
+            PREFIX_RS_HUB,
+            PREFIX_RS_V2,
+            PREFIX_SCREENER,
+            PREFIX_TECHNICAL_SCREENER,
+            PREFIX_TERMINAL,
+        )
+        app_prefixes = (
+            PREFIX_RS, PREFIX_RS_V2, PREFIX_SCREENER, PREFIX_TECHNICAL_SCREENER,
+            PREFIX_PRICES, PREFIX_INDUSTRY_GROUPS, PREFIX_TERMINAL, PREFIX_REBH,
+            # Written by this pipeline's stages, outside the 8-namespace daily flush:
+            PREFIX_MARKET_REPORTS, PREFIX_RS_HUB,
+        )
         r = sync_redis.from_url(str(settings.REDIS_URL), decode_responses=True, socket_timeout=2)
         r.ping()
-        auth_prefixes = (
-            "token_blacklist:", "refresh_token:", "refresh_jti:",
-            "session_index:", "oauth_state:", "oauth_link:",
-            "verify_token:", "reset_token:",
-        )
         deleted_count = 0
-        cursor = 0
-        while True:
-            cursor, keys = r.scan(cursor=cursor, match="*", count=500)
-            keys_to_del = [k for k in keys if not any(k.startswith(p) for p in auth_prefixes)]
-            if keys_to_del:
-                r.delete(*keys_to_del)
-                deleted_count += len(keys_to_del)
-            if cursor == 0:
-                break
+        for _prefix in app_prefixes:
+            cursor = 0
+            while True:
+                cursor, keys = r.scan(cursor=cursor, match=f"{_prefix}:*", count=500)
+                if keys:
+                    r.unlink(*keys)   # non-blocking; TTL is the backstop
+                    deleted_count += len(keys)
+                if cursor == 0:
+                    break
         r.close()
-        logger.info(f"✅ Redis cache flushed successfully ({deleted_count} keys removed).")
+        logger.info(f"✅ Redis cache flushed successfully ({deleted_count} keys removed "
+                    f"across {len(app_prefixes)} prefixes).")
     except Exception:
         logger.info("ℹ️ Redis server inactive locally — skipping cache flush.")
 

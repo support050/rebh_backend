@@ -21,7 +21,11 @@ from app.core.cache_helpers import (
     make_rs_history_key,
     make_rs_advanced_key,
 )
-from app.core.cache_config import CACHE_TTL_SCREENERS, CACHE_TTL_RS_HISTORY
+from app.core.cache_config import (
+    CACHE_TTL_SCREENERS,
+    CACHE_TTL_RS_HISTORY,
+    CACHE_TTL_RS_HUB_R2,
+)
 from app.api.deps import get_current_user
 from app.models.user import User
 
@@ -44,7 +48,7 @@ async def get_latest_rs(
 ):
     """
     الحصول على آخر RS Rating لكل الأسهم مع التقييم السابق.
-    Cached with 10-minute TTL.
+    Cached with 24-hour TTL (CACHE_TTL_SCREENERS).
     """
     cache_key = make_rs_latest_key(min_rs, limit)
     
@@ -136,11 +140,11 @@ async def get_latest_hub():
             response = s3_client.get_object(Bucket=r2_bucket, Key="rs/rs_data.json")
             data = json.loads(response['Body'].read().decode('utf-8'))
             
-            # Cache in Redis for 10 minutes (600 seconds)
+            # Cache in Redis for CACHE_TTL_RS_HUB_R2 (10 minutes)
             try:
                 from app.core.redis import redis_cache
                 if redis_cache.is_connected or await redis_cache.ensure_connection():
-                    await redis_cache.set(cache_key, data, expire=600)
+                    await redis_cache.set(cache_key, data, expire=CACHE_TTL_RS_HUB_R2)
             except Exception:
                 pass
                 
@@ -172,7 +176,7 @@ async def advanced_screener(
 ):
     """
     فلترة متقدمة للأسهم بناءً على الرتب والفترات.
-    Cached with 10-minute TTL.
+    Cached with 24-hour TTL (CACHE_TTL_SCREENERS).
     """
     cache_key = make_rs_advanced_key(min_rs, min_rank_3m, min_rank_6m, sort_by, limit)
     
@@ -249,7 +253,7 @@ async def get_rs_history(
 ):
     """
     الحصول على تاريخ RS لسهم معين.
-    Cached with 30-minute TTL.
+    Cached with 24-hour TTL (CACHE_TTL_RS_HISTORY).
     """
     cache_key = make_rs_history_key(
         symbol,

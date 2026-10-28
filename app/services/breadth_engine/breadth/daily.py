@@ -26,7 +26,7 @@ def newest(pattern: str) -> str | None:
     return os.path.basename(files[-1]) if files else None
 
 
-def run(prices: str | None = None, index: str | None = None, skip_data: bool = False) -> dict:
+def run(prices: str | None = None, index: str | None = None, skip_data: bool = False, eps_growth: dict | None = None) -> dict:
     t0 = time.time()
     cfg = load_config()
     status = {}
@@ -45,7 +45,7 @@ def run(prices: str | None = None, index: str | None = None, skip_data: bool = F
     from breadth.reports.daily_summary import build as build_sum
     status["dashboard"] = build_dash(cfg)
     from breadth.reports.pro_dashboard import build as build_pro
-    status["pro_dashboard"] = build_pro(cfg)
+    status["pro_dashboard"] = build_pro(cfg, eps_growth=eps_growth)
     from breadth.reports.canary_study import run as run_canary
     run_canary(cfg)
     status["summary"] = build_sum(cfg)

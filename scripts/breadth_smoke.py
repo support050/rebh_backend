@@ -25,6 +25,7 @@ EXPECTED = {
     "/api/rebh/breadth/sectors",
     "/api/rebh/breadth/stocks",
     "/api/rebh/breadth/stockbee",
+    "/api/rebh/breadth/guru",
     "/api/rebh/breadth/ohlc",
     "/api/rebh/breadth/ohlc/{symbol}",
     "/api/rebh/breadth/meta",

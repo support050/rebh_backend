@@ -185,6 +185,16 @@ def _post_run_hooks(job_name: str) -> None:
     run must do the same, or the UI keeps serving the pre-run numbers."""
     if job_name == "breadth_daily":
         return                                    # its body clears its own keys
+    if job_name == "market_reports":
+        # Run Now dispatches the raw _market_reports callable — the cron wrapper
+        # (job_market_reports_scrapers) that busts market_reports:* never runs
+        # here, so the manual path must clear the keyspace itself.
+        try:
+            from app.core.scheduler import _clear_market_reports_cache
+            _clear_market_reports_cache()
+        except Exception as e:                    # noqa: BLE001 — cache is optional
+            logger.debug("job_runner: market-reports cache clear skipped: %s", e)
+        return
     try:
         from app.core.scheduler import ECONOMIC_CACHE_JOBS, _clear_cache
         if job_name in ECONOMIC_CACHE_JOBS:
