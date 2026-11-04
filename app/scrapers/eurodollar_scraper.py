@@ -23,6 +23,14 @@ Eurodollar Futures Scraper — Investing.com [Scrapling v4]
      ينقل الـ 403 من عنوان لآخر فقط.
   3. مصدر احتياطي مقاس (انظر _fetch_yahoo_sofr): يعيد عقد SOFR الأقرب استحقاقاً
      فقط، ويُعلَّم في السجل كالتقاط ناقص حتى لا يُقرأ كمنظومة كاملة.
+
+2026-11-04 — ScraperAPI transport (Render/datacenter support)
+  من Render كل القنوات المباشرة بترجع 403 (مقاس في لوج الإنتاج يوم 4/11: كل
+   النقلات فشلت وخرجنا بلقطة Yahoo بعقد واحد)، لأن الحظر على سمعة الـ IP مش على
+   البصمة. ScraperAPI بيمرّر الطلب من مجمّع سكني خاصه، فبقى القناة الوحيدة اللي
+   بتشتغل من datacenter — بيتقدّم على المتصفح (المتصفح التقال في Render بيفشل
+   بصمت وبيضيّع دقايق). المفتاح من SCRAPERAPI_KEY (settings/.env/Render env)؛
+   لو مش مضبوط بتتخطّى القناة زي الأول بالظبط.
 """
 
 import argparse
@@ -61,6 +69,51 @@ logger = logging.getLogger(__name__)
 
 # ─── Constants ────────────────────────────────────────────────────────────────
 PAGE_URL = "https://www.investing.com/rates-bonds/eurodollar-futures"
+
+# ScraperAPI: طلب واحد = كريدت واحد بدون render، و5 مع render (توثيق الشركة).
+# يُجرَّب بلا render أولاً لأن الجدول يطلع أحياناً في HTML الخادم نفسه (مقاس).
+SCRAPERAPI_ENDPOINT = "https://api.scraperapi.com"
+
+
+def _scraperapi_key() -> Optional[str]:
+    """Lazy key lookup: pydantic settings first (.env/Render env), bare env as
+    the escape hatch when app config cannot be imported."""
+    try:
+        from app.core.config import settings
+        key = getattr(settings, "SCRAPERAPI_KEY", None)
+        if key:
+            return key
+    except Exception:                                    # noqa: BLE001 — optional
+        pass
+    return os.environ.get("SCRAPERAPI_KEY") or None
+
+
+def _fetch_via_scraperapi(key: str, render: bool) -> Optional[str]:
+    """One ScraperAPI call → table HTML, or None.
+
+    Only a response that actually carries the contracts grid counts; anything
+    else (blocked target, quota error page) is treated as a miss so the caller
+    can escalate instead of parsing garbage."""
+    params = {"api_key": key, "url": PAGE_URL}
+    if render:
+        params["render"] = "true"
+    try:
+        resp = requests.get(SCRAPERAPI_ENDPOINT, params=params, timeout=120)
+        if resp.status_code != 200:
+            # 429/401/402 are ScraperAPI-side codes; 403/5xx = target blocked
+            # through the pool — both mean "miss", never "retry forever".
+            logger.warning(f"    ScraperAPI (render={render}): HTTP {resp.status_code}")
+            return None
+        if _table_markup(resp.text) is None:
+            logger.info(f"    ScraperAPI (render={render}): 200 بلا جدول "
+                        f"({len(resp.text):,} حرف)")
+            return None
+        logger.info(f"    ✅ الجدول خرج من ScraperAPI (render={render}, "
+                    f"{len(resp.text):,} حرف)")
+        return resp.text
+    except Exception as e:                                # noqa: BLE001
+        logger.warning(f"    ScraperAPI فشل: {type(e).__name__}: {str(e)[:120]}")
+        return None
 
 # اسم المتغير البيئي الأعلى أولوية في سلسلة resolve_proxy (EURODOLLAR_PROXY →
 # SCRAPLING_PROXY → HTTPS_PROXY → ALL_PROXY → HTTP_PROXY).
@@ -145,7 +198,19 @@ def _acquire_page() -> tuple[Optional[str], Optional[object]]:
         if html is not None:
             return html, res.page
 
-    # 2) Scrapling stealth browser + Cloudflare solver — the path that gets a
+    # 2) ScraperAPI (residential pool) — the only channel that can answer from
+    #    a datacenter IP. Plain first (1 credit), then JS-render (5 credits)
+    #    when the grid turned out to be client-side on this response.
+    sa_key = _scraperapi_key()
+    if sa_key:
+        html = _fetch_via_scraperapi(sa_key, render=False) or \
+            _fetch_via_scraperapi(sa_key, render=True)
+        if html is not None:
+            return html, None
+    else:
+        logger.info("    ScraperAPI: SCRAPERAPI_KEY غير مضبوط — تُتخطّى القناة")
+
+    # 3) Scrapling stealth browser + Cloudflare solver — the path that gets a
     #    datacenter IP through the Turnstile challenge. It is slow by design
     #    (BROWSER_TIMEOUT_MS), and "no challenge on this page" still returns
     #    the rendered HTML, so a solver attempt is never wasted work.
@@ -156,7 +221,7 @@ def _acquire_page() -> tuple[Optional[str], Optional[object]]:
         logger.info("    ✅ الجدول خرج من متصفح StealthyFetcher (+ حل Cloudflare)")
         return bres.text, bres.page
 
-    # 3) Same browser without the solver: covers the case where the solver
+    # 4) Same browser without the solver: covers the case where the solver
     #    itself timed out on a challenge that was never really served (measured
     #    behaviour: it returns the page as-is after its own retries).
     bres = browser_get(PAGE_URL, wait_selector="table",
@@ -167,7 +232,7 @@ def _acquire_page() -> tuple[Optional[str], Optional[object]]:
         logger.info("    ✅ الجدول خرج من متصفح StealthyFetcher (بلا حلّاء)")
         return bres.text, bres.page
 
-    # 4) Legacy requests path (kept so an image without scraping still runs)
+    # 5) Legacy requests path (kept so an image without scraping still runs)
     try:
         session = requests.Session()
         session.headers.update(HEADERS_BROWSER)
@@ -548,6 +613,10 @@ def scrape_eurodollar_futures(
     logger.info("=" * 60)
 
     # ── فحص إذا تم السحب اليوم مسبقاً ──
+    # Skip only when today's snapshot is FULL. A day left at fewer than
+    # MIN_CONTRACTS rows (e.g. the 1-row Yahoo emergency pick) is still a hole,
+    # so a later run — now possibly through ScraperAPI from Render — refills it
+    # via the (scrape_date, contract) upsert instead of being locked out.
     if save_db and not force:
         try:
             from app.core.database import SessionLocal as _SL
@@ -557,9 +626,11 @@ def scrape_eurodollar_futures(
                 existing_count = _db.query(_EF).filter(
                     _EF.scrape_date == date.today()
                 ).count()
-                if existing_count > 0:
+                if existing_count >= MIN_CONTRACTS:
                     logger.info(f"ℹ️ تم السحب مسبقاً اليوم ({date.today()}). يوجد {existing_count} سجل. استخدم --force لإعادة السحب.")
                     return {"ok": True, "rows": 0, "skipped": "already scraped today"}
+                if existing_count > 0:
+                    logger.info(f"⚠️ اليوم فيه {existing_count} سجل فقط (< {MIN_CONTRACTS}) — لقطة ناقصة، يُعاد السحب لترميمها")
             finally:
                 _db.close()
         except ImportError:

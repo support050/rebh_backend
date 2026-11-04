@@ -81,6 +81,10 @@ class Settings(BaseSettings):
     # ── External APIs ────────────────────────────────────────────────────
     TWELVE_DATA_API_KEY: str | None = None
     FRED_API_KEY: str | None = None
+    # Residential-proxy endpoint used by scrapers whose target blocks
+    # datacenter IPs (eurodollar_scraper: investing.com 403s from Render's
+    # egress but answers 200 through this pool). Unset = transport skipped.
+    SCRAPERAPI_KEY: str | None = None
     INTERNAL_API_KEY: str | None = None
     BASE_URL: str = "https://api.twelvedata.com"
 

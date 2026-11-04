@@ -548,10 +548,11 @@ def _load_script_sync(filename: str):
 
 
 def _sukuk_sync():
-    """Sukuk & Bonds snapshot refresh. run_sukuk_sync() returns an int (rows
-    upserted) so job_tracking infers rows_written directly. 0 means the live grid
-    was blocked and even the seed produced nothing — surfaced as a visible 0-row
-    success in the last-run chip, exactly as the script's __main__ records it."""
+    """Sukuk & Bonds snapshot refresh. run_sukuk_sync() returns
+    {"ok", "rows", "error"?} — with_result_handling records ok=False runs as
+    'failed'. Since 2026-11-04 a fatal bulk write (e.g. the legacy UNIQUE
+    index collision, job_runs id=231) is never again booked as a 0-row
+    success; 0-row success now honestly means "everything already current"."""
     return _load_script_sync("Sukuk&Bonds.py").run_sukuk_sync()
 
 

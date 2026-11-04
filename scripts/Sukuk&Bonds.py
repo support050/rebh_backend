@@ -609,6 +609,88 @@ def _sukuk_key(symbol, parent) -> tuple:
     return (str(symbol or "").strip(), str(parent or "").strip())
 
 
+def _lookup_existing(existing_records: dict, pool_by_symbol: dict, key: tuple,
+                     issuer_name: str = ""):
+    """Resolve which stored row an incoming item writes to, or None to insert.
+
+    Three cases, in order:
+
+    1. Exact composite key (symbol, parent).
+    2. Orphan adoption — the STORED row's parent is empty and the incoming
+       item carries one. This is what repaired legacy rows after the key
+       changed from symbol-only to composite.
+    3. Seed adoption (2026-11-04) — the INCOMING parent is empty (the frozen
+       seed dataset never carried parents) while a live row already has one.
+       Without this the seed INSERTs ('5389','') beside the real
+       ('5389','5200'): under the legacy UNIQUE(symbol) index that crashed
+       the whole bulk write (job_runs id=231); under the composite
+       constraint it would silently duplicate instead. _merge_into refuses
+       to blank the stored parent.
+
+    Adopted rows are removed from the pool and registered under the incoming
+    key, so no row is ever claimed twice in one run.
+    """
+    existing = existing_records.get(key)
+    if existing is not None:
+        return existing
+
+    pool = pool_by_symbol.get(key[0]) or []
+    if not key[1]:
+        # Case 3: seed adoption — same symbol, incoming parent blank.
+        # A symbol with several parented rows (TestSukukKey: one symbol, two
+        # parents, is two distinct listings) must not be adopted blindly:
+        # disambiguate by issuer_name, and refuse (insert path) when still
+        # ambiguous — the legacy UNIQUE(symbol) then makes the collision
+        # fatal and honest, instead of a silent parentless duplicate.
+        candidates = pool
+        if len(pool) > 1 and issuer_name:
+            candidates = [r for r in pool
+                          if str(r.issuer_name or "").strip() == str(issuer_name).strip()]
+        if len(candidates) == 1:
+            existing = candidates[0]
+            pool.remove(existing)
+            existing_records[key] = existing
+            return existing
+        return None
+
+    # Case 2: orphan adoption — repair a stored row whose parent is still empty.
+    orphans = [r for r in pool if not str(r.parent_company_symbol or "").strip()]
+    if orphans:
+        existing = orphans[0]
+        pool.remove(existing)
+        # Its old (symbol, '') slot now points at a row that is about to be
+        # re-parented — drop it or a later item could claim the same row twice.
+        existing_records.pop((key[0], ""), None)
+        existing_records[key] = existing
+        return existing
+    return None
+
+
+def _merge_into(existing, norm: dict) -> None:
+    """Write a normalized item onto its resolved row.
+
+    The one guard: an empty incoming parent never blanks a stored one — seed
+    adoption deliberately lands on rows the live grid already re-parented
+    (see _lookup_existing case 3). A non-empty incoming parent still repairs
+    orphan rows exactly as before.
+    """
+    if (str(norm["parent_company_symbol"] or "").strip()
+            or not str(getattr(existing, "parent_company_symbol", "") or "").strip()):
+        existing.parent_company_symbol = norm["parent_company_symbol"]
+    existing.issuer_name        = norm["issuer_name"]
+    existing.bond_type          = norm["bond_type"]
+    existing.coupon_rate        = norm["coupon_rate"]
+    existing.yield_to_maturity  = norm["yield_to_maturity"]
+    existing.issue_date         = norm["issue_date"]
+    existing.maturity_date      = norm["maturity_date"]
+    existing.outstanding_amount = norm["outstanding_amount"]
+    existing.currency           = norm["currency"]
+    existing.sector_name        = norm["sector_name"]
+    existing.source_url         = norm["source_url"]
+    existing.is_active          = norm["is_active"]
+    existing.as_of              = norm["as_of"]
+
+
 def _deactivate_retired(db: Session, seen_keys: set) -> int:
     """Flag rows the live grid no longer lists as is_active=False.
 
@@ -683,33 +765,16 @@ def save_sukuk_to_db(items: list, source_url: str = BASE_PAGE,
             seen_keys.add(key)
 
             try:
-                existing = existing_records.get(key)
-
-                if existing is None:
-                    orphans = [r for r in pool_by_symbol.get(key[0], [])
-                               if not str(r.parent_company_symbol or "").strip()]
-                    if orphans:
-                        existing = orphans[0]
-                        pool_by_symbol[key[0]].remove(existing)
-                        # Its old (symbol, '') slot now points at a row that is
-                        # about to be re-parented — drop it or a later item could
-                        # claim the same row twice.
-                        existing_records.pop((key[0], ""), None)
+                existing = _lookup_existing(existing_records, pool_by_symbol, key,
+                                            norm["issuer_name"])
 
                 if existing:
-                    existing.issuer_name           = norm["issuer_name"]
-                    existing.parent_company_symbol = norm["parent_company_symbol"]
-                    existing.bond_type             = norm["bond_type"]
-                    existing.coupon_rate           = norm["coupon_rate"]
-                    existing.yield_to_maturity     = norm["yield_to_maturity"]
-                    existing.issue_date            = norm["issue_date"]
-                    existing.maturity_date         = norm["maturity_date"]
-                    existing.outstanding_amount    = norm["outstanding_amount"]
-                    existing.currency              = norm["currency"]
-                    existing.sector_name           = norm["sector_name"]
-                    existing.source_url            = norm["source_url"]
-                    existing.is_active             = norm["is_active"]
-                    existing.as_of                 = norm["as_of"]
+                    _merge_into(existing, norm)
+                    # Track the row's FINAL key too: after seed/orphan adoption
+                    # it differs from the incoming `key`, and a row that was
+                    # just written must never look "absent" to retirement.
+                    seen_keys.add(_sukuk_key(existing.symbol,
+                                             existing.parent_company_symbol))
                 else:
                     new_obj = SukukMarketData(**norm)
                     db.add(new_obj)
@@ -738,7 +803,9 @@ def save_sukuk_to_db(items: list, source_url: str = BASE_PAGE,
     except Exception as e:
         db.rollback()
         logger.error(f"[DB] Fatal error during bulk upsert: {e}")
-        return 0
+        # Re-raise so the caller reports ok=False — a crashed bulk write may
+        # never be recorded as a 0-row success (job_runs id=231, 2026-11-04).
+        raise RuntimeError(f"sukuk bulk upsert failed: {e}") from e
     finally:
         db.close()
 
@@ -844,13 +911,17 @@ def get_buildup_sukuk_yield(equity_symbol: str) -> dict:
 # Main Entry Point
 # ──────────────────────────────────────────────────────────────────────────────
 
-def run_sukuk_sync() -> int:
+def run_sukuk_sync() -> dict:
     """
     Main execution entry point — cheapest transport first:
       1. ScraperAPI, only when a key is configured (paid proxy, Saudi IP)
       2. Scrapling impersonated HTTP replay of the grid's data URL (no browser)
       3. Scrapling stealth session: recorded XHR, else DOM-by-header
       4. Verified local seed dataset (keeps Build-Up R served 100% of the time)
+
+    Returns {"ok": bool, "rows": int, "error": str?} — the exact shape
+    job_tracking.with_result_handling turns into an honest ledger row. A fatal
+    DB write or a total transport blackout is ok=False, never a 0-row success.
     """
     logger.info("=== Starting Sukuk & Bonds Data Sync (Phase 5) ===")
 
@@ -886,26 +957,35 @@ def run_sukuk_sync() -> int:
         items = load_sukuk_from_seed()
         source_url = "local_seed_repository"
 
-    if items:
-        # Retirement marking only makes sense against a live grid. The seed file
-        # is a frozen snapshot: marking its absences as delisted would disable
-        # real instruments the first time the seed lags the market.
+    if not items:
+        logger.error("=== Sync FAILED: No data fetched from live browser or seed dataset ===")
+        return {"ok": False, "rows": 0,
+                "error": "no payload from any transport (scraperapi/http/browser/seed)"}
+
+    # Retirement marking only makes sense against a live grid. The seed file
+    # is a frozen snapshot: marking its absences as delisted would disable
+    # real instruments the first time the seed lags the market.
+    try:
         count = save_sukuk_to_db(
             items, source_url=source_url,
             mark_missing_inactive=(source_url != "local_seed_repository"),
         )
-        logger.info(f"=== Sync Finished: {count} instruments updated ===")
-        return count
-    else:
-        logger.error("=== Sync FAILED: No data fetched from live browser or seed dataset ===")
-        return 0
+    except Exception as e:
+        logger.error(f"=== Sync FAILED during DB write: {e}")
+        return {"ok": False, "rows": 0, "error": str(e)[:4000]}
+    logger.info(f"=== Sync Finished: {count} instruments updated ===")
+    return {"ok": True, "rows": count}
 
 
 if __name__ == "__main__":
     # Wrapped here (not inside run_sukuk_sync) so an APScheduler / admin-triggered
     # run is not recorded twice. job key matches scheduler._safe(job_key=...).
-    from app.services.job_tracking import track_job
+    from app.services.job_tracking import track_job, with_result_handling
     with track_job("sukuk_importer", "manual") as run:
-        result = run_sukuk_sync()
-        run.rows_written = result if isinstance(result, int) else None
-    print(f"\n[SUCCESS] Sukuk & Bonds sync complete: {result} records upserted.")
+        result = with_result_handling(run, run_sukuk_sync())
+    if result.get("ok"):
+        print(f"\n[SUCCESS] Sukuk & Bonds sync complete: {result['rows']} records upserted.")
+    else:
+        import sys as _sys
+        print(f"\n[FAILED] Sukuk & Bonds sync: {result.get('error')}", file=_sys.stderr)
+        _sys.exit(1)

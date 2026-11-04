@@ -22,6 +22,8 @@ from scripts.Sukuk_and_Bonds import (  # noqa: F401  (import alias used below)
     _classify_bond_type,
     _normalize_item,
     _sukuk_key,
+    _lookup_existing,
+    _merge_into,
     _deactivate_retired,
     _header_map,
     MIN_DEACTIVATE_COVERAGE,
@@ -324,6 +326,83 @@ class TestSukukKey:
         """The pre-fix dict was keyed on symbol alone, so a second listing under a
         different parent silently re-parented (and hid) the first one."""
         assert _sukuk_key("5025", "5025") != _sukuk_key("5025", "1010")
+
+
+# ─── Seed-vs-live adoption (_lookup_existing / _merge_into) ───────────────
+
+class TestSeedAdoption:
+    """2026-11-04: the frozen seed dataset carries NO parent while live rows DO
+    (symbol 5389 is stored with parent 5200). An empty-parent incoming item must
+    UPDATE the live same-symbol row — never INSERT a duplicate (that collision
+    killed the whole bulk write, job_runs id=231) and never blank the stored
+    parent. The mirror case — a live item re-parenting an orphan row — must
+    keep working."""
+
+    def _row(self, symbol, parent, issuer="Old Name"):
+        from types import SimpleNamespace
+        return SimpleNamespace(symbol=symbol, parent_company_symbol=parent,
+                               issuer_name=issuer, bond_type=None,
+                               coupon_rate=None, yield_to_maturity=None,
+                               issue_date=None, maturity_date=None,
+                               outstanding_amount=None, currency=None,
+                               sector_name=None, source_url=None,
+                               is_active=True, as_of=None)
+
+    def _norm(self, symbol, parent, issuer="KSA Sukuk 2026-07-15"):
+        return {"symbol": symbol, "issuer_name": issuer,
+                "parent_company_symbol": parent, "bond_type": "G",
+                "coupon_rate": None, "yield_to_maturity": None,
+                "issue_date": None, "maturity_date": None,
+                "outstanding_amount": None, "currency": "SAR",
+                "sector_name": "Government Sukuk/Bonds Index",
+                "source_url": "local_seed_repository", "is_active": True,
+                "as_of": "2026-11-04"}
+
+    def _index(self, rows):
+        existing, pool = {}, {}
+        for r in rows:
+            existing[_sukuk_key(r.symbol, r.parent_company_symbol)] = r
+            pool.setdefault(str(r.symbol), []).append(r)
+        return existing, pool
+
+    def test_seed_item_adopts_the_parented_live_row(self):
+        live = self._row("5389", "5200", "KSA Sukuk 2026-07-15")
+        existing, pool = self._index([live])
+        got = _lookup_existing(existing, pool, ("5389", ""), "KSA Sukuk 2026-07-15")
+        assert got is live
+        assert pool["5389"] == []                # claimed once, never handed twice
+        assert existing[("5389", "")] is live    # a repeat item maps to the same row
+
+    def test_adoption_writes_through_but_keeps_the_stored_parent(self):
+        live = self._row("5389", "5200", "KSA Sukuk 2026-07-15")
+        existing, pool = self._index([live])
+        target = _lookup_existing(existing, pool, ("5389", ""), "KSA Sukuk 2026-07-15")
+        _merge_into(target, self._norm("5389", None))
+        assert live.parent_company_symbol == "5200"   # never blanked by the seed
+        assert live.as_of == "2026-11-04"             # but the row is refreshed
+
+    def test_live_item_still_repairs_an_orphan_row(self):
+        orphan = self._row("5025", None)
+        existing, pool = self._index([orphan])
+        got = _lookup_existing(existing, pool, ("5025", "1010"), "RIYAD SUKUK PERP")
+        assert got is orphan
+        assert ("5025", "") not in existing          # stale slot dropped
+        _merge_into(got, self._norm("5025", "1010"))
+        assert orphan.parent_company_symbol == "1010"
+
+    def test_ambiguous_multi_listing_is_not_adopted(self):
+        """One symbol under two parents is two instruments: an empty-parent
+        item that names neither issuer must not silently pick one."""
+        a = self._row("5025", "5025", "RIYAD SUKUK PERP")
+        b = self._row("5025", "1010", "SABIC SUKUK 2030")
+        existing, pool = self._index([a, b])
+        assert _lookup_existing(existing, pool, ("5025", ""), "UNKNOWN ISSUER") is None
+        # …but the moment the issuer names one of them, it is unambiguous again
+        assert _lookup_existing(existing, pool, ("5025", ""), "SABIC SUKUK 2030") is b
+
+    def test_absent_symbol_falls_through_to_insert(self):
+        existing, pool = self._index([self._row("5389", "5200")])
+        assert _lookup_existing(existing, pool, ("1234", ""), "X") is None
 
 
 # ─── Retirement guard: real delisting vs a partial grid ───────────────────────
