@@ -66,9 +66,15 @@ from __future__ import annotations
 import logging
 import os
 import re
+import sys
 import time
 from datetime import date, datetime, timedelta
 from typing import Any, Dict, List, Optional, Tuple
+
+# Same convention as eurodollar_scraper.py: make `app` importable when this
+# file is executed directly (the Runbook's copy-command runs it as a script,
+# where sys.path[0] is the scrapers folder and `import app…` would fail).
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../')))
 
 from bs4 import BeautifulSoup
 from sqlalchemy import func
@@ -617,7 +623,13 @@ if __name__ == "__main__":
     parser.add_argument("--max-pages", type=int, default=None,
                         help="legacy table fallback only (ignored by the decoder)")
     args = parser.parse_args()
-    out = scrape_gurufocus_indicator(url=args.url, indicator_code=args.code,
-                                     mode=args.mode, max_pages=args.max_pages)
+    # Record in job_runs like the Admin/Run-Now path does (same key, same
+    # dict-failure contract) — a terminal run that is invisible to the ledger
+    # forces the Runbook to judge this card "from tables" instead of real.
+    from app.services.job_tracking import track_job, with_result_handling
+    with track_job("manual:gurufocus", "manual") as run:
+        out = with_result_handling(run, scrape_gurufocus_indicator(
+            url=args.url, indicator_code=args.code,
+            mode=args.mode, max_pages=args.max_pages))
     print(out)
     raise SystemExit(0 if out.get("ok") else 1)

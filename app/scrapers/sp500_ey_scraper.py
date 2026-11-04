@@ -16,9 +16,15 @@ Fallback 3     : our own sp500_history.pe_ratio (Multpl monthly) → EY = 100 / 
 
 import logging
 import os
+import sys
 import time
 from datetime import date, datetime, timedelta
 from typing import Optional
+
+# Same convention as eurodollar_scraper.py: make `app` importable when this
+# file is executed directly (the Runbook's copy-command runs it as a script,
+# where sys.path[0] is the scrapers folder and `import app…` would fail).
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../')))
 
 import requests
 from bs4 import BeautifulSoup

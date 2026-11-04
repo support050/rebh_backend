@@ -122,7 +122,8 @@ def _j(job_name: str, file: str, expected_schedule: str,
        writes: Optional[List[str]] = None, note: str = "",
        tracked: bool = True, cadence: Optional[str] = None,
        role: str = "ingestion", storage: str = "cumulative",
-       commands: Optional[List[Dict[str, str]]] = None) -> Dict[str, Any]:
+       commands: Optional[List[Dict[str, str]]] = None,
+       local_run: Optional[Dict[str, str]] = None) -> Dict[str, Any]:
     """One job. ``job_name`` MUST equal the key written into ``job_runs``.
 
     ``tracked=False`` → the entry point is not wrapped by track_job(), so
@@ -138,6 +139,10 @@ def _j(job_name: str, file: str, expected_schedule: str,
       · commands → [{label, cli, kind}] the exact operator terminal commands,
                    kind ∈ incremental | full | backfill. Left empty for
                    cron-only jobs, whose door is the Run Now button instead.
+      · local_run → {"level": "required"|"advised", "reason": str} when the
+                   source blocks Render's datacenter IP (403/Akamai) or the run
+                   needs a local browser. The card carries a red/amber
+                   "run locally" badge and the reason as its tooltip.
     """
     return {
         "job_name": job_name,
@@ -152,6 +157,7 @@ def _j(job_name: str, file: str, expected_schedule: str,
         "role": role,
         "storage": storage,
         "commands": commands or [],
+        "local_run": local_run,
     }
 
 
@@ -976,6 +982,20 @@ SYSTEMS: List[Dict[str, Any]] = [
                "manual only — Admin monthly buttons /scrape/SP500_EY and /scrape/SP500_PE "
                "or Run Now",
                None, "manual", writes=["economic_indicators"], tracked=True,
+               local_run={"level": "required",
+                          "reason": "GuruFocus 403s Render's datacenter IP on every "
+                                    "transport (verified 2026-11-04: Run Now → failed; "
+                                    "fingerprint rotation only answers 200 from a "
+                                    "residential line). Run it from your machine."},
+               commands=[
+                   {"label": "Refresh SP500_EY (incremental)", "kind": "incremental",
+                    "cli": '.\\venv\\Scripts\\python.exe "app/scrapers/gurufocus_scraper.py" '
+                           '--url "https://www.gurufocus.com/economic_indicators/151/sp-500-earnings-yield" '
+                           '--code SP500_EY'},
+                   {"label": "Refresh SP500_PE (incremental)", "kind": "incremental",
+                    "cli": '.\\venv\\Scripts\\python.exe "app/scrapers/gurufocus_scraper.py" '
+                           '--url "https://www.gurufocus.com/economic_indicators/57/sp-500-pe-ratio" '
+                           '--code SP500_PE'}],
                note="GuruFocus (primary) + sp500_ey (alternative) both feed the "
                     "S&P 500 earnings yield (SP500_EY) into economic_indicators; this "
                     "job stays active and is also the sole writer of the SP500_PE key. "
@@ -985,10 +1005,18 @@ SYSTEMS: List[Dict[str, Any]] = [
                     "scheduler._gurufocus) and the driver comes from the shared "
                     "daily_detailed_scraper.build_driver (page_load_strategy=eager, "
                     "300s client timeout). sp500_ey_scraper.py is the lighter "
-                    "alternative used by scraper_service.run_sp500_ey."),
+                    "alternative used by scraper_service.run_sp500_ey. Since "
+                    "2026-11-04 the __main__ door records under "
+                    "track_job('manual:gurufocus') too — a terminal run closes the "
+                    "ledger gap that table-superseded verdicts used to paper over."),
             _j("scraper:sp500_ey", "backend/app/scrapers/sp500_ey_scraper.py",
                "manual — POST /api/admin/system/run-scraper {\"scraper\":\"sp500_ey\"}",
                None, "manual", writes=["economic_indicators"], tracked=True,
+               local_run={"level": "advised",
+                          "reason": "Its GuruFocus leg 403s from datacenter IPs, but the "
+                                    "chain self-heals on Render (Yahoo → derived from own "
+                                    "sp500_history). Run locally when you want the true "
+                                    "GuruFocus value instead of the derived one."},
                note="One of two SP500_EY sources in economic_indicators - the lighter "
                     "alternative to manual:gurufocus (which stays active and is the sole "
                     "SP500_PE writer). key comes from "
@@ -1009,6 +1037,11 @@ SYSTEMS: List[Dict[str, Any]] = [
                          {"label": "This month only (latest observation)",
                           "kind": "incremental",
                           "cli": '$env:CHROME_BIN="C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe"; .\\venv\\Scripts\\python.exe "scripts/SAMA&GaStat.py" --execute --no-history'}],
+               local_run={"level": "advised",
+                          "reason": "Browser-heavy SAMA/GaStat ingestion — the commands "
+                                    "assume a local CHROME_BIN, and Render's stealth "
+                                    "browser fails instantly (measured 2026-11-04 on "
+                                    "sukuk), so remote runs degrade to the fallback."},
                note="THE SAMA/GaStat macro ingestion entry point. --execute writes; "
                     "without it the run is a dry plan. The browser channel needs "
                     "CHROME_BIN (or GOOGLE_CHROME_BIN on Render) or Scrapling falls "
@@ -1028,6 +1061,12 @@ SYSTEMS: List[Dict[str, Any]] = [
                commands=[{"label": "Refresh sukuk snapshot",
                           "kind": "full",
                           "cli": '.\\venv\\Scripts\\python.exe "scripts/Sukuk&Bonds.py"'}],
+               local_run={"level": "required",
+                          "reason": "Akamai blocks the SaudiExchange sukuk grid from "
+                                    "datacenter IPs — a Run-Now on Render always drops "
+                                    "to the static 63-record seed (verified 2026-11-04). "
+                                    "Live yields/prices only land when run from a "
+                                    "residential line."},
                note="THE sukuk ingestion entry point — no flags, running it performs "
                     "the upsert. Snapshot semantics: the live grid is re-listed each "
                     "run; instruments the grid stops listing are flagged "
@@ -2601,6 +2640,7 @@ def schedule_jobs() -> List[Dict[str, Any]]:
                     "trigger": job.get("trigger", "cron"),
                     "tracked": job.get("tracked", True),
                     "note": job.get("note", ""),
+                    "local_run": job.get("local_run"),
                     "systems": [system["id"]],
                 }
                 by_name[name] = row
@@ -2613,6 +2653,13 @@ def schedule_jobs() -> List[Dict[str, Any]]:
                         row["writes"].append(tbl)
                 if len(job.get("commands") or []) > len(row["commands"]):
                     row["commands"] = list(job["commands"])
+                # The local-run flag survives dedupe, and one system claiming
+                # "required" outranks another system's softer "advised".
+                if job.get("local_run") and (
+                        row["local_run"] is None
+                        or (job["local_run"].get("level") == "required"
+                            and row["local_run"].get("level") != "required")):
+                    row["local_run"] = job["local_run"]
     return [by_name[n] for n in order]
 
 

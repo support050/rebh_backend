@@ -306,6 +306,9 @@ def _build_job(job: Dict[str, Any], last: Optional[Dict[str, Any]],
         # When the list above is legitimately empty (a library module with no
         # __main__ door), the card says WHY instead of showing a blank slot.
         "cli_absence_reason": registry.cli_absence_reason(job),
+        # Registry verdict on datacenter-hostility: {level, reason} when the
+        # source 403s/blocks Render's IP — the card badges it "run locally".
+        "local_run": job.get("local_run"),
         "failures_7d": failures_7d,
         "stuck_running": stuck_running,
         "last_run": None,

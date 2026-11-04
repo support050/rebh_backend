@@ -120,3 +120,43 @@ def test_integrity_targets_point_at_real_jobs():
             f"{t['table']} names an unknown fix job {t['responsible_job']!r}"
         for cmd in t["fix_commands"]:
             assert set(cmd) == _CMD_KEYS and cmd["kind"] in registry.COMMAND_KINDS
+
+
+# ── local_run badges (2026-11-04): datacenter-blocked jobs say "run locally" ──
+_LOCAL_LEVELS = {"required", "advised"}
+
+
+def test_local_run_flags_are_well_formed():
+    for system in registry.SYSTEMS:
+        for job in system["jobs"]:
+            lr = job.get("local_run")
+            if lr is None:
+                continue
+            assert lr["level"] in _LOCAL_LEVELS, \
+                f"{job['job_name']} local_run level {lr.get('level')!r}"
+            assert lr["reason"].strip(), \
+                f"{job['job_name']} badges a local run without saying why"
+
+
+def test_datacenter_blocked_jobs_carry_the_badge_and_a_command():
+    jobs = {j["job_name"]: j for j in registry.schedule_jobs()}
+    # Required: the source never answers from Render's IP, Run Now is a lie of
+    # omission — the operator needs the badge AND a copyable local command.
+    for name in ("manual:gurufocus", "sukuk_importer"):
+        lr = jobs[name].get("local_run")
+        assert lr and lr["level"] == "required", f"{name} lost its red badge"
+        assert jobs[name]["commands"], f"{name} is badged local without a CLI"
+    # The gurufocus CLI needs --url/--code (argparse required=True in its
+    # __main__): the derived bare-command would die on the spot.
+    gurus = [c["cli"] for c in jobs["manual:gurufocus"]["commands"]]
+    assert len(gurus) == 2
+    for cli in gurus:
+        assert "--url" in cli and "--code" in cli, f"incomplete command {cli!r}"
+
+
+def test_schedule_jobs_carry_local_run_through_dedupe():
+    # sukuk_importer + gurufocus are listed under several systems; the flag
+    # (and the richest command list) must survive the flattening.
+    jobs = {j["job_name"]: j for j in registry.schedule_jobs()}
+    assert jobs["sukuk_importer"]["local_run"]["level"] == "required"
+    assert len(jobs["manual:gurufocus"]["commands"]) == 2
