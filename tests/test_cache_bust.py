@@ -300,7 +300,9 @@ class TestNotifyApi:
 
 
 class TestBustChannelSelection:
-    """The rule that ends the Render-shell ritual — and does not double the work."""
+    """The door policy of 2026-11-04: host identity decides, not reachability.
+    On the deploy (RENDER=true) a local bust is the whole job; anywhere else
+    the door is knocked EVEN WHEN the local Redis answered cleanly."""
 
     def _unreachable(self, patterns, **kw):
         return {"channel": "local", "target": "redis://localhost:7424",
@@ -312,7 +314,12 @@ class TestBustChannelSelection:
                 "reachable": True, "deleted": 3, "error": None,
                 "per_pattern": {"rebh:breadth:*": 3}, "skipped_auth_keys": 0}
 
-    def test_local_success_means_no_http_call(self):
+    def _door(self, deleted=12):
+        return {"channel": "remote", "target": "https://api.example",
+                "reachable": True, "deleted": deleted, "error": None}
+
+    def test_deploy_host_local_success_means_no_http_call(self, monkeypatch):
+        monkeypatch.setenv("RENDER", "true")
         with patch.object(cache_bust, "evict", self._reachable), \
              patch.object(cache_bust, "notify_api",
                           side_effect=AssertionError("must not be used")):
@@ -320,17 +327,41 @@ class TestBustChannelSelection:
         assert result["ok"] is True
         assert [c["channel"] for c in result["channels"]] == ["local"]
 
-    def test_local_failure_knocks_the_door(self):
-        door = {"channel": "remote", "target": "https://api.example",
-                "reachable": True, "deleted": 12, "error": None}
+    def test_laptop_local_success_STILL_knocks_the_door(self, monkeypatch):
+        # The retired bug: a reachable laptop Redis used to silence the door,
+        # so the deploy kept serving the pre-run payload.
+        monkeypatch.delenv("RENDER", raising=False)
+        with patch.object(cache_bust, "evict", self._reachable), \
+             patch.object(cache_bust, "notify_api", return_value=self._door()):
+            result = cache_bust.bust(job="breadth_daily")
+        assert [c["channel"] for c in result["channels"]] == ["local", "remote"]
+        assert result["deleted"] == 3 + 12
+
+    def test_local_failure_knocks_the_door(self, monkeypatch):
+        monkeypatch.delenv("RENDER", raising=False)
         with patch.object(cache_bust, "evict", self._unreachable), \
-             patch.object(cache_bust, "notify_api", return_value=door):
+             patch.object(cache_bust, "notify_api", return_value=self._door()):
             result = cache_bust.bust(job="breadth_daily")
         assert result["ok"] is True
         assert result["deleted"] == 12
         assert [c["channel"] for c in result["channels"]] == ["local", "remote"]
 
-    def test_nothing_reachable_is_ok_false_not_an_exception(self, caplog):
+    def test_door_failure_beside_a_good_local_bust_is_a_loud_warning(
+            self, monkeypatch, caplog):
+        # Partial success must not read as full success: Render is named.
+        monkeypatch.delenv("RENDER", raising=False)
+        dead = {"channel": "remote", "target": "https://api.example",
+                "reachable": False, "deleted": None, "error": "HTTP 403: "}
+        with patch.object(cache_bust, "evict", self._reachable), \
+             patch.object(cache_bust, "notify_api", return_value=dead), \
+             caplog.at_level(logging.WARNING, logger="app.core.cache_bust"):
+            result = cache_bust.bust(job="breadth_daily")
+        assert result["ok"] is True  # local did land
+        msgs = [r.getMessage() for r in caplog.records]
+        assert any("channel 'remote'" in m and "FAILED" in m for m in msgs)
+
+    def test_nothing_reachable_is_ok_false_not_an_exception(self, monkeypatch, caplog):
+        monkeypatch.delenv("RENDER", raising=False)
         dead = {"channel": "remote", "target": None, "reachable": False,
                 "deleted": None, "error": "not configured"}
         with patch.object(cache_bust, "evict", self._unreachable), \
@@ -342,7 +373,8 @@ class TestBustChannelSelection:
         # as an informational "skipped, that is safe" line.
         assert any("CACHE NOT BUSTED" in r.getMessage() for r in caplog.records)
 
-    def test_explicit_flags_override_the_heuristic(self):
+    def test_explicit_flags_override_the_heuristic(self, monkeypatch):
+        monkeypatch.delenv("RENDER", raising=False)
         with patch.object(cache_bust, "evict", self._unreachable), \
              patch.object(cache_bust, "notify_api",
                           side_effect=AssertionError("must not be used")):
@@ -505,7 +537,10 @@ class TestHumanDoorReportsItsOwnFailures:
     """A cache endpoint that answers 200 "cleared 0 keys" while the cache is dead
     is worse than a 503: it tells the operator the thing they wanted happened."""
 
+    @pytest.mark.asyncio  # pytest-asyncio runs in strict mode: unmarked
     async def test_unreachable_cache_raises_503_not_a_quiet_success(self):
+        # (added 2026-11-04) this test silently never ran — without the marker
+        # pytest reports "async functions are not natively supported".
         from app.api.routes import cache as cache_routes
 
         dead = {"channel": "local", "reachable": False, "deleted": 0,

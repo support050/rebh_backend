@@ -425,6 +425,19 @@ def internal_key(override: Optional[str] = None) -> Optional[str]:
     return override or _env("INTERNAL_API_KEY")
 
 
+def is_deploy_host() -> bool:
+    """True when this process IS the deployment (Render sets ``RENDER=true``).
+
+    This is the only honest test for "am I standing next to the Redis the site
+    reads". A laptop uvicorn can have a perfectly healthy local Redis — and
+    busting it still leaves the deployed pages stale (measured 2026-11-04:
+    engine_vintages Run-Now from the laptop logged a clean local bust while
+    Render's cache kept the old payload). Everywhere but the deploy, the HTTP
+    door is therefore mandatory, not a fallback.
+    """
+    return str(_env("RENDER") or "").strip().lower() in {"1", "true", "yes", "on"}
+
+
 def notify_api(*, job: Optional[str] = None, groups: Optional[Sequence[str]] = None,
                namespaces: Optional[Sequence[str]] = None,
                base: Optional[str] = None, key: Optional[str] = None,
@@ -489,15 +502,17 @@ def bust(*, job: Optional[str] = None, groups: Optional[Sequence[str]] = None,
          log: bool = True) -> Dict[str, Any]:
     """Bust the cache wherever the readers actually look. Returns the full report.
 
-    ``remote=None`` (the default) means: knock on the HTTP door only when this
-    host's own Redis was unreachable — i.e. only when we are NOT standing next to
-    the cache the API reads. That is the whole trick behind "run a script from a
-    laptop and the site updates": the laptop cannot see Render's Redis (and must
-    never be handed its credentials), so it asks Render to evict its own keys.
+    ``remote=None`` (the default) is a policy, not a guess:
+      · ON the deploy (``RENDER=true``) → local only. The local Redis IS the
+        cache the API reads; knocking on our own HTTP door would be the app
+        calling itself.
+      · ANYWHERE ELSE (laptop uvicorn, terminal script, CI) → ALWAYS knock the
+        door, even when a local Redis is reachable and busted cleanly. That
+        local cache is not the one behind the site, so skipping the door for a
+        reachable local Redis silently left Render serving stale payloads
+        (the 2026-11-04 engine_vintages bug this line retired).
 
-    A job already running on Render busts locally and spends no HTTP round trip
-    on itself, so this default never doubles the work on the server. Pass
-    ``remote=True`` / ``remote=False`` to force either way.
+    Pass ``remote=True`` / ``remote=False`` to force either way.
 
     ``skip_prefixes`` protects namespaces this caller already refreshed (Part 2
     / Phase 4: warm first, then evict the rest). It applies to THIS host's Redis
@@ -514,7 +529,8 @@ def bust(*, job: Optional[str] = None, groups: Optional[Sequence[str]] = None,
         local_report = evict(patterns, url=url, skip_prefixes=skip)
         channels.append(local_report)
     if remote is None:
-        remote = not (local_report and local_report.get("reachable"))
+        # Not the deploy → the door is mandatory, reachable local Redis or not.
+        remote = not is_deploy_host()
     if remote:
         channels.append(notify_api(job=job, groups=groups, namespaces=namespaces,
                                    base=base, key=key))
@@ -546,6 +562,16 @@ def _log_result(result: Dict[str, Any], *, job: Optional[str]) -> None:
     if result["ok"]:
         logger.info("cache busted%s: %s (patterns=%s)", label,
                     result["summary"], ",".join(result["patterns"]))
+        # Partial success is not success: when one channel was attempted and
+        # failed, the readers behind IT stay stale — say so beside the green
+        # line instead of letting "ok" bury the gap (the laptop case: local
+        # bust fine, door unreachable → Render keeps the old payload).
+        for c in result["channels"]:
+            if not c["reachable"]:
+                logger.warning(
+                    "cache-bust channel '%s' (%s) FAILED: %s — readers behind "
+                    "that host keep the previous payload until the TTL lapses",
+                    c["channel"], c.get("target") or "?", c.get("error"))
         for note in result["notes"]:
             logger.warning("cache-bust note: %s", note)
     else:

@@ -232,10 +232,13 @@ def _post_run_hooks(job_name: str) -> None:
       ``logger.debug("cache clear skipped")`` — invisible by default, which is
       exactly how "the script ran and the site did not update" stayed unexplained.
 
-    ``remote=False``: this runs on the server, next to the server's Redis, so the
-    HTTP door would only be the app calling itself. The door is for scripts run
-    somewhere else (see app/core/cache_bust.py).
-
+    ``remote`` is left at the library default (None): ``cache_bust`` decides by
+    host identity — on the deploy (RENDER=true) the local bust already hit the
+    production cache, while a Run Now served from a laptop uvicorn ALSO knocks
+    on the HTTP door, because its perfectly healthy local Redis is not the one
+    behind the site (2026-11-04: engine_vintages busted only localhost:7424 and
+    Render stayed stale).
+    
     Part 2 / Phase 4: the bust goes through ``cache_warmers.bust_job_caches``,
     which first rewrites the hot keys of any namespace this job clears and then
     protects exactly those from the eviction behind them. Ordering is the whole
@@ -247,7 +250,7 @@ def _post_run_hooks(job_name: str) -> None:
         return                       # _breadth_daily_body + the job itself both bust
     try:
         from app.services import cache_warmers
-        report = cache_warmers.bust_job_caches(job_name, local=True, remote=False)
+        report = cache_warmers.bust_job_caches(job_name, local=True)
     except Exception as e:                        # noqa: BLE001 — cache is optional
         logger.warning("job_runner: post-run cache hook failed for %s: %s", job_name, e)
         return
