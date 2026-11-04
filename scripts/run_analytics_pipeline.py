@@ -452,50 +452,47 @@ def run_pipeline_for_date(target_date: datetime.date):
 
 
 def flush_redis_cache():
-    """Invalidate Redis cache at the very end.
+    """Bust the caches this pipeline rewrites — locally, and through the
+    deployed API's HTTP door when this host cannot reach the cache the site
+    reads.
 
-    Evict BY PREFIX, mirroring daily_market_update step 10: the old
-    match="*" sweep (minus a hand-maintained auth list) deleted every
-    non-auth key in the instance — rate-limit buckets included.
+    Delegates to app.core.cache_bust, the ONE implementation the scripts, the
+    scheduler and the admin routes now share. The copy that used to live here
+    reported every failure as logger.info("Redis inactive locally — skipping
+    cache flush"), which is why a finished pipeline could leave the site showing
+    the previous payload and the operator had to flush from a Render shell.
+    Evicts BY PREFIX (never "*"): the old wildcard sweep deleted rate-limit
+    buckets and any other app's keys, and needed a hand-maintained auth list.
     """
     logger.info("🧹 Invalidating application caches (Redis)...")
     try:
-        import redis as sync_redis
-        from app.core.cache_config import (
-            PREFIX_INDUSTRY_GROUPS,
-            PREFIX_MARKET_REPORTS,
-            PREFIX_PRICES,
-            PREFIX_REBH,
-            PREFIX_RS,
-            PREFIX_RS_HUB,
-            PREFIX_RS_V2,
-            PREFIX_SCREENER,
-            PREFIX_TECHNICAL_SCREENER,
-            PREFIX_TERMINAL,
-        )
-        app_prefixes = (
-            PREFIX_RS, PREFIX_RS_V2, PREFIX_SCREENER, PREFIX_TECHNICAL_SCREENER,
-            PREFIX_PRICES, PREFIX_INDUSTRY_GROUPS, PREFIX_TERMINAL, PREFIX_REBH,
-            # Written by this pipeline's stages, outside the 8-namespace daily flush:
-            PREFIX_MARKET_REPORTS, PREFIX_RS_HUB,
-        )
-        r = sync_redis.from_url(str(settings.REDIS_URL), decode_responses=True, socket_timeout=2)
-        r.ping()
-        deleted_count = 0
-        for _prefix in app_prefixes:
-            cursor = 0
-            while True:
-                cursor, keys = r.scan(cursor=cursor, match=f"{_prefix}:*", count=500)
-                if keys:
-                    r.unlink(*keys)   # non-blocking; TTL is the backstop
-                    deleted_count += len(keys)
-                if cursor == 0:
-                    break
-        r.close()
-        logger.info(f"✅ Redis cache flushed successfully ({deleted_count} keys removed "
-                    f"across {len(app_prefixes)} prefixes).")
-    except Exception:
-        logger.info("ℹ️ Redis server inactive locally — skipping cache flush.")
+        # Part 2 / Phase 4: warm the hot keys of the namespaces being cleared
+        # before the sweep, so the first reader of a page does not pay for the
+        # whole screener/terminal rebuild. Falls back to the plain bust if the
+        # warm-up layer cannot be imported — an optimisation must never be what
+        # stops the eviction itself from running.
+        try:
+            from app.services import cache_warmers
+            report = cache_warmers.bust_job_caches("analytics_pipeline")
+        except Exception as warm_exc:                           # noqa: BLE001
+            logger.info("warm-up unavailable (%s: %s) — busting without it",
+                        type(warm_exc).__name__, str(warm_exc)[:120])
+            from app.core import cache_bust
+            report = cache_bust.bust(job="analytics_pipeline")
+    except Exception as exc:                                    # noqa: BLE001
+        logger.warning("⚠️ CACHE NOT BUSTED: cache_bust itself failed: %s: %s",
+                       type(exc).__name__, exc)
+        return False
+    if report["ok"]:
+        logger.info("✅ Cache busted: %s (patterns=%s)", report["summary"],
+                    ",".join(report["patterns"]))
+    else:
+        logger.warning(
+            "⚠️ CACHE NOT BUSTED — data is written but the API keeps serving the "
+            "previous payload until the TTL lapses. tried: %s | %s",
+            report["summary"],
+            "; ".join(str(c.get("error")) for c in report["channels"]))
+    return report["ok"]
 
 
 def main():

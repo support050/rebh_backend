@@ -8,6 +8,7 @@ if hasattr(sys.stderr, 'reconfigure'):
     sys.stderr.reconfigure(encoding='utf-8', errors='replace')
 
 import gc
+import time
 from pathlib import Path
 import csv
 import traceback
@@ -25,30 +26,49 @@ from sqlalchemy.dialects.postgresql import insert
 # Add parent directory to path
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 
+# ── Logging must be configured HERE, before any sub-module import ──────────
+# Several imported modules call logging.basicConfig at their top (daily_detailed_
+# scraper=INFO, calculate_rs_final_precise=WARNING, calculate_rs_line_metrics=INFO).
+# basicConfig is a NO-OP once the root has handlers, so whichever runs FIRST owns
+# the root — and the sub-module imports below would otherwise beat this script's
+# own config. Configuring the root here (at CLI process start) makes THIS pipeline
+# entrypoint own the timestamped format + level. The `if not root.handlers` guard
+# keeps it a no-op when imported by the live server (uvicorn / admin trigger), so
+# we never clobber the server's logging config — no handler conflict. Level INFO:
+# the print→logger bridge routes routine detail to DEBUG (suppressed here → a
+# clean log) and meaningful lines to INFO/WARNING/ERROR.   #L1 #E1
+_root = logging.getLogger()
+if not _root.handlers:
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+
 from app.core.config import settings
 from app.core.database import SessionLocal 
 from app.models.price import Price
-# استيراد الخدمات الجديدة
+# Import the services used by this run
 from app.services.daily_detailed_scraper import scrape_daily_details
-# ✅ استخدام الـ Calculator النهائي
+# Use the final RS Calculator
 from scripts.calculate_rs_final_precise import RSCalculatorUltraFast
-# 📊 استيراد Reports Scraper
+# Import the Reports scraper
 from scrapers.Reports import main as run_reports_scraper
-# 📊 استيراد تحديث الـ Market Pulse
+# Import the Market Pulse updater
 from scripts.backfill_market_pulse import main as run_market_pulse_backfill
-# 📊 استيراد Daily Financial Indicators
+# Import the Daily Financial Indicators scraper
 from app.scrapers.daily_financial_indicators_scraper import run_scraper_and_save_to_db as run_financial_indicators_scraper
+# [C1] Per-cycle company cache control (top-level import so the outer finally can
+# always call disable_company_cache(), even on the early lock-held return).
+from app.services.xbrl_data_service import enable_company_cache, disable_company_cache
 
-# إعداد الـ Logging
-logging.basicConfig(level=logging.INFO)
+# Logger for this module. The root is already configured ABOVE, before the
+# sub-module imports, so this entrypoint owns the format + level.   #L1
 logger = logging.getLogger(__name__)
 
-# مسار المشروع والملفات
+# Project root and file paths
 project_root = Path(__file__).resolve().parent.parent
 
 def _clean_cell(value):
-    """pandas يقرأ الخلية الفارغة NaN (عائمة) مش None — تمريرها للإسقاط على عمود
-    نصي يكتب حرفياً "NaN" في قاعدة البيانات. كلها يرجع None."""
+    """pandas reads an empty cell as NaN (a float), not None — passing it to a
+    text column would literally store "NaN" in the database. Return None for all
+    of them."""
     if value is None:
         return None
     if isinstance(value, float) and pd.isna(value):
@@ -126,8 +146,9 @@ def _load_hierarchy_from_csv():
     try:
         if csv_path.exists():
             df = pd.read_csv(csv_path)
-            # to_dict("records") بدل iterrows(): نفس القيم والمفاتيح، بدون
-            # بناء Series لكل سطر (iterrows بيبطؤ مع اتساع الأعمدة).
+            # to_dict("records") instead of iterrows(): same values and keys,
+            # without building a Series per row (iterrows slows down as the row
+            # gets wider).
             for row in df.to_dict("records"):
                 symbol = str(row['Symbol'])
                 mapping[symbol] = {
@@ -168,37 +189,32 @@ def load_full_hierarchy_mapping(db=None):
     return db_map
 
 def run_historical_reports_scraper():
-    """
-    تشغيل سكريبت تجميع التقارير التاريخية من سوق الأسهم السعودي (TASI)
-    """
+    """Run the historical reports aggregation script for the Saudi market (TASI)"""
     try:
         logger.info("🏭 Starting Historical Reports Scraper...")
         run_reports_scraper()
         logger.info("✅ Historical Reports Scraper completed successfully!")
         return True
     except Exception as e:
-        # كان الخطأ يُبلع هنا والتشغيل يُعلن "ناجحاً" — الآن يُسجَّل في تقرير
-        # التشغيل ويُطبع في نهاية اللوج + يظهر في لوحة الأدمن.
-        _record_stage_failure("0.1 historical reports scraper", e)
+        # The error used to be swallowed here while the run was still reported as
+        # "successful" — it is now recorded in the run report, printed at the end
+        # of the log and surfaced in the admin panel.
+        _record_stage_failure("01 historical reports scraper", e)
         return False
 
 def update_market_pulse():
-    """
-    تشغيل سكريبت backfill_market_pulse لحساب إشارات Market Pulse للأيام الجديدة فقط
-    """
+    """Run backfill_market_pulse to compute Market Pulse signals for new days only"""
     try:
         logger.info("📈 Starting Market Pulse Daily Update...")
         run_market_pulse_backfill()
         logger.info("✅ Market Pulse Daily Update completed successfully!")
         return True
     except Exception as e:
-        _record_stage_failure("0.2 market pulse update", e)
+        _record_stage_failure("08 market pulse update", e)
         return False
 
 def update_financial_indicators():
-    """
-    تشغيل سكريبت Daily Financial Indicators لتحديث أوزان السوق ومكررات الربحية
-    """
+    """Run the Daily Financial Indicators scraper to refresh market weights and P/E ratios"""
     try:
         logger.info("💰 Starting Daily Financial Indicators Scraper...")
         result = run_financial_indicators_scraper() or {}
@@ -208,35 +224,19 @@ def update_financial_indicators():
             failures = result.get("stage_failures") or []
             msg = ("; ".join(f"[{f.get('stage')}] {f.get('error')}" for f in failures)
                    or "run_scraper_and_save_to_db() returned ok=False")
-            _record_stage_failure("0.3 daily financial indicators", msg, critical=True)
+            _record_stage_failure("02 daily financial indicators", msg, critical=True)
             return False
         if result.get("partial"):
             _record_stage_failure(
-                "0.3 daily financial indicators",
+                "02 daily financial indicators",
                 f"partial page: only {result.get('companies')} company rows",
                 advisory=True)
         logger.info(f"✅ Daily Financial Indicators completed — "
                     f"{result.get('rows', 0)} rows written!")
         return True
     except Exception as e:
-        _record_stage_failure("0.3 daily financial indicators", e)
+        _record_stage_failure("02 daily financial indicators", e)
         return False
-
-
-# def update_tadawul_market_reports():
-#     """
-#     تشغيل سكريبت تقارير تداول الرسمية (كبار الملاك، البيع على المكشوف، تملك الأجانب، شراء الأسهم، إقراض الأوراق المالية SBL)
-#     """
-#     try:
-#         logger.info("📑 Starting Tadawul Market Reports Update (Shareholders, Net Short, Headroom, Buybacks, SBL)...")
-#         from scripts.update_market_reports import main as run_market_reports
-#         run_market_reports()
-#         logger.info("✅ Tadawul Market Reports completed successfully!")
-#         return True
-#     except Exception as e:
-#         logger.error(f"⚠️ Tadawul Market Reports encountered an error: {e}")
-#         logger.error(traceback.format_exc())
-#         return False
 
 
 
@@ -337,16 +337,22 @@ PIPELINE_STRICT_FINALIZE = os.getenv("PIPELINE_STRICT_FINALIZE", "1") == "1"
 
 RUN_REPORT: dict = {"market_date": None, "stage_failures": [], "quality": {},
                     "ready_date_advanced": None, "critical_stages": [],
-                    "stage_advisories": []}
+                    "stage_advisories": [], "stage_timings": [],
+                    # None until step 10 runs; False means the data is written but
+                    # the API may still serve the cached payload (see cache_bust).
+                    "cache_busted": None, "cache_summary": None}
 
 
 def reset_run_report(market_date=None):
     RUN_REPORT["market_date"] = str(market_date) if market_date else None
     RUN_REPORT["stage_failures"] = []
     RUN_REPORT["stage_advisories"] = []
+    RUN_REPORT["stage_timings"] = []
     RUN_REPORT["quality"] = {}
     RUN_REPORT["ready_date_advanced"] = None
     RUN_REPORT["critical_stages"] = []
+    RUN_REPORT["cache_busted"] = None
+    RUN_REPORT["cache_summary"] = None
 
 
 def _record_stage_failure(stage, exc, critical=False, advisory=False):
@@ -355,9 +361,10 @@ def _record_stage_failure(stage, exc, critical=False, advisory=False):
     `exc` may be an exception instance (traceback is captured) or a plain
     string describing a non-exception problem (e.g. "0 rows were written").
 
-    `advisory=True` يُستخدم للحالة المبرَّرة التي لا تُعطِّل اليوم — مثل سهم
-    مُدرَجأمس لا يمكن أن يكون له SMA200 أو مؤشر أسبوعي بعد. تُسجَّل كـ
-    📋 ADVISORY بمستوى WARN وتذهب إلى stage_advisories وحالة التشغيل تبقى ok.
+    `advisory=True` is used for a justified condition that must not fail the day —
+    a symbol listed yesterday cannot have an SMA200 or a weekly indicator yet. It
+    is recorded as 📋 ADVISORY at WARN level in stage_advisories, and the run
+    status stays ok.
     """
     tb = traceback.format_exc()
     if isinstance(exc, str):
@@ -395,6 +402,17 @@ def _stamp_run_date(market_date):
     RUN_REPORT["market_date"] = str(market_date) if market_date else None
 
 
+def _record_stage_timing(stage, seconds, status="ok"):
+    """Append a per-stage duration to the run report (display only — never
+    affects ok/critical). Recorded for every _guard-wrapped stage, success or
+    failure, because the timing lives in _guard's finally block."""
+    RUN_REPORT.setdefault("stage_timings", []).append({
+        "stage": stage,
+        "seconds": round(float(seconds), 3),
+        "status": status,
+    })
+
+
 def get_run_report():
     failures = list(RUN_REPORT.get("stage_failures", []))
     advisories = list(RUN_REPORT.get("stage_advisories", []))
@@ -403,9 +421,12 @@ def get_run_report():
         "market_date": RUN_REPORT.get("market_date"),
         "stage_failures": failures,
         "stage_advisories": advisories,
+        "stage_timings": list(RUN_REPORT.get("stage_timings", [])),
         "quality": dict(RUN_REPORT.get("quality", {})),
         "ready_date_advanced": RUN_REPORT.get("ready_date_advanced"),
         "critical_stages": critical,
+        "cache_busted": RUN_REPORT.get("cache_busted"),
+        "cache_summary": RUN_REPORT.get("cache_summary"),
         "ok": not failures,
     }
 
@@ -597,13 +618,21 @@ def _guard(stage: str, critical: bool = False, save_db=None):
 
     The wrapped block keeps its own code untouched — this guards execution and
     reporting only, never the calculation logic.
+
+    [L2] The stage duration is measured with time.perf_counter() and recorded in
+    the finally block, so it is captured whether the stage succeeds or fails.
     """
+    _t0 = time.perf_counter()
+    _status = "ok"
     try:
         yield
     except Exception as exc:
+        _status = "failed"
         _record_stage_failure(stage, exc, critical=critical)
         if save_db is not None:
             _rollback_session(save_db)
+    finally:
+        _record_stage_timing(stage, time.perf_counter() - _t0, _status)
 
 
 # ── Pipeline mutex (update_status row id=1) ───────────────────────────
@@ -721,7 +750,7 @@ def update_daily(target_date_str=None):
     2. Save to DB (with correct Industry Group)
     3. Calculate RS (Incremental)
     """
-    # تهيئة الاتصال بقاعدة البيانات
+    # Open the database connection
     db = SessionLocal()
     
     try:
@@ -732,6 +761,11 @@ def update_daily(target_date_str=None):
             return {"skipped": True, "reason": "pipeline lock held by a live run"}
         reset_run_report()
         apply_session_tuning(db)
+
+        # [C1] Turn on the per-cycle company cache for THIS run only (off by
+        # default → the long-lived server never serves a stale file). disabled in
+        # the outer finally, which is the single guaranteed exit path.
+        enable_company_cache()
         
         logger.info("=" * 80)
         # 0.1 Run Historical Reports Scraper
@@ -742,17 +776,14 @@ def update_daily(target_date_str=None):
         # 0.3 Run Daily Financial Indicators
         update_financial_indicators()
 
-        # logger.info("=" * 80)
-        # # 0.4 Run Tadawul Market Reports (Shareholders, Net Short, Headroom, Buybacks, SBL)
-        # update_tadawul_market_reports()
-
         logger.info("=" * 80)
         # 0.6 Load Mappings (DB-first: prices is the source of truth, new.csv only fills gaps)
         hierarchy_map = load_full_hierarchy_mapping(db)
         if not hierarchy_map:
-            # كان صامتاً: بدون خريطة التسلسل، الأسعار تتكتب sector/industry = NULL
-            # لكل الأسهم وصفحات القطاعات تتكسر من غير أي إنذار.
-            _record_stage_failure("0.6 hierarchy mapping",
+            # This used to be silent: without the hierarchy map, prices are written with
+            # sector/industry = NULL for every symbol and the sector pages break with
+            # no warning at all.
+            _record_stage_failure("03 hierarchy mapping",
                                   "empty hierarchy map (prices has no classified rows and "
                                   "new.csv is missing/unreadable) — prices would be saved "
                                   "without sector/industry for every symbol")
@@ -762,8 +793,9 @@ def update_daily(target_date_str=None):
             market_date = datetime.datetime.strptime(target_date_str, "%Y-%m-%d").date()
             logger.info(f"📅 User provided custom date: {market_date}")
         else:
-            # Auto-detect: use the latest date from historical_reports (آخر يوم تداول فعلي)
-            # هذا أدق من date.today() لأن السكريبت قد يشتغل في الفجر ويوم التداول لم يبدأ بعد
+            # Auto-detect: use the latest date from historical_reports (the actual last
+            # trading day). This is more accurate than date.today(), because the script
+            # can run at dawn before the trading day has started.
             try:
                 from app.models import HistoricalReport
                 latest_hist = db.query(HistoricalReport.report_date)\
@@ -780,7 +812,7 @@ def update_daily(target_date_str=None):
                 # Roll back first: if the drop surfaced here, the shared session is
                 # poisoned and everything downstream dies with PendingRollbackError.
                 _rollback_session(db)
-                _record_stage_failure("1. market date detection", e)
+                _record_stage_failure("04 market date detection", e)
                 logger.warning(f"⚠️ Could not detect market date from DB ({e}), falling back to today: {market_date}")
 
         logger.info("=" * 80)
@@ -790,7 +822,7 @@ def update_daily(target_date_str=None):
         scraped_data = scrape_daily_details(headless=True)
         
         if not scraped_data:
-            _record_stage_failure("2. daily detailed scrape",
+            _record_stage_failure("05 daily detailed scrape",
                                   "scraping returned 0 records — no prices written for "
                                   f"{market_date}", critical=True)
             return get_run_report()
@@ -799,21 +831,40 @@ def update_daily(target_date_str=None):
 
 
 
-        # 3. Pre-load previous close for all symbols (one DB query)
+        # 3. Pre-load previous close for the traded symbols (one DB query)
         # ─────────────────────────────────────────────────────────
         # This allows us to calculate change & change_percent ourselves
         # instead of trusting the scraper's unreliable "Change %" value.
+        #
+        # [Perf] The old `SELECT DISTINCT ON (symbol) ... ORDER BY symbol, date DESC`
+        # could NOT use idx_prices_symbol_date: mixed ASC/DESC ordering needs a
+        # (symbol, date DESC) index, so Postgres seq-scanned and externally sorted
+        # ~990K rows (24.5s measured, 25MB of temp disk). Probing the previous close
+        # per symbol with a LATERAL + LIMIT 1 walks that index backwards instead
+        # (4ms for 273 symbols on production data), and only the symbols in today's
+        # feed are needed — prev_close_map is read exclusively inside the scraped_data
+        # loop below.
         logger.info("📦 Loading previous close prices from DB...")
         prev_close_map = {}
+        _feed_symbols = sorted({
+            str(item.get("Symbol")).strip() for item in scraped_data if item.get("Symbol")
+        })
         try:
-            prev_close_rows = db.execute(text("""
-                SELECT DISTINCT ON (symbol)
-                    symbol, close
-                FROM prices
-                WHERE date < :market_date AND close > 0
-                ORDER BY symbol, date DESC
-            """), {"market_date": market_date}).fetchall()
-            prev_close_map = {str(row[0]): float(row[1]) for row in prev_close_rows}
+            if _feed_symbols:
+                prev_close_rows = db.execute(text("""
+                    SELECT s.symbol, p.close
+                    FROM (SELECT UNNEST(CAST(:syms AS text[])) AS symbol) s
+                    CROSS JOIN LATERAL (
+                        SELECT close
+                        FROM prices
+                        WHERE prices.symbol = s.symbol
+                          AND prices.date < :market_date
+                          AND prices.close > 0
+                        ORDER BY prices.date DESC
+                        LIMIT 1
+                    ) p
+                """), {"syms": _feed_symbols, "market_date": market_date}).fetchall()
+                prev_close_map = {str(row[0]): float(row[1]) for row in prev_close_rows}
             logger.info(f"  ← Loaded prev_close for {len(prev_close_map)} symbols.")
         except Exception as e:
             _rollback_session(db)   # don't let a dropped read poison the session
@@ -880,20 +931,21 @@ def update_daily(target_date_str=None):
                 continue
 
         # 4b. Quality gate — a broken scrape must raise an ALARM, not a silent
-        #     NULL that overwrites a good stored value. الفحص نفسه ما يفشلش الكتابة.
-        with _guard("4b. price quality gate", save_db=db):
+        #     NULL that overwrites a good stored value. The check itself never fails
+        #     the write.
+        with _guard("06 price quality gate", save_db=db):
             assess_price_quality(db, price_rows, market_date)
 
         # 4c. Write in chunked multi-row upserts.
-        #     كان: عبارة INSERT ... ON CONFLICT لكل سهم (272 رحلة ذهاب-وءياب
-        #     عبر الشبكة في كل تشغيل). صار: استعلام واحد لكل 100 صف.
-        success_count = 0   # default: لو المرحلة سقطة قبل الإسناد، الفحص تحت يلاقي 0
-        with _guard("4c. price write", critical=True, save_db=db):
+        #     Used to be one INSERT ... ON CONFLICT per symbol (272 network
+        #     round-trips per run). Now: one statement per 100 rows.
+        success_count = 0   # default: if the stage fails before assignment, the check below sees 0
+        with _guard("07 price write", critical=True, save_db=db):
             success_count = _upsert_price_rows(db, price_rows)
             db.commit()
         if price_rows and not success_count:
-            # ماينفعش نكمل حسابات على يوم ما اتكتبش
-            _record_stage_failure("4c. price write",
+            # We must not keep computing for a day that was never written
+            _record_stage_failure("07 price write",
                                   f"0/{len(price_rows)} price rows written for {market_date}",
                                   critical=True)
             logger.error("🛑 PIPELINE ALERT — no prices were written for %s; stopping "
@@ -907,10 +959,11 @@ def update_daily(target_date_str=None):
         del scraped_data, hierarchy_map, price_rows
         gc.collect()
 
-        # 3.5 Market Pulse — يُشغَّل هنا بعد حفظ أسعار اليوم مباشرة
-        # (كان في step 0.2 قبل السكرابر، فكان يفوّت يوم التداول الحالي دايماً)
+        # 3.5 Market Pulse — runs here, right after today's prices are saved
+        # (it used to sit in step 0.2 before the scraper, so it always missed the
+        # current trading day)
         logger.info("=" * 80)
-        with _guard("3.5 Market Pulse daily update", save_db=db):
+        with _guard("08 Market Pulse daily update", save_db=db):
             update_market_pulse()
         
         logger.info("=" * 80)
@@ -920,7 +973,7 @@ def update_daily(target_date_str=None):
         from scripts.calculate_rs_final_precise import RSCalculatorUltraFast
         import pandas as pd
 
-        # تعريف defaults أولاً يضمن إن الـ del في النهاية آمن حتى لو حصل exception
+        # Defining the defaults first keeps the final `del` safe even if an exception fires
         calculator = None
         df_rs_today = None
 
@@ -931,13 +984,13 @@ def update_daily(target_date_str=None):
                 df_rs_today = pd.DataFrame(results)
                 logger.info(f"✅ Calculated RS for {len(df_rs_today)} stocks (held in memory, not saved yet).")
             else:
-                # صمت هنا معناه يوم ناقص في rs_daily_v2 — يُسجَّل كحالة فشل حرجة
-                _record_stage_failure("4. RS calculation (rs_daily_v2)",
+                # Silence here means a missing day in rs_daily_v2 — recorded as a critical failure
+                _record_stage_failure("09 RS calculation (rs_daily_v2)",
                                       f"calculator returned 0 RS rows for {market_date}",
                                       critical=True)
             del results
         except Exception as rs_err:
-            _record_stage_failure("4. RS calculation (rs_daily_v2)", rs_err, critical=True)
+            _record_stage_failure("09 RS calculation (rs_daily_v2)", rs_err, critical=True)
 
         gc.collect()
             
@@ -945,10 +998,11 @@ def update_daily(target_date_str=None):
         # 5. Calculate Technical Indicators — ATOMIC: only save prices.change, keep tech data in memory
         # -------------------------------------------------------------------
         logger.info("🧮 Calculating Technical Indicators (SMAs, 52W High/Low)...")
-        # defaults قبل الـ guard: لو المرحلة سقطة، stage 8 يلاقي dict فاضي بدل NameError
+        # Defaults before the guard: if the stage fails, stage 8 finds an empty dict
+        # instead of a NameError
         tech_map = {}
         df_tech = df_tech_res = tech_calc = None
-        with _guard("5. Technical indicators", critical=True, save_db=db):
+        with _guard("10 Technical indicators", critical=True, save_db=db):
             from scripts.calculate_technicals import TechnicalCalculator
             tech_calc = TechnicalCalculator(str(settings.DATABASE_URL))
             df_tech = tech_calc.load_data()
@@ -964,19 +1018,19 @@ def update_daily(target_date_str=None):
         # 6. Calculate IBD Metrics (Group RS, Acc/Dis) — CALCULATE ONLY
         # -------------------------------------------------------------------
         logger.info("📊 Calculating IBD Metrics (Group RS, Acc/Dis)...")
-        # defaults قبل الـ guard (كانت معرَّفة في النص) — تضمن إن الدمج في 6.5
-        # والـ del بعدين آمنين دايماً حتى لو المرحلة دي سقطة كلها
+        # Defaults before the guard (they used to be defined mid-block) — they keep the
+        # 6.5 merge and the later `del` safe even if this whole stage fails
         group_rs_map = {}
         acc_dis_map = {}
         df_ibd_prices = None
         ibd_calc = None
-        with _guard("6. IBD metrics (group RS, acc/dis)", save_db=db):
+        with _guard("11 IBD metrics (group RS, acc/dis)", save_db=db):
             from scripts.calculate_ibd_metrics import IBDMetricsCalculator
         
             ibd_calc = IBDMetricsCalculator(db)
             df_ibd_prices = ibd_calc.load_data(lookback_days=230)
         
-            # (المُتغيِّرات معرَّفة فوق الـ guard كـ defaults آمنة)
+            # (The variables are defined above the guard as safe defaults)
         
             if df_ibd_prices is not None and not df_ibd_prices.empty:
                 group_rs_map = ibd_calc.calculate_group_rs(df_ibd_prices, market_date) or {}
@@ -991,11 +1045,11 @@ def update_daily(target_date_str=None):
 
         # 6.5 ATOMIC SAVE: Merge RS + IBD → Save to rs_daily_v2 in ONE shot
         # -------------------------------------------------------------------
-        with _guard("6.5 rs_daily_v2 atomic save", critical=True, save_db=db):
+        with _guard("12 rs_daily_v2 atomic save", critical=True, save_db=db):
             if df_rs_today is not None and len(df_rs_today) > 0 and calculator is not None:
                 logger.info("💾 Merging RS + IBD data and saving atomically to rs_daily_v2...")
 
-                # Vectorized merge — بدل iterrows + .at[] على كل سهم
+                # Vectorized merge — instead of iterrows + .at[] per symbol
                 df_rs_today['sector_rs_rating']         = df_rs_today['symbol'].map(lambda s: group_rs_map.get(s, {}).get('sector_rs_rating'))
                 df_rs_today['industry_group_rs_rating'] = df_rs_today['symbol'].map(lambda s: group_rs_map.get(s, {}).get('industry_group_rs_rating'))
                 df_rs_today['industry_rs_rating']       = df_rs_today['symbol'].map(lambda s: group_rs_map.get(s, {}).get('industry_rs_rating'))
@@ -1006,13 +1060,13 @@ def update_daily(target_date_str=None):
                 calculator.save_bulk_results_with_ibd(df_rs_today)
                 logger.info(f"✅ RS + IBD Data saved atomically for {market_date} ({len(df_rs_today)} stocks).")
             else:
-                # ما كانش فيه DataFrame → جدول rs_daily_v2 ما اتكتبش لليوم ده
-                _record_stage_failure("6.5 rs_daily_v2 atomic save",
+                # No DataFrame available → rs_daily_v2 was not written for this day
+                _record_stage_failure("12 rs_daily_v2 atomic save",
                                       f"no RS dataframe available for {market_date} — table not written",
                                       critical=True)
 
         # 🧹 Free memory: RS, IBD maps, and calculator no longer needed
-        # (كلهم معرّفين بـ defaults فوق، فالـ del آمن دايماً)
+        # (All of them are defined as defaults above, so the `del` is always safe)
         del df_rs_today, group_rs_map, acc_dis_map, calculator
         gc.collect()
 
@@ -1020,7 +1074,7 @@ def update_daily(target_date_str=None):
         # -------------------------------------------------------------------
         logger.info("🏭 Calculating Industry Group Metrics (IBD Score, Rank, YTD)...")
         ig_calc = None
-        with _guard("7. Industry group metrics", save_db=db):
+        with _guard("13 Industry group metrics", save_db=db):
             from scripts.calculate_industry_groups import IndustryGroupCalculator
         
             ig_calc = IndustryGroupCalculator(db)
@@ -1041,12 +1095,12 @@ def update_daily(target_date_str=None):
                         ig_calc.save(summary_ig, market_date)
                         logger.info(f"✅ Industry Group Metrics Updated ({len(summary_ig)} groups).")
                     else:
-                        _record_stage_failure("7. Industry group metrics",
+                        _record_stage_failure("13 Industry group metrics",
                                               f"empty summary dataframe for {market_date}")
                 else:
                     logger.warning("⚠️ No IBD scores calculated for Industry Groups.")
             else:
-                _record_stage_failure("7. Industry group metrics",
+                _record_stage_failure("13 Industry group metrics",
                                       f"no group indices computed for {market_date}")
 
         # 🧹 Free memory: industry group objects no longer needed
@@ -1062,7 +1116,7 @@ def update_daily(target_date_str=None):
         all_symbols = list(tech_map.keys())
         total_processed = total_errors = total_successful = 0
         if not all_symbols:
-            _record_stage_failure("8. stock indicators",
+            _record_stage_failure("14 stock indicators",
                                   "no technical map available — stage skipped for "
                                   f"{market_date}", critical=True)
 
@@ -1075,14 +1129,14 @@ def update_daily(target_date_str=None):
                 f"{batch_start + len(batch_symbols)} ({len(batch_symbols)} stocks)..."
             )
 
-            # حارس لكل دفعة: دفعة فاشلة واحدة ما تلغيش بقية الدفعات ولا الـ finalize
+            # Per-batch guard: one failed batch must not cancel the other batches or the finalize
             b_processed = b_errors = b_successful = 0
             try:
                 b_processed, b_errors, b_successful = calculate_and_store_indicators(
                     db, market_date, tech_map=batch_tech_map
                 )
             except Exception as batch_err:
-                _record_stage_failure(f"8. stock indicators batch {batch_num}",
+                _record_stage_failure(f"14 stock indicators batch {batch_num}",
                                       batch_err, critical=True)
                 _rollback_session(db)
             total_processed  += b_processed
@@ -1103,12 +1157,13 @@ def update_daily(target_date_str=None):
             f"Processed: {total_processed}, Successful: {total_successful}, Errors: {total_errors}"
         )
         if all_symbols and total_processed < len(all_symbols):
-            # 🧮 المرجع الصحيح للتغطية هو الرموز التي لها صف أسعار في هذا اليوم فعلاً
-            # (stage 8 يعالج هؤلاء فقط — انظر cn_query عند S288 في calculate_stock_indicators)،
-            # لا كل رموز tech_map. وإلا فشل الحارس كل يوم بلا استثناء: 294 رمزاً في
-            # tech_map مقابل 273 لها تداول اليوم، ومن الناقصين أسهم صاعدة حديثاً
-            # تاريخها أقل من 100 شمعة فتُرفض بحكم التصميم (Not enough data).
-            _MIN_BARS = 100        # نفس حد calculate_all_indicators_for_stock
+            # 🧮 The correct coverage baseline is the symbols that actually have a price row
+            # on this day (stage 8 processes exactly those — see cn_query around S288 in
+            # calculate_stock_indicators), not every symbol in tech_map. Otherwise the guard
+            # would fail every single day without exception: 294 symbols in tech_map versus
+            # 273 that traded today, and the missing ones include recently listed stocks whose
+            # history is under 100 bars, which are rejected by design (Not enough data).
+            _MIN_BARS = 100        # same threshold as calculate_all_indicators_for_stock
             try:
                 _expected = db.execute(text(
                     "SELECT count(DISTINCT symbol) FROM prices WHERE date = :d"
@@ -1132,22 +1187,22 @@ def update_daily(target_date_str=None):
             RUN_REPORT["indicators_skipped_short_history"] = _short
 
             if _real:
-                # رمز بتاريخ كافٍ ومالوش صف مؤشرات → نقص حقيقي يمنع اكتمال اليوم
-                _record_stage_failure("8. stock indicators coverage",
+                # A symbol with enough history but no indicator row → real gap that blocks the day
+                _record_stage_failure("14 stock indicators coverage",
                                       f"only {total_processed}/{_expected} symbols "
                                       f"processed for {market_date}; missing: "
                                       f"{', '.join(_real[:10])}", critical=True)
             elif _short:
-                # أسهم حديثة الإدراج لا تُحسب لها المؤشرات بعد — يُبلَّغ ولا يُعطَّل اليوم
+                # Newly listed symbols have no indicators yet — reported, but the day stays ok
                 logger.warning("⚠️ %d symbol(s) skipped, fewer than %d daily bars: %s",
                                len(_short), _MIN_BARS, ", ".join(_short))
-                _record_stage_failure("8. stock indicators",
+                _record_stage_failure("14 stock indicators",
                                       f"{len(_short)} newly listed symbol(s) skipped "
                                       f"(<{_MIN_BARS} daily bars): {', '.join(_short)}",
                                       advisory=True)
         elif total_errors:
-            # الأخطاء الفردية (أسهم جديدة/تاريخ قصير) تُبلَّغ لكن ما تعطّلش اليوم
-            _record_stage_failure("8. stock indicators",
+            # Individual errors (new listings / short history) are reported but do not fail the day
+            _record_stage_failure("14 stock indicators",
                                   f"{total_errors} symbol(s) failed indicator calc "
                                   f"for {market_date}")
 
@@ -1156,7 +1211,7 @@ def update_daily(target_date_str=None):
         gc.collect()
 
         # 8.1 Pre-aggregate Minervini trend counts for this date (fast chart API reads)
-        with _guard("8.1 screener_daily_trend_counts", save_db=db):
+        with _guard("15 screener_daily_trend_counts", save_db=db):
             from app.services.screener_daily_trend_service import update_market_date
             update_market_date(db, market_date)
             logger.info("✅ Screener daily trend row updated for chart API.")
@@ -1170,7 +1225,7 @@ def update_daily(target_date_str=None):
             from scripts.update_daily_market_breadth import update_todays_market_breadth
             update_todays_market_breadth(db, market_date)
         except Exception as breadth_err:
-            _record_stage_failure("8.5 daily market breadth", breadth_err)
+            _record_stage_failure("16 daily market breadth", breadth_err)
             _rollback_session(db)
 
         # 8.6 Calculate RS Line Metrics (TraderLion scale)
@@ -1181,7 +1236,7 @@ def update_daily(target_date_str=None):
             calculate_and_store_rs_line_metrics(db, market_date)
             logger.info("✅ RS Line Metrics calculated and stored successfully.")
         except Exception as rs_err:
-            _record_stage_failure("8.6 RS line metrics", rs_err)
+            _record_stage_failure("17 RS line metrics", rs_err)
             _rollback_session(db)
 
         # 8.7 Export RS Hub cached JSON data
@@ -1201,20 +1256,98 @@ def update_daily(target_date_str=None):
             export_rs_hub_data(market_date)
             logger.info("✅ Unified RS Hub data exported successfully.")
         except Exception as exp_err:
-            _record_stage_failure("8.7 RS Hub export", exp_err)
+            _record_stage_failure("18 RS Hub export", exp_err)
 
         # 8.8 Pre-calculate and Upload Valuation Models Summary to R2
         # -------------------------------------------------------------------
-        try:
+        # [Batch-3 S1] Wrapped in _guard so it is TIMED like every other stage
+        # (perf_counter recorded in the finally) and any failure is logged +
+        # rolled back uniformly. Same label as the R3 advisory so the timings
+        # table and the run report line up on one name. Non-critical: a failure
+        # here must not block the rest of the run.
+        with _guard("19 valuation models → R2", save_db=db):
             logger.info("☁️ Pre-calculating valuation models summary & uploading to R2...")
             from app.services.xbrl_data_service import OUTPUT_DIR, _get_r2_client, R2_BUCKET_NAME, list_companies
             from app.services.rebh_engine_service import calculate_valuation_models
 
             companies = list_companies()
+
+            # [C3] Load the REAL market cap from prices so valuation stops guessing
+            # via te*1.5. prices.market_cap is SAR absolute → divide by 1e6 to feed
+            # market_cap_m (the models work in millions).
+            #
+            # [Perf 2026-11-03] This used to be
+            #   SELECT DISTINCT ON (symbol) … ORDER BY symbol, date DESC
+            # which CANNOT walk idx_prices_symbol_date: the mixed ASC/DESC ordering
+            # needs a (symbol, date DESC) index, so Postgres parallel-seq-scanned the
+            # whole table and sorted it — 9,266 ms measured on production. Probing the
+            # newest non-zero cap per symbol with LATERAL + LIMIT 1 reads the existing
+            # index backwards instead: 139 ms, value-identical (273/273 keys, 0 value
+            # mismatches). The symbol list comes from the recursive skip-scan, which is
+            # 6 ms versus 2.3 s for SELECT DISTINCT symbol on 993K rows.
+            mcap_by_symbol: dict = {}
+            try:
+                _mc_rows = db.execute(text("""
+                    WITH RECURSIVE syms AS (
+                        (SELECT symbol FROM prices ORDER BY symbol LIMIT 1)
+                        UNION ALL
+                        SELECT (SELECT symbol FROM prices
+                                WHERE symbol > syms.symbol ORDER BY symbol LIMIT 1)
+                        FROM syms WHERE syms.symbol IS NOT NULL
+                    )
+                    SELECT s.symbol, p.market_cap
+                    FROM syms s
+                    CROSS JOIN LATERAL (
+                        SELECT market_cap
+                        FROM prices
+                        WHERE prices.symbol = s.symbol
+                          AND prices.date <= :d
+                          AND prices.market_cap IS NOT NULL
+                          AND prices.market_cap > 0
+                        ORDER BY prices.date DESC
+                        LIMIT 1
+                    ) p
+                    WHERE s.symbol IS NOT NULL
+                """), {"d": market_date}).fetchall()
+                mcap_by_symbol = {r.symbol: float(r.market_cap) for r in _mc_rows if r.market_cap}
+                logger.info("📈 Loaded real market cap for %d/%d companies from prices (≤ %s).",
+                            len(mcap_by_symbol), len(companies), market_date)
+            except Exception as mc_err:
+                logger.warning("⚠️ Could not load market caps from prices — valuation will "
+                               "fall back to te*1.5 for ALL companies: %s", mc_err)
+
+            # [Data quality] Only value symbols that actually traded today. A company
+            # with no price row on market_date is suspended/delisted: its XBRL history
+            # still exists, so it used to be re-valued every day with a te*1.5 guess and
+            # surfaced as a misleading "missing market_cap" warning (8011, 8080, 8090,
+            # 8110…). NOTHING historical is deleted here — the symbol is simply left out
+            # of today's valuation loop. If this read fails we keep the old behaviour
+            # (evaluate the whole list) rather than silently dropping companies.
+            active_symbols: set = set()
+            try:
+                active_symbols = {
+                    r.symbol for r in db.execute(
+                        text("SELECT DISTINCT symbol FROM prices WHERE date = :d"),
+                        {"d": market_date},
+                    ).fetchall()
+                }
+            except Exception as act_err:
+                logger.warning("⚠️ Could not read today's traded symbols from prices — "
+                               "valuating the full company list instead: %s", act_err)
+
             all_models = []
+            _mcap_fallback: list = []
+            _excluded_inactive: list = []
             for c in companies:
                 try:
-                    m = calculate_valuation_models(c.symbol)
+                    if active_symbols and c.symbol not in active_symbols:
+                        _excluded_inactive.append(c.symbol)
+                        continue
+                    _mc = mcap_by_symbol.get(c.symbol)
+                    _market_cap_m = (_mc / 1_000_000.0) if _mc else None
+                    if _market_cap_m is None:
+                        _mcap_fallback.append(c.symbol)
+                    m = calculate_valuation_models(c.symbol, market_cap_m=_market_cap_m)
                     all_models.append({
                         "symbol": c.symbol,
                         "company_name": c.company_name,
@@ -1223,6 +1356,32 @@ def update_daily(target_date_str=None):
                     })
                 except Exception as model_err:
                     logger.warning(f"⚠️ Error compiling model for {c.symbol}: {model_err}")
+
+            # [R3 / Data Quality] Loud, aggregated warning in BOTH the log and the
+            # run report whenever any TRADING company had to use the te*1.5 fallback.
+            if _excluded_inactive:
+                _ex_preview = ", ".join(_excluded_inactive[:25]) + ("…" if len(_excluded_inactive) > 25 else "")
+                logger.info(
+                    "⏭️ Valuation skipped %d non-trading symbols (no price row on %s) — "
+                    "suspended/delisted, historical data untouched: %s",
+                    len(_excluded_inactive), market_date, _ex_preview,
+                )
+            if _mcap_fallback:
+                _preview = ", ".join(_mcap_fallback[:25]) + ("…" if len(_mcap_fallback) > 25 else "")
+                logger.warning(
+                    "⚠️ VALUATION DATA-QUALITY: %d/%d traded companies had NO real market_cap in "
+                    "prices (date ≤ %s) — their valuation used the te*1.5 ESTIMATE, not "
+                    "actual market data. Symbols: %s",
+                    len(_mcap_fallback), len(all_models), market_date, _preview,
+                )
+                _record_stage_failure(
+                    "19 valuation models → R2",
+                    f"{len(_mcap_fallback)}/{len(all_models)} traded companies missing market_cap "
+                    f"in prices → te*1.5 fallback used",
+                    advisory=True,
+                )
+            else:
+                logger.info("✅ Valuation used real market cap from prices for all %d traded companies.", len(all_models))
 
             models_summary_path = OUTPUT_DIR / "all_models_summary.json"
             with open(models_summary_path, "w", encoding="utf-8") as f:
@@ -1239,8 +1398,6 @@ def update_daily(target_date_str=None):
                 logger.info(f"✅ Pre-compiled models summary ({len(all_models)} companies) uploaded to R2.")
             else:
                 logger.info(f"✅ Pre-compiled models summary saved locally ({len(all_models)} companies).")
-        except Exception as models_err:
-            _record_stage_failure("8.8 valuation models → R2", models_err)
 
         # 8.9 Khurafshi Universal Engine Vintage Generation (Optimized Parallel Pipeline Stage)
         # -------------------------------------------------------------------
@@ -1283,22 +1440,24 @@ def update_daily(target_date_str=None):
                 json.dump(engine_vintages, vf, ensure_ascii=False)
             logger.info(f"✅ Generated and archived engine vintage for {len(engine_vintages)} companies as of {market_date}.")
         except Exception as vintage_err:
-            _record_stage_failure("8.9 engine vintages", vintage_err)
+            _record_stage_failure("20 engine vintages", vintage_err)
 
         # 8.10 Universe Snapshot Persistence (DB-backed, powers /peers + /universe reads)
         # -------------------------------------------------------------------
         try:
             logger.info("🌐 Building REBH universe snapshot for DB-backed reads...")
             from app.services.khurafshi_engine_service import build_universe_snapshot
-            # الوحدة المستوردة اسمها datetime ( أعلى الملف). dt_module كان اسمًا محليًا
-            # داخل run_analytics_pipeline.py فقط، واستخدامه هنا كان يرمي NameError
-            # تبتلعه except: snap_date = None → الـ snapshot يتوسم بتاريخ اليوم
-            # بدل تاريخ السوق المدروس (فرق حقيقي في كل backfill لتاريخ ماضٍ).
+            # The imported module at the top of this file is named `datetime`.
+            # `dt_module` was a local name that only existed inside
+            # run_analytics_pipeline.py; using it here raised a NameError that the
+            # except clause swallowed: snap_date = None → the snapshot got stamped
+            # with today's date instead of the market date being processed (a real
+            # difference for every backfill of a past date).
             snap_date = datetime.datetime.strptime(str(market_date), "%Y-%m-%d").date()
             n_snap = build_universe_snapshot(snapshot_date=snap_date, batch_id=str(market_date))
             logger.info(f"✅ Universe snapshot persisted for {n_snap} companies (sector peers now served from DB).")
         except Exception as snap_err:
-            _record_stage_failure("8.10 universe snapshot", snap_err)
+            _record_stage_failure("21 universe snapshot", snap_err)
 
 
         # ── Run report: nothing may fail silently ───────────────────
@@ -1326,10 +1485,25 @@ def update_daily(target_date_str=None):
                         _q.get("high_below_low"), _q.get("missing_ohlc"),
                         _q.get("rows_vs_prev_day"))
 
+        # [L2] Timings summary — measured per _guard-wrapped stage (in finally, so
+        # failed stages are timed too). Display only; the list is appended as each
+        # stage completes, so it is already in execution order.
+        _timings = RUN_REPORT.get("stage_timings", [])
+        if _timings:
+            _total = sum(t["seconds"] for t in _timings)
+            _icon = {"ok": "✅", "failed": "❌"}
+            logger.info("=" * 64)
+            logger.info("⏱️  STAGE TIMINGS — %.1fs across %d measured stage(s):",
+                        _total, len(_timings))
+            for _t in _timings:
+                logger.info("   %8.3fs  %s  %s",
+                            _t["seconds"], _icon.get(_t["status"], "•"), _t["stage"])
+            logger.info("=" * 64)
+
         # 9. Finalize Update Status (Atomic Switch)
         # -------------------------------------------------------------------
-        # الحارس: لو مرحلة حرجة سقطت، اليوم مش مكتمل — ماينفعش latest_ready_date
-        # يتقدّم فوق يوم ناقص. نعيد نفس التاريخ الحالي (no-op) مع تحرير الـ lock.
+        # Guard: if a critical stage failed, the day is incomplete — latest_ready_date
+        # must not advance past a partial day. Keep the current date (no-op) and release the lock.
         _critical = [f for f in RUN_REPORT["stage_failures"] if f["critical"]]
         RUN_REPORT["critical_stages"] = [c["stage"] for c in _critical]
         _ready_date = market_date
@@ -1339,7 +1513,7 @@ def update_daily(target_date_str=None):
                 _held = db.execute(text(
                     "SELECT latest_ready_date FROM update_status WHERE id = 1"
                 )).scalar()
-            except Exception as hold_err:  # ماينفعش الحارس نفسه يوقف الـ finalize
+            except Exception as hold_err:  # the guard itself must never block the finalize
                 logger.warning("⚠️ Could not read current latest_ready_date (%s) — "
                                "advancing normally." % hold_err)
             if _held is not None:
@@ -1372,71 +1546,54 @@ def update_daily(target_date_str=None):
             _rollback_session(db)
             _release_update_lock(_ready_date)
 
+        # -------------------------------------------------------------------
         # 10. Invalidate Caches so new data shows up immediately
         # -------------------------------------------------------------------
+        # Delegated to app.core.cache_bust. The hand-copied SCAN/UNLINK loop that
+        # used to sit here reported EVERY failure as an informational "redis is not
+        # running here, so the flush was skipped, and that is safe in dev" line —
+        # which is how a run that rewrote production rows could quietly leave the
+        # production cache serving the old payload, and how flushing from a Render
+        # shell became part of the routine. cache_bust evicts this host's Redis
+        # when it can reach it and otherwise knocks the authenticated HTTP door on
+        # the deployed API; either way the outcome lands in the run report.
+        # (It evicts BY PREFIX, never "*": the old wildcard pass deleted other
+        # apps' keys and rate-limit buckets too and needed a hand-maintained auth
+        # exclusion list to avoid logging users out.)
         try:
-            logger.info("🧹 Invalidating application caches...")
-            cache_cleared = False
-
-            # Primary Method: Direct Sync Redis Connection (Fast & bulletproof in background jobs/scripts)
+            # Part 2 / Phase 4: warm the hot keys of the namespaces this step is
+            # about to clear, then evict the rest. Wraps the SAME bust (the
+            # eviction stays cache_bust's single implementation); if the warm-up
+            # layer cannot even be imported the run degrades to the plain bust,
+            # because an optimisation must never be what leaves stale data live.
             try:
-                import redis as sync_redis
-                r = sync_redis.from_url(str(settings.REDIS_URL), decode_responses=True, socket_timeout=2)
-                r.ping()
-                
-                # Evict BY PREFIX, not with match="*". The wildcard pass deleted every
-                # non-auth key in the instance — other apps' keys, rate limits, anything
-                # added later — and needed a hand-maintained auth_prefixes list to avoid
-                # logging users out. Same 8 namespaces as cache_helpers.invalidate_all_caches()
-                # (which is async; this runs in a background job with no event loop, so the
-                # sync client stays), sourced from cache_config so there is one list to keep
-                # correct instead of two.
-                from app.core.cache_config import (
-                    PREFIX_INDUSTRY_GROUPS,
-                    PREFIX_PRICES,
-                    PREFIX_REBH,
-                    PREFIX_RS,
-                    PREFIX_RS_V2,
-                    PREFIX_SCREENER,
-                    PREFIX_TECHNICAL_SCREENER,
-                    PREFIX_TERMINAL,
+                from app.services import cache_warmers
+                cache_report = cache_warmers.bust_job_caches("daily_market_update")
+            except Exception as warm_err:                       # noqa: BLE001
+                logger.info("warm-up unavailable (%s: %s) — busting without it",
+                            type(warm_err).__name__, str(warm_err)[:120])
+                from app.core import cache_bust
+                cache_report = cache_bust.bust(job="daily_market_update")
+            RUN_REPORT["cache_busted"] = cache_report["ok"]
+            RUN_REPORT["cache_summary"] = cache_report["summary"]
+            if cache_report["ok"]:
+                logger.info("✅ Caches busted (%s) — new data is live.",
+                            cache_report["summary"])
+            else:
+                # Advisory, not a stage failure: the day's rows ARE written, so a
+                # cache outage must not mark a good data day as failed. It is
+                # recorded and flagged because "ran fine, site unchanged" is the
+                # one outcome the operator cannot be left to guess about.
+                _record_stage_failure(
+                    "10 cache invalidation",
+                    "no cache reachable (%s): %s" % (
+                        cache_report["summary"],
+                        "; ".join(str(c.get("error")) for c in cache_report["channels"])),
+                    advisory=True,
                 )
-                app_prefixes = (
-                    PREFIX_RS,
-                    PREFIX_RS_V2,
-                    PREFIX_SCREENER,
-                    PREFIX_TECHNICAL_SCREENER,
-                    PREFIX_PRICES,
-                    PREFIX_INDUSTRY_GROUPS,
-                    PREFIX_TERMINAL,
-                    PREFIX_REBH,
-                )
-
-                deleted_count = 0
-                per_prefix = {}
-                for _prefix in app_prefixes:
-                    _n = 0
-                    cursor = 0
-                    while True:
-                        cursor, keys = r.scan(cursor=cursor, match=f"{_prefix}:*", count=500)
-                        if keys:
-                            r.unlink(*keys)   # non-blocking; TTL is the backstop
-                            _n += len(keys)
-                        if cursor == 0:
-                            break
-                    per_prefix[_prefix] = _n
-                    deleted_count += _n
-                r.close()
-                cache_cleared = True
-                logger.info(f"✅ Sync Redis cache flushed successfully ({deleted_count} keys removed "
-                            f"across {len(app_prefixes)} prefixes: "
-                            f"{', '.join(f'{k}={v}' for k, v in per_prefix.items())}). "
-                            f"New data is now live!")
-            except Exception as sync_err:
-                logger.info("ℹ️ Redis server is not active locally — skipping cache flush (safe in dev/script mode).")
-
         except Exception as cache_err:
-            logger.error(f"⚠️ Failed to invalidate caches: {cache_err}")
+            RUN_REPORT["cache_busted"] = False
+            _record_stage_failure("10 cache invalidation", cache_err, advisory=True)
 
         if RUN_REPORT["stage_failures"]:
             logger.info("🏁 Daily Update Workflow completed WITH %d failed stage(s) — "
@@ -1452,6 +1609,9 @@ def update_daily(target_date_str=None):
     finally:
         # Single release point — guarantees the mutex is freed on success,
         # failure, early return (e.g. scrape returned nothing) or Ctrl+C.
+        # [C1] Always drop the per-cycle company cache; disable() only touches
+        # module globals so it is safe even if enable() never ran (early return).
+        disable_company_cache()
         reset_session_tuning(db)
         _release_update_lock()
         try:

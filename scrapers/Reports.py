@@ -81,6 +81,9 @@ def setup_driver():
             '/opt/google/chrome/chrome',
             '/opt/google/chrome/google-chrome',
             '/app/.apt/usr/bin/google-chrome',
+            # Windows default installs (Chrome is rarely on PATH there)
+            r'C:\Program Files\Google\Chrome\Application\chrome.exe',
+            r'C:\Program Files (x86)\Google\Chrome\Application\chrome.exe',
         ]
         for path in linux_chrome_paths:
             if os.path.exists(path):
@@ -109,10 +112,23 @@ def setup_driver():
                 chromedriver_path = path
                 break
 
+    # [Perf] Use the locally cached webdriver-manager binary before hitting the
+    # network: ChromeDriverManager().install() queries Google for the newest
+    # driver version on every cold call, even though ~/.wdm already holds one.
+    if not chromedriver_path:
+        try:
+            from app.core.chromedriver_cache import resolve_cached_chromedriver
+            chromedriver_path = resolve_cached_chromedriver(chrome_bin)
+        except Exception as cache_err:
+            logger.debug("Local ChromeDriver cache lookup failed: %s", cache_err)
+            chromedriver_path = None
+
     if chromedriver_path:
-        logger.info(f"📍 Found explicit ChromeDriver at: {chromedriver_path}")
+        logger.info(f"📍 Using ChromeDriver at: {chromedriver_path}")
         service = Service(chromedriver_path)
     else:
+        # Last resort only — downloads/queries the latest driver over the network.
+        logger.info("📍 No local ChromeDriver found — falling back to webdriver-manager (network)")
         service = Service(ChromeDriverManager().install())
         
     return webdriver.Chrome(service=service, options=chrome_options)

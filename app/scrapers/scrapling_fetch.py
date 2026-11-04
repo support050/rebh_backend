@@ -50,8 +50,9 @@ from __future__ import annotations
 import logging
 import os
 import re
+import time
 from dataclasses import dataclass
-from typing import Any, Optional, Sequence, Tuple
+from typing import Any, List, Optional, Sequence, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -111,6 +112,16 @@ _SOFT_MARKERS = (r"captcha", r"verify you are human", r"are you a robot",
                  r"cf-chl", r"challenge-platform")
 _SOFT_RE = re.compile("|".join(_SOFT_MARKERS), re.I)
 _SOFT_BLOCK_MAX_LEN = int(os.getenv("SCRAPLING_SOFT_BLOCK_MAX_LEN", "20000"))
+
+# A WAF challenge is often TRANSIENT: measured 2026-11-01 on gurufocus.com, the
+# same URL answered 403 "Just a moment..." from plain curl_cffi while Scrapling's
+# Fetcher was served 200 + 3.6 MB minutes apart, and an admin Run Now at 18:17 UTC
+# failed both series while a terminal run at 20:19 UTC got 200 for both. Firing
+# the whole fingerprint rotation at a challenged IP five times back-to-back only
+# deepens the challenge, so one bounded pause-and-retry pass runs when the site
+# ANSWERED (any HTTP status). A connection error will not clear in five seconds,
+# so it is never retried here.
+RETRY_PAUSE_S = float(os.getenv("SCRAPLING_RETRY_PAUSE_S", "5"))
 
 
 # ─── Proxy resolution ─────────────────────────────────────────────────────────
@@ -299,36 +310,58 @@ def http_get(url: str, *, referer: Optional[str] = None, timeout: int = 30,
     if proxy:
         logger.info(f"[scrapling http] proxy={_mask_proxy(proxy)}")
 
-    for imp in (engines or IMPERSONATE_ORDER):
-        kwargs = dict(impersonate=imp, stealthy_headers=True,
-                      timeout=timeout, retries=retries_per_engine,
-                      follow_redirects=True)
-        if proxy_server:
-            kwargs["proxy"] = proxy_server
-            if proxy_auth:
-                kwargs["proxy_auth"] = proxy_auth
-        if referer:
-            kwargs["headers"] = {**(extra_headers or {}), "Referer": referer}
-        elif extra_headers:
-            kwargs["headers"] = extra_headers
-        try:
-            page = Fetcher.get(url, **kwargs)
-        except Exception as e:
-            logger.debug(f"[scrapling http] {imp} failed for {url}: {type(e).__name__}: {str(e)[:140]}")
-            continue
+    # Every attempt is recorded so the give-up line can name the real reason.
+    # Without this an operator sees "no usable GuruFocus page" and a DEBUG line
+    # they never read — which is exactly how a 403 stayed unexplained for hours.
+    attempts: List[str] = []
 
-        body = page.body or b""
-        text = body.decode("utf-8", "ignore") if isinstance(body, bytes) else str(body)
-        status = int(getattr(page, "status", 0) or 0)
-        final = str(getattr(page, "url", url))
-        if status == 200 and text and not looks_blocked(text):
-            logger.info(f"[scrapling http] 200 via {imp}: {len(text):,} chars <- {final[-70:]}")
-            return FetchResult(text=text, status=status, url=final,
-                               via=f"http:{imp}" + ("+proxy" if proxy else ""),
-                               page=page)
-        logger.debug(f"[scrapling http] {imp} -> status={status} len={len(text):,} (rejected)")
+    def rotate(pass_no: int) -> Optional[FetchResult]:
+        for imp in (engines or IMPERSONATE_ORDER):
+            kwargs = dict(impersonate=imp, stealthy_headers=True,
+                          timeout=timeout, retries=retries_per_engine,
+                          follow_redirects=True)
+            if proxy_server:
+                kwargs["proxy"] = proxy_server
+                if proxy_auth:
+                    kwargs["proxy_auth"] = proxy_auth
+            if referer:
+                kwargs["headers"] = {**(extra_headers or {}), "Referer": referer}
+            elif extra_headers:
+                kwargs["headers"] = extra_headers
+            try:
+                page = Fetcher.get(url, **kwargs)
+            except Exception as e:
+                attempts.append(f"p{pass_no} {imp}: raised {type(e).__name__}")
+                logger.debug(f"[scrapling http] {imp} failed for {url}: "
+                             f"{type(e).__name__}: {str(e)[:140]}")
+                continue
 
-    return None
+            body = page.body or b""
+            text = body.decode("utf-8", "ignore") if isinstance(body, bytes) else str(body)
+            status = int(getattr(page, "status", 0) or 0)
+            final = str(getattr(page, "url", url))
+            if status == 200 and text and not looks_blocked(text):
+                logger.info(f"[scrapling http] 200 via {imp}: {len(text):,} chars "
+                            f"<- {final[-70:]}")
+                return FetchResult(text=text, status=status, url=final,
+                                   via=f"http:{imp}" + ("+proxy" if proxy else ""),
+                                   page=page)
+            attempts.append(f"p{pass_no} {imp}: {status}/{len(text):,}b")
+            logger.debug(f"[scrapling http] {imp} -> status={status} "
+                         f"len={len(text):,} (rejected)")
+        return None
+
+    result = rotate(1)
+    answered = [a for a in attempts if ": raised " not in a]
+    if result is None and answered and RETRY_PAUSE_S > 0:
+        logger.info(f"[scrapling http] blocked by the site "
+                    f"({'  '.join(attempts)}) — one retry in {RETRY_PAUSE_S:g}s")
+        time.sleep(RETRY_PAUSE_S)
+        result = rotate(2)
+    if result is None:
+        logger.warning(f"[scrapling http] no usable response for {url[-70:]}: "
+                       f"{'; '.join(attempts) or 'no engine ran'}")
+    return result
 
 
 def browser_get(url: str, *, wait_selector: Optional[str] = None,

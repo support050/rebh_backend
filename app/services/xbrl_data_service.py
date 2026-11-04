@@ -2,6 +2,7 @@ import json
 import logging
 import os
 import re
+import threading
 from pathlib import Path
 import boto3
 from botocore.config import Config
@@ -147,6 +148,25 @@ def get_company(symbol: str) -> CompanyFinancials | None:
     if not symbol:
         return None
 
+    cache_on = _COMPANY_CACHE_ENABLED
+    if cache_on:
+        with _COMPANY_CACHE_LOCK:
+            if symbol in _COMPANY_CACHE:
+                return _COMPANY_CACHE[symbol]
+
+    company = _load_company_source(symbol)
+
+    if cache_on:
+        with _COMPANY_CACHE_LOCK:
+            _COMPANY_CACHE[symbol] = company
+    return company
+
+
+def _load_company_source(symbol: str) -> CompanyFinancials | None:
+    """Actual one-shot read of a company's financials (local JSON, then R2).
+
+    Split out from get_company() so the per-cycle cache wrapper can stay thin.
+    """
     # 1. Local fallback first (fastest)
     fp = OUTPUT_DIR / f"{symbol}_financials.json"
     if fp.exists():
@@ -177,6 +197,41 @@ def get_company(symbol: str) -> CompanyFinancials | None:
     return None
 
 
+# ── per-cycle company cache ────────────────────────────────────────
+# [C1 / Batch-3] The pipeline reads every company JSON at least twice per run —
+# once in stage 8.8 (serial valuation) and again in stage 8.9 (parallel engine) —
+# and get_company() had no cache, so the same ~257 files were opened + json.load'ed
+# + Pydantic-parsed repeatedly. This cache is OPT-IN (off by default) so it only
+# lives inside a single pipeline run and NEVER affects the long-lived server: the
+# run calls enable_company_cache() at the start and disable_company_cache() in its
+# finally, so the server keeps reading fresh files on every request. The lock
+# guards ONLY the dict get/set (microseconds); the expensive file/R2 read runs
+# OUTSIDE the lock, so the stage 8.9 ThreadPoolExecutor stays parallel. Misses
+# (including None results) are cached too, so an absent company is not re-tried.
+_COMPANY_CACHE: dict = {}
+_COMPANY_CACHE_ENABLED: bool = False
+_COMPANY_CACHE_LOCK = threading.Lock()
+
+
+def enable_company_cache() -> None:
+    global _COMPANY_CACHE, _COMPANY_CACHE_ENABLED
+    with _COMPANY_CACHE_LOCK:
+        _COMPANY_CACHE = {}
+        _COMPANY_CACHE_ENABLED = True
+
+
+def disable_company_cache() -> None:
+    global _COMPANY_CACHE, _COMPANY_CACHE_ENABLED
+    with _COMPANY_CACHE_LOCK:
+        _COMPANY_CACHE_ENABLED = False
+        _COMPANY_CACHE = {}
+
+
+def company_cache_size() -> int:
+    with _COMPANY_CACHE_LOCK:
+        return len(_COMPANY_CACHE)
+
+
 def save_company(symbol: str, data: dict) -> Path:
     """Persist financials JSON for one company.
 
@@ -192,6 +247,9 @@ def save_company(symbol: str, data: dict) -> Path:
     fp = OUTPUT_DIR / f"{safe_symbol}_financials.json"
     with open(fp, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
+    # [C1] Drop any cached (stale) parsed copy so a mid-cycle read sees the write.
+    with _COMPANY_CACHE_LOCK:
+        _COMPANY_CACHE.pop(safe_symbol, None)
     return fp
 
 

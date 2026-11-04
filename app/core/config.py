@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import logging
 from functools import lru_cache
-from typing import List
+from typing import List, Optional
 
 from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -30,6 +30,12 @@ class Settings(BaseSettings):
     # ── Required infrastructure ──────────────────────────────────────────
     DATABASE_URL: str
     REDIS_URL: str
+    # Optional second instance for auth/session keys ONLY (see
+    # docs/redis-production.md). When set, every auth_* helper talks to it and
+    # the data-path cache keeps using REDIS_URL, so a maxmemory eviction on the
+    # cache box can no longer log users out. Unset = single instance (today's
+    # behaviour, unchanged).
+    REDIS_AUTH_URL: Optional[str] = None
     SECRET_KEY: str = Field(min_length=32)
 
     # ── Environment ──────────────────────────────────────────────────────
@@ -50,6 +56,15 @@ class Settings(BaseSettings):
     # It remains a setting (not hardcoded) only as an emergency kill-switch —
     # e.g. if the verification-mail provider is down during an onboarding push.
     ENFORCE_EMAIL_VERIFICATION: bool = True
+
+    # ── Job concurrency cap (home↔Render link protection) ───────────────
+    # Scraper/engine jobs each open their own DB connections. Running three
+    # heavy jobs at once from one machine saturates the residential uplink to
+    # Render's Postgres and black-holes every API request sharing it
+    # (observed 2026-11-03: blank admin pages until the jobs finished). The
+    # run-now runner refuses beyond this cap; raise it only on a sturdier line
+    # or when the DB is co-located.
+    MAX_CONCURRENT_JOBS: int = 2
 
     # ── JWT ──────────────────────────────────────────────────────────────
     JWT_ALGORITHM: str = "HS256"

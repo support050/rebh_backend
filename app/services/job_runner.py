@@ -37,6 +37,7 @@ from typing import Any, Callable, Dict, Optional
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.core.database import SessionLocal
 
 logger = logging.getLogger(__name__)
@@ -46,11 +47,24 @@ logger = logging.getLogger(__name__)
 STALE_RUNNING_MINUTES = 120
 _READ_TIMEOUT_MS = 3000
 
+# Wall clock of THIS process's birth. ``uvicorn --reload`` destroys the server
+# child on every saved file, and a Run Now job is a daemon thread inside it, so
+# the job dies mid-run and leaves its job_runs row open forever. A 'running'
+# admin row that predates BOOT_AT and is absent from _ACTIVE therefore cannot
+# belong to any thread that exists: it is a corpse, and must not read "running"
+# (nor lock its own Run Now button) until STALE_RUNNING_MINUTES has elapsed.
+# Rows opened AFTER this process booted stay trusted — a sibling worker in a
+# multi-worker deploy owns those, and so does a live Run Now thread.
+BOOT_AT = datetime.now(timezone.utc)
+
 # job_name -> {fn, label, self_tracked}. self_tracked=True means the callable
 # writes its own job_runs row (scraper_service does that) ⇒ do NOT wrap again.
 _TARGETS: Dict[str, Dict[str, Any]] = {}
 _ACTIVE: Dict[str, datetime] = {}
 _targets_lock = threading.Lock()
+# Guards check-and-reserve against the MAX_CONCURRENT_JOBS cap below; the
+# existing in-process double-click caveat (module docstring) applies here too.
+_active_lock = threading.Lock()
 _registered = False
 
 
@@ -163,44 +177,87 @@ def latest_run(job_name: str) -> Optional[Dict[str, Any]]:
         db.close()
 
 
+def row_is_a_corpse(job_name: str, started_at: Optional[datetime],
+                    triggered_by: Optional[str]) -> bool:
+    """True when an open 'running' row belongs to a process that no longer exists.
+
+    Only Run Now rows qualify: ``triggered_by='admin'`` is written exclusively by
+    this module's own thread, so a reload is the only thing that can abandon one.
+    A cron or terminal row is owned by a DIFFERENT process, which this one cannot
+    see — guessing about those is what STALE_RUNNING_MINUTES is for.
+    """
+    if started_at is None or triggered_by != "admin":
+        return False
+    if job_name in _ACTIVE:
+        return False                        # this process really is running it
+    if started_at.tzinfo is None:           # a naive column value is UTC by convention
+        started_at = started_at.replace(tzinfo=timezone.utc)
+    return started_at < BOOT_AT
+
+
 def is_in_flight(job_name: str) -> bool:
-    """True when this process started the run, or the ledger shows a young 'running' row."""
+    """True when this process started the run, or the ledger shows a young
+    'running' row that a live process still owns."""
     if job_name in _ACTIVE:
         return True
     db = SessionLocal()
     try:
         rows = _read(
             db,
-            "SELECT 1 FROM job_runs WHERE job_name = :job_name AND status = 'running' "
-            "AND started_at > NOW() - (:minutes * INTERVAL '1 minute') LIMIT 1",
+            "SELECT started_at, triggered_by FROM job_runs "
+            "WHERE job_name = :job_name AND status = 'running' "
+            "AND started_at > NOW() - (:minutes * INTERVAL '1 minute') "
+            "ORDER BY started_at DESC, id DESC LIMIT 1",
             job_name=job_name, minutes=STALE_RUNNING_MINUTES,
         )
-        return bool(rows)
+        if not rows:
+            return False
+        started, triggered = rows[0]
+        return not row_is_a_corpse(job_name, started, triggered)
     finally:
         db.close()
 
 
 def _post_run_hooks(job_name: str) -> None:
-    """Cron clears the economic-indicator cache once per group; a single manual
-    run must do the same, or the UI keeps serving the pre-run numbers."""
+    """Bust whatever cache this job just made stale.
+
+    One table for the whole system (``cache_bust.JOB_GROUPS``), instead of the
+    three special cases this used to be — economic jobs, market_reports, and
+    breadth_daily returning early. Two consequences worth naming:
+
+    * jobs whose output is served from ``terminal:*`` / ``scraper:*``
+      (engine_vintages, filings_importer, scraper:tasi_components) are now busted
+      too, where they previously left the admin staring at pre-run numbers;
+    * a bust that reached nothing is logged at WARNING. It used to be
+      ``logger.debug("cache clear skipped")`` — invisible by default, which is
+      exactly how "the script ran and the site did not update" stayed unexplained.
+
+    ``remote=False``: this runs on the server, next to the server's Redis, so the
+    HTTP door would only be the app calling itself. The door is for scripts run
+    somewhere else (see app/core/cache_bust.py).
+
+    Part 2 / Phase 4: the bust goes through ``cache_warmers.bust_job_caches``,
+    which first rewrites the hot keys of any namespace this job clears and then
+    protects exactly those from the eviction behind them. Ordering is the whole
+    point — warm, then sweep the rest — so a reader never finds the page they are
+    about to open missing from the cache. The warm-up is optional by design: if
+    it cannot run, the report is the same bust this function always performed.
+    """
     if job_name == "breadth_daily":
-        return                                    # its body clears its own keys
-    if job_name == "market_reports":
-        # Run Now dispatches the raw _market_reports callable — the cron wrapper
-        # (job_market_reports_scrapers) that busts market_reports:* never runs
-        # here, so the manual path must clear the keyspace itself.
-        try:
-            from app.core.scheduler import _clear_market_reports_cache
-            _clear_market_reports_cache()
-        except Exception as e:                    # noqa: BLE001 — cache is optional
-            logger.debug("job_runner: market-reports cache clear skipped: %s", e)
-        return
+        return                       # _breadth_daily_body + the job itself both bust
     try:
-        from app.core.scheduler import ECONOMIC_CACHE_JOBS, _clear_cache
-        if job_name in ECONOMIC_CACHE_JOBS:
-            _clear_cache()
+        from app.services import cache_warmers
+        report = cache_warmers.bust_job_caches(job_name, local=True, remote=False)
     except Exception as e:                        # noqa: BLE001 — cache is optional
-        logger.debug("job_runner: post-run cache hook skipped for %s: %s", job_name, e)
+        logger.warning("job_runner: post-run cache hook failed for %s: %s", job_name, e)
+        return
+    if report["ok"]:
+        logger.info("job_runner: busted %s after %s", report["summary"], job_name)
+    else:
+        reasons = "; ".join(str(c.get("error")) for c in report["channels"])
+        logger.warning("job_runner: CACHE NOT BUSTED after %s (%s) — %s; readers keep "
+                       "the previous payload until the TTL lapses.",
+                       job_name, report["summary"], reasons)
 
 
 def _execute(job_name: str, target: Dict[str, Any]) -> None:
@@ -240,11 +297,34 @@ def start(job_name: str) -> Dict[str, Any]:
                 "message": "A run is already in flight (in this process or a "
                            "job_runs row younger than %d min)." % STALE_RUNNING_MINUTES}
 
+    # Concurrency cap (2026-11-03): three heavy run-now jobs at once from one
+    # machine saturated the home↔Render Postgres uplink and black-holed every
+    # API request — admin pages went blank until the jobs finished. Reserve a
+    # slot here (not inside the thread) so two fast clicks cannot both pass the
+    # count.
+    with _active_lock:
+        active = [k for k in _ACTIVE if k != job_name]
+        if len(active) >= settings.MAX_CONCURRENT_JOBS:
+            return {"job_name": job_name, "status": "already_running",
+                    "message": "Concurrency cap reached (%d/%d slots busy: %s). "
+                               "Jobs share this machine's DB uplink — run it "
+                               "after one finishes."
+                               % (len(active), settings.MAX_CONCURRENT_JOBS,
+                                  ", ".join(sorted(active)))}
+        _ACTIVE[job_name] = datetime.now(timezone.utc)
+
     thread = threading.Thread(
         target=_execute, args=(job_name, target),
         name=f"run-now-{job_name}", daemon=True,
     )
-    thread.start()
+    try:
+        thread.start()
+    except Exception as e:                        # noqa: BLE001 — verdict API
+        with _active_lock:
+            _ACTIVE.pop(job_name, None)
+        logger.exception("run-now %s could not start: %s", job_name, e)
+        return {"job_name": job_name, "status": "not_runnable",
+                "message": "Thread could not be started: %s" % e}
     return {"job_name": job_name, "status": "started",
             "message": "Started in the background. Follow it in the Last run column.",
             "label": target["label"], "self_tracked": target["self_tracked"]}

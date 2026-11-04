@@ -12,13 +12,14 @@ import os
 import requests
 import time
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
+from zoneinfo import ZoneInfo
 from typing import Optional, List, Dict, Any
 from sqlalchemy import func
 
 from app.core.config import settings
 from app.core.database import SessionLocal
-from app.models.economic_indicators import EconomicIndicator
+from app.models.economic_indicators import EconomicIndicator, FredSeriesMetadata
 
 logger = logging.getLogger(__name__)
 
@@ -30,6 +31,22 @@ if not FRED_API_KEY:
         "Get a free key at: https://fredaccount.stlouisfed.org/apikeys"
     )
 FRED_API_URL = "https://api.stlouisfed.org/fred/series/observations"
+# Series details (units, frequency, seasonal adj, source, last_updated, notes)
+# and release calendar — used to persist fred_series_metadata.
+FRED_SERIES_URL = "https://api.stlouisfed.org/fred/series"
+# Singular "release/dates" DOES filter by release_id. The plural
+# "releases/dates" endpoint silently IGNORES release_id (verified 2026-10-31 by
+# comparing rows for different rids), so it can never answer "when is THIS
+# release published next?" — that was the bug behind next_release=None.
+FRED_RELEASE_DATES_URL = "https://api.stlouisfed.org/fred/release/dates"
+# Master list of every release (id -> name); used to sanity-check the map below
+# so a renamed release surfaces in the log instead of pointing at a wrong date.
+FRED_RELEASES_URL = "https://api.stlouisfed.org/fred/releases"
+# The page FRED itself links to from "Next Release Date" on a series page.
+FRED_CALENDAR_URL = "https://fred.stlouisfed.org/releases/calendar"
+# FRED renders "Updated: ... CDT/CST" in U.S. Central time; the API returns an
+# offset ISO stamp, so we re-express it in this zone to match the site exactly.
+FRED_DISPLAY_TZ = ZoneInfo("America/Chicago")
 
 # ── Smart Incremental Backfill windows ───────────────────────────────────────
 # `observation_start` is only a LOWER bound: FRED answers with every observation
@@ -253,6 +270,249 @@ def fetch_fred_observations(
     return all_observations
 
 
+# ── Series metadata (persisted to fred_series_metadata) ──────────────────────
+def _fred_get(url: str, params: dict, max_retries: int = 3) -> Optional[dict]:
+    """GET a FRED API endpoint with retry; returns parsed JSON or None."""
+    base = dict(params)
+    base.update({"api_key": FRED_API_KEY, "file_type": "json"})
+    for attempt in range(1, max_retries + 1):
+        try:
+            resp = requests.get(url, params=base, timeout=30)
+            if resp.status_code == 404:
+                logger.warning(f"FRED endpoint 404: {url}")
+                return None
+            resp.raise_for_status()
+            return resp.json()
+        except (requests.exceptions.RequestException, ValueError) as e:
+            if attempt < max_retries:
+                wait = attempt * 3
+                logger.warning(f"FRED GET {url} attempt {attempt}/{max_retries} failed: {e}; retry in {wait}s")
+                time.sleep(wait)
+            else:
+                logger.error(f"FRED GET {url} failed after {max_retries} attempts: {e}")
+                return None
+    return None
+
+
+def format_fred_updated(iso_stamp: Optional[str]) -> Optional[str]:
+    """'2026-10-02T08:24:00-05:00' -> 'Oct 2, 2026 8:24 AM CDT' (Central time).
+
+    Built manually (no %-d / %-I) so it is identical on Windows and Linux.
+    Returns None on any parse failure so the caller can leave the field blank
+    rather than store a raw ISO string that would not match FRED's display.
+    """
+    if not iso_stamp:
+        return None
+    try:
+        dt = datetime.fromisoformat(iso_stamp.replace("Z", "+00:00"))
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=ZoneInfo("UTC"))
+        ct = dt.astimezone(FRED_DISPLAY_TZ)
+        hour = ct.strftime("%I").lstrip("0") or "0"
+        return f"{ct.strftime('%b')} {ct.day}, {ct.year} {hour}:{ct.strftime('%M')} {ct.strftime('%p')} {ct.tzname()}"
+    except Exception:
+        return None
+
+
+# ── Release calendars ────────────────────────────────────────────────────────
+# GET /fred/series does NOT expose release_id (its payload keys are frequency,
+# frequency_short, id, last_updated, notes, observation_start/end, popularity,
+# realtime_start/end, seasonal_adjustment(_short), title, units(_short) —
+# verified 2026-10-31), and FRED has no series->release endpoint. So the
+# series -> release id map was resolved once against
+# GET /fred/release/series?release_id=<id> (the release's own series list):
+#   50  Employment Situation                    <- UNRATE, PAYEMS
+#   180 Unemployment Insurance Weekly Claims    <- IC4WSA
+#   18  H.15 Selected Interest Rates            <- FEDFUNDS
+#   10  Consumer Price Index                    <- CPIAUCSL
+#   20  H.4.1 Factors Affecting Reserve Bal.    <- WALCL, TREAST
+#   21  H.6 Money Stock Measures                <- BOGMBASE, M1SL, M2SL
+#   22  H.8 Assets/Liabilities of Comm. Banks   <- TLAACBW027SBOG, TOTLL
+#   209 ICE BofA Indices                        <- every BAML* spread/yield
+SERIES_RELEASE_IDS: Dict[str, int] = {
+    "UNRATE": 50, "PAYEMS": 50,
+    "IC4WSA": 180,
+    "FEDFUNDS": 18,
+    "CPIAUCSL": 10,
+    "WALCL": 20, "TREAST": 20,
+    "BOGMBASE": 21, "M1SL": 21, "M2SL": 21,
+    "TLAACBW027SBOG": 22, "TOTLL": 22,
+}
+# All ICE BofA / Merrill Lynch index series share one release calendar.
+SERIES_RELEASE_PREFIXES: Dict[str, int] = {"BAML": 209}
+# Names the ids above are expected to carry; only used to log a warning.
+RELEASE_NAMES: Dict[int, str] = {
+    50: "Employment Situation",
+    180: "Unemployment Insurance Weekly Claims Report",
+    18: "H.15 Selected Interest Rates",
+    10: "Consumer Price Index",
+    20: "H.4.1 Factors Affecting Reserve Balances",
+    21: "H.6 Money Stock Measures",
+    22: "H.8 Assets and Liabilities of Commercial Banks in the United States",
+    209: "ICE BofA Indices",
+}
+
+_release_names_cache: Optional[Dict[int, str]] = None
+
+
+def _live_release_names() -> Dict[int, str]:
+    """id -> name for every FRED release, fetched once per process."""
+    global _release_names_cache
+    if _release_names_cache is None:
+        data = _fred_get(FRED_RELEASES_URL, {"limit": 1000}) or {}
+        _release_names_cache = {
+            int(r["id"]): (r.get("name") or "").strip()
+            for r in data.get("releases", []) if r.get("id") is not None
+        }
+    return _release_names_cache
+
+
+def release_id_for(series_id: str) -> Optional[int]:
+    """FRED release id for a series, or None when the series is unmapped."""
+    sid = (series_id or "").upper()
+    rid = SERIES_RELEASE_IDS.get(sid)
+    if rid:
+        return rid
+    for prefix, mapped in SERIES_RELEASE_PREFIXES.items():
+        if sid.startswith(prefix):
+            return mapped
+    return None
+
+
+def _check_release_name(series_id: str, release_id: int) -> None:
+    """Warn (never fail) when a mapped release id no longer matches its name."""
+    names = _live_release_names()
+    if not names:
+        return
+    live = names.get(release_id)
+    expected = RELEASE_NAMES.get(release_id)
+    if live is None:
+        logger.warning(f"FRED release id {release_id} for {series_id} is no longer listed")
+    elif expected and live != expected:
+        logger.warning(f"FRED release {release_id} renamed: {expected!r} -> {live!r}")
+
+
+def fetch_release_schedule(
+    release_id: Optional[int],
+    today: Optional[date] = None,
+) -> tuple:
+    """Return (next release date, FRED calendar url) for one release.
+
+    Scheduled-but-not-yet-published dates only exist with
+    include_release_dates_with_no_data=true: without the flag the calendar stops
+    at the last release that already has data (rid=209 ended 2026-10-29 with the
+    flag off vs 2026-12-31 with it on — verified 2026-10-31). (None, None) when
+    the release is unmapped or the calendar is unreachable.
+    """
+    if not release_id:
+        return None, None
+    today = today or date.today()
+    candidates: List[date] = []
+    offset = 0
+    while True:
+        data = _fred_get(FRED_RELEASE_DATES_URL, {
+            "release_id": release_id,
+            "include_release_dates_with_no_data": "true",
+            "limit": 1000,
+            "offset": offset,
+        })
+        if not data:
+            break
+        rows = data.get("release_dates", [])
+        for row in rows:
+            ds = row.get("date")
+            if not ds:
+                continue
+            try:
+                d = datetime.strptime(ds, "%Y-%m-%d").date()
+            except ValueError:
+                continue
+            if d >= today:
+                candidates.append(d)
+        offset += len(rows)
+        # Full calendars are < 1000 rows; the guard only trips on a huge release.
+        if len(rows) < 1000 or offset >= 20000:
+            break
+    if not candidates:
+        return None, None
+    nxt = min(candidates)
+    return nxt, f"{FRED_CALENDAR_URL}?rid={release_id}&y={nxt.year}"
+
+
+def scrape_fred_metadata(indicator_code: str) -> bool:
+    """Fetch series details + next release date and UPSERT one metadata row.
+
+    Best-effort: returns False (never raises) so a metadata hiccup cannot undo
+    a successful observations scrape. Latest observation date/value are read
+    back from the economic_indicators table (authoritative, post-upsert).
+    """
+    indicator_code = indicator_code.upper()
+    config = FRED_SERIES_CONFIG.get(indicator_code)
+    if not config:
+        return False
+    series_id = config["series_id"]
+
+    data = _fred_get(FRED_SERIES_URL, {"series_id": series_id})
+    if not data or not data.get("seriess"):
+        logger.warning(f"No FRED series metadata for {series_id}")
+        return False
+    s = data["seriess"][0]
+    # /fred/series carries no release_id, so fall back to the verified map;
+    # without it next_release can never be resolved (that was the None bug).
+    rid = s.get("release_id") or release_id_for(series_id)
+    if rid:
+        _check_release_name(series_id, rid)
+    else:
+        logger.warning(f"{series_id}: no FRED release mapping — next release date unavailable")
+    next_release, release_calendar_url = fetch_release_schedule(rid)
+
+    db = SessionLocal()
+    try:
+        latest = (
+            db.query(EconomicIndicator.report_date, EconomicIndicator.value)
+            .filter(EconomicIndicator.indicator_code == indicator_code)
+            .order_by(EconomicIndicator.report_date.desc())
+            .first()
+        )
+        payload = {
+            "series_id": series_id,
+            "title": s.get("title"),
+            "units": s.get("units"),
+            "frequency": s.get("frequency"),
+            "seasonal_adjustment": s.get("seasonal_adjustment"),
+            "source_agency": s.get("source"),
+            "fred_url": f"https://fred.stlouisfed.org/series/{series_id}",
+            "latest_observation_date": latest.report_date if latest else None,
+            "latest_observation_value": float(latest.value) if latest and latest.value is not None else None,
+            "last_updated_time": format_fred_updated(s.get("last_updated")),
+            "next_release_date": next_release,
+            "release_id": rid,
+            "release_calendar_url": release_calendar_url,
+            # The API field is "notes"; the previous s.get("note") read a key that
+            # does not exist, so notes were never persisted.
+            "notes": s.get("notes"),
+        }
+        row = db.query(FredSeriesMetadata).filter(
+            FredSeriesMetadata.indicator_code == indicator_code
+        ).first()
+        if row:
+            for k, v in payload.items():
+                setattr(row, k, v)
+        else:
+            db.add(FredSeriesMetadata(indicator_code=indicator_code, **payload))
+        db.commit()
+        logger.info(f"\u2139\ufe0f {indicator_code}: fred_series_metadata upserted "
+                    f"(next_release={next_release}, rid={rid}, "
+                    f"calendar={release_calendar_url}, updated={payload['last_updated_time']})")
+        return True
+    except Exception as e:
+        db.rollback()
+        logger.error(f"DB error saving FRED metadata for {indicator_code}: {e}", exc_info=True)
+        return False
+    finally:
+        db.close()
+
+
 def _job_result(code: str, ok: bool, rows: int = 0, error: str = "") -> dict:
     """Return shape understood by job_tracking.with_result_handling:
     'rows' feeds job_runs.rows_written; ok=False + stage_failures turns the
@@ -314,6 +574,7 @@ def scrape_fred_indicator(indicator_code: str) -> dict:
 
         if not parsed_data:
             logger.info(f"ℹ️ {indicator_code}: already up-to-date (0 new records)")
+            scrape_fred_metadata(indicator_code)  # refresh metadata even with no new rows
             return _job_result(indicator_code, True, 0)
 
         # ── Atomic UPSERT ──
@@ -345,6 +606,7 @@ def scrape_fred_indicator(indicator_code: str) -> dict:
         db.execute(stmt)
         db.commit()
         logger.info(f"✅ {indicator_code}: processed {len(records_to_insert)} records via atomic UPSERT (new & revised values updated).")
+        scrape_fred_metadata(indicator_code)  # keep fred_series_metadata in sync
         return _job_result(indicator_code, True, len(records_to_insert))
 
     except Exception as e:

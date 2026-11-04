@@ -308,11 +308,19 @@ class TestCacheAdminOnly:
             return admin
 
         app.dependency_overrides[get_current_admin] = override_admin
-        with patch("app.api.routes.cache._delete_matching", new_callable=AsyncMock) as d:
-            d.return_value = 3
+        # 2026-11-04: the routes no longer hand-roll the SCAN walk — they delegate
+        # to app.core.cache_bust.evict, which returns a report instead of a count.
+        report = {"reachable": True, "deleted": 3, "target": "redis://x:6379/0",
+                  "per_pattern": {"rs:*": 1, "prices:*": 2}, "skipped_auth_keys": 0,
+                  "error": None}
+        with patch("app.api.routes.cache.cache_bust.evict", return_value=report) as d:
             res = client.post("/api/cache/clear/stocks", headers=_csrf(client))
         assert res.status_code == 200
         assert res.json()["deleted_count"] == 3
+        # Smart bust, and honest about what it touched: stock/market namespaces
+        # only — never "*", which is what used to make a clear-all possible.
+        patterns = d.call_args[0][0]
+        assert "rs:*" in patterns and "*" not in patterns
 
 
 # ── 4. Registration enumeration ─────────────────────────────────────────

@@ -63,6 +63,12 @@ EXPOSE 8000
 # which collapses every visitor into one slowapi bucket ("5 logins/minute for the
 # whole platform") and makes the auth rate limits useless. Overridable to pin
 # trusted proxy CIDRs instead of "*" if the app is ever exposed directly.
+#
+# This ENV, not a CLI flag, is what sets the trusted-proxy list: uvicorn's Config
+# reads FORWARDED_ALLOW_IPS when --forwarded-allow-ips is absent (verified against
+# the installed uvicorn 0.24.0), and the exec-form CMD below performs no shell
+# expansion, so "--forwarded-allow-ips=${FORWARDED_ALLOW_IPS:-*}" would pass the
+# literal dollar string to uvicorn. Procfile (shell form) does carry the flag.
 ENV FORWARDED_ALLOW_IPS="*"
 
 # Run the application

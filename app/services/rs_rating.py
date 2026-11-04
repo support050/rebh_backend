@@ -4,7 +4,7 @@ from typing import Dict, List, Optional, Tuple
 from datetime import datetime
 
 
-# الفترات المطلوبة (أيام التداول الفعلية)
+# Required windows (actual trading days)
 PERIODS = {
     "12m": 252,
     "9m": 189,
@@ -19,7 +19,7 @@ async def fetch_all_stocks_time_series(symbols: List[str]) -> Dict[str, pd.DataF
     import asyncio
     
     results = {}
-    batch_size = 20  # 20 رمز في كل مرة فقط
+    batch_size = 20  # only 20 symbols per batch
     
     for i in range(0, len(symbols), batch_size):
         batch = symbols[i:i + batch_size]
@@ -30,7 +30,7 @@ async def fetch_all_stocks_time_series(symbols: List[str]) -> Dict[str, pd.DataF
             if not isinstance(response, Exception) and response is not None:
                 results[symbol] = response
         
-        # انتظر 2 ثانية بين كل دفعة
+        # Wait 2 seconds between batches
         if i + batch_size < len(symbols):
             print(f"⏳ Waiting 2 seconds before next batch...")
             await asyncio.sleep(2)
@@ -38,9 +38,7 @@ async def fetch_all_stocks_time_series(symbols: List[str]) -> Dict[str, pd.DataF
     return results
 
 def calculate_period_change(df: pd.DataFrame, days: int) -> Optional[float]:
-    """
-    حساب Change% لفترة معينة
-    """
+    """Compute the Change% for a single window"""
     try:
         if df is None or len(df) < 2:
             return None
@@ -66,8 +64,8 @@ def calculate_period_change(df: pd.DataFrame, days: int) -> Optional[float]:
 
 def percentrank_inc(data: List[float], value: float) -> float:
     """
-    🎯 حساب PERCENTRANK.INC تماماً كما في Excel
-    = (عدد القيم < value + 0.5 * عدد القيم = value) / (العدد الكلي - 1)
+    🎯 PERCENTRANK.INC exactly as implemented in Excel
+    = (count(values < v) + 0.5 * count(values == v)) / (total_count - 1)
     """
     if len(data) < 2:
         return 0.0
@@ -81,11 +79,11 @@ def percentrank_inc(data: List[float], value: float) -> float:
 
 def calculate_rs_for_period(all_data: Dict[str, pd.DataFrame], period_days: int, period_name: str = "") -> Tuple[Dict[str, Optional[float]], Dict[str, Optional[float]]]:
     """
-    حساب RS Rating و Change% لكل السهم لفترة معينة
+    Compute RS Rating and Change% for every symbol over one window
     Returns: (rs_scores_dict, change_scores_dict)
     """
     try:
-        # 1️⃣ حساب Change% لكل سهم
+        # 1️⃣ Change% per symbol
         changes = {}
         for symbol, df in all_data.items():
             change = calculate_period_change(df, period_days)
@@ -96,7 +94,7 @@ def calculate_rs_for_period(all_data: Dict[str, pd.DataFrame], period_days: int,
             empty_result = {symbol: None for symbol in all_data.keys()}
             return empty_result, empty_result
         
-        # 2️⃣ قائمة بالتغييرات
+        # 2️⃣ List of the change values
         change_values = list(changes.values())
         n = len(change_values)
         
@@ -104,7 +102,7 @@ def calculate_rs_for_period(all_data: Dict[str, pd.DataFrame], period_days: int,
             empty_result = {symbol: None for symbol in all_data.keys()}
             return empty_result, empty_result
         
-        # 3️⃣ حساب PERCENTRANK.INC و RS Score لكل سهم
+        # 3️⃣ PERCENTRANK.INC and RS Score per symbol
         rs_scores = {}
         for symbol, change in changes.items():
             percent_rank = percentrank_inc(change_values, change)
@@ -112,11 +110,11 @@ def calculate_rs_for_period(all_data: Dict[str, pd.DataFrame], period_days: int,
             score = min(score, 99)
             rs_scores[symbol] = score
             
-            # 🎯 تسجيل مفصل لأول 3 أسهم للتحقق
+            # 🎯 Verbose trace for the first 3 symbols (sanity check)
             if period_name and symbol in ["1010", "1020", "1030"]:
                 print(f"📊 {symbol} [{period_name}]: change={change:.2f}% | rank={percent_rank:.4f} | score={score}")
         
-        # 4️⃣ تعبئة القيم الناقصة
+        # 4️⃣ Fill the missing values
         for symbol in all_data.keys():
             if symbol not in rs_scores:
                 rs_scores[symbol] = None
@@ -131,28 +129,28 @@ def calculate_rs_for_period(all_data: Dict[str, pd.DataFrame], period_days: int,
 
 async def calculate_all_rs_ratings(symbols: List[str]) -> Dict[str, Dict[str, Optional[float]]]:
     """
-    حساب RS Ratings و Change% لكل الفترات
+    Compute RS Ratings and Change% across every window
     """
-    print(f"📊 جلب بيانات time series لـ {len(symbols)} سهم...")
+    print(f"📊 Fetching time series data for {len(symbols)} symbols...")
     all_data = await fetch_all_stocks_time_series(symbols)
     
     if not all_data:
         print("❌ No data fetched")
         return {}
     
-    print(f"✅ تم جلب بيانات {len(all_data)} سهم")
+    print(f"✅ Fetched data for {len(all_data)} symbols")
     
-    # حساب RS و Change لكل فترة
+    # RS and Change per window
     rs_results = {}
     change_results = {}
     
     for period_name, days in PERIODS.items():
-        print(f"\n📈 حساب RS و Change لـ {period_name} ({days} أيام)...")
+        print(f"\n📈 Computing RS and Change for {period_name} ({days} days)...")
         rs_scores, change_scores = calculate_rs_for_period(all_data, days, period_name)
         rs_results[period_name] = rs_scores
         change_results[period_name] = change_scores
     
-    # تنسيق النتائج النهائية
+    # Shape the final result
     final_results = {}
     for symbol in symbols:
         final_results[symbol] = {}
@@ -160,5 +158,5 @@ async def calculate_all_rs_ratings(symbols: List[str]) -> Dict[str, Dict[str, Op
             final_results[symbol][f"rs_{period_name}"] = rs_results.get(period_name, {}).get(symbol)
             final_results[symbol][f"change_{period_name}"] = change_results.get(period_name, {}).get(symbol)
     
-    print(f"\n✅ تم حساب RS و Change لـ {len(final_results)} سهم")
+    print(f"\n✅ Computed RS and Change for {len(final_results)} symbols")
     return final_results

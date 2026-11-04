@@ -561,7 +561,10 @@ async def get_system_stats(
     try:
         total_users = db.query(User).count()
         pending_users = db.query(User).filter(User.is_approved == False).count()  # noqa: E712
-        stock_keys = await redis_cache.keys("tadawul_stocks:*")
+        # scan_iter (cursor, non-blocking) — the blocking KEYS alias in
+        # RedisCache was O(N) over the whole keyspace on a shared
+        # instance, i.e. an admin page could stall live traffic (Phase 7).
+        stock_keys = await redis_cache.scan_iter("tadawul_stocks:*")
         redis_ok = bool(redis_cache.is_connected)
 
         return {

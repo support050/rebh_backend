@@ -16,6 +16,28 @@ from app.services.rs_line import calculate_rs_line, df_to_response
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(message)s')
 logger = logging.getLogger(__name__)
 
+
+# [Batch-2 L1/L3] print→logging bridge. Module-local rebinding of `print` so this
+# script's console output flows through the pipeline's logging (levels + handler)
+# instead of raw stdout; the builtin `print` is untouched in every other module.
+# Spacer lines dropped; ✅/❌/⚠️→INFO/ERROR/WARNING, routine detail→DEBUG.
+def _print_to_log(*args, sep=" ", end="\n", file=None, flush=False):
+    msg = sep.join(str(a) for a in args).strip()
+    if not msg or set(msg) <= set("=-*"):
+        return
+    if "❌" in msg or "Error" in msg:
+        logger.error(msg)
+    elif "⚠️" in msg:
+        logger.warning(msg)
+    elif "✅" in msg:
+        logger.info(msg)
+    else:
+        logger.debug(msg)
+
+
+print = _print_to_log
+
+
 def create_table_if_not_exists(db: Session):
     # Using text for raw SQL
     db.execute(text("""

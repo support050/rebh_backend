@@ -16,6 +16,7 @@ Equivalent of `python -m breadth.daily`, but input = live database.
 from __future__ import annotations
 
 import json
+import os
 import re
 import subprocess
 import sys
@@ -238,12 +239,73 @@ def _run_loader(snapshot_html=None, snapshot_only=False) -> dict:
     return rep
 
 
+CACHE_BUST_JOB_KEY = "breadth_daily"
+
+
+def _bust_cache() -> dict:
+    """Invalidate THIS job's keyspace (rebh:breadth:*), locally and remotely.
+
+    Why the job does it instead of trusting the caller: the API serves the
+    breadth payload from Redis (TTL 3 days is only the safety net), and the
+    nightly cron / admin Run Now bust it from the parent process — which works
+    there because the parent runs on Render, next to Render's Redis. A human at a
+    terminal is NOT next to that cache: the machine's REDIS_URL is a local
+    instance, so the parent-side bust evicts keys nobody reads and the site keeps
+    showing yesterday's breadth for up to three days. The only thing that worked
+    was opening a Render shell and running flush_all() by hand.
+
+    cache_bust covers both places from one call: it evicts the local cache, and
+    when the local cache is unreachable it POSTs to the deployed API's
+    /api/internal/cache/bust door (X-Internal-Key), which evicts there. No Redis
+    credentials ever leave the deploy.
+
+    Like the job_runs ledger, bookkeeping must never fail a completed rebuild: the
+    tables are already committed and the TTL is the backstop, so every error here
+    is printed and folded into the report — never raised. It must be LOUD, though:
+    swallowing this as "skipped, safe in dev mode" is the bug being fixed.
+    """
+    try:
+        sys.path.insert(0, str(BACKEND_DIR))
+        from app.core import cache_bust
+    except Exception as exc:                       # noqa: BLE001 — job beats cache
+        msg = f"cache_bust unavailable: {type(exc).__name__}: {exc}"
+        print(f"[cache] {msg} — rebh:breadth:* keeps the previous payload until its TTL",
+              file=sys.stderr, flush=True)
+        return {"ok": False, "summary": msg}
+
+    try:
+        rep = cache_bust.bust(job=CACHE_BUST_JOB_KEY)
+    except Exception as exc:                       # noqa: BLE001
+        msg = f"cache bust raised {type(exc).__name__}: {exc}"
+        print(f"[cache] {msg}", file=sys.stderr, flush=True)
+        return {"ok": False, "summary": msg}
+
+    for ch in rep["channels"]:
+        if ch["reachable"]:
+            print(f"[cache] busted via {ch['channel']} target={ch.get('target')} "
+                  f"deleted={ch.get('deleted')}", flush=True)
+        else:
+            print(f"[cache] FAILED via {ch['channel']} target={ch.get('target')} "
+                  f"error={ch.get('error')}", file=sys.stderr, flush=True)
+    if not rep["ok"]:
+        print("[cache] CACHE NOT BUSTED — readers keep the previous payload until the "
+              "TTL lapses (3 days). Fix: set CACHE_BUST_API_URL and INTERNAL_API_KEY in "
+              "backend/.env, or run `python -m app.core.cache_bust --job breadth_daily` "
+              "from a Render shell.", file=sys.stderr, flush=True)
+    return {"ok": bool(rep["ok"]), "summary": rep["summary"],
+            "patterns": rep["patterns"]}
+
+
 def snapshot_only() -> dict:
     """Refresh breadth_data from the latest generated dashboard (no recompute)."""
     html = ENGINE_DIR / "storage" / "reports" / "breadth_dashboard.html"
     if not html.exists():
         raise SystemExit(f"no dashboard to snapshot at {html} — run breadth_job without --snapshot-only")
-    return _run_loader(snapshot_html=html, snapshot_only=True)
+    rep = _run_loader(snapshot_html=html, snapshot_only=True)
+    # breadth_data is what the API caches, so a snapshot-only refresh has to
+    # invalidate it too — same rule as the full run.
+    rep["cache_bust"] = _bust_cache()
+    return rep
 
 
 def _load_eps_growth_map() -> dict | None:
@@ -317,12 +379,64 @@ def run(skip_load: bool = False) -> dict:
                                    if k != "breadth_data"}
         status["data_snapshot"] = status["loader"].get("breadth_data")
         print("[loader] " + json.dumps(status["loader"], default=str), flush=True)
+        # The snapshot row readers actually fetch is breadth_data, and the API
+        # caches it as rebh:breadth:* — so the bust belongs HERE, after the write,
+        # not only in whatever parent happened to spawn this file. See _bust_cache().
+        status["cache_bust"] = _bust_cache()
     return status
+
+
+# A run opened by someone else's ledger row must not open a second one. The cron
+# wrapper (scheduler.job_breadth_daily) and Run Now (job_runner._execute) both
+# wrap this same body and set this env var when they spawn the script, so only a
+# human at a terminal records here. Until 2026-11-03 a terminal run recorded
+# NOTHING, which is how an admin card kept showing a reload-killed 'running'
+# corpse hours after the tables had actually been rebuilt from a terminal.
+PARENT_RECORDED_ENV = "JOB_RUN_PARENT_RECORDED"      # must match job_tracking.py
+
+
+def _parent_owns_the_ledger_row() -> bool:
+    return bool(os.getenv(PARENT_RECORDED_ENV))
+
+
+def _run_logged() -> dict:
+    """`run()` as a real job_runs row, for terminal use only.
+
+    Bookkeeping must never be the reason a nightly rebuild fails: when the
+    ledger cannot be reached the job still runs, untracked, exactly as it always
+    did — hence the import and the row live here rather than in `run()` itself.
+    """
+    skip_load = "--skip-load" in sys.argv
+    if _parent_owns_the_ledger_row():
+        return run(skip_load=skip_load)
+    if skip_load:
+        # A partial run: the engine computed, nothing was written to the breadth
+        # tables. Recording it as a success would tell the card a lie.
+        print("[note] --skip-load is a partial run — not recorded in job_runs",
+              file=sys.stderr)
+        return run(skip_load=True)
+
+    try:
+        sys.path.insert(0, str(BACKEND_DIR))
+        from app.services.job_tracking import track_job, with_result_handling
+    except Exception as exc:                       # noqa: BLE001 — job beats ledger
+        print(f"[warn] job_runs unavailable ({type(exc).__name__}: {exc}) "
+              f"— this run is NOT recorded", file=sys.stderr)
+        return run(skip_load=False)
+
+    with track_job("breadth_daily", "manual") as handle:
+        out = run(skip_load=False)
+        with_result_handling(handle, out)          # a dict-style failure marks 'failed'
+        if handle.rows_written is None:
+            # The job's own report: the per-date indicator series it rebuilt
+            # (6418 rows on today's full history). Read from the output, not summed.
+            handle.rows_written = (out.get("indicators") or {}).get("rows")
+    return out
 
 
 if __name__ == "__main__":
     if "--snapshot-only" in sys.argv:
         print(json.dumps(snapshot_only(), ensure_ascii=False))
     else:
-        out = run(skip_load="--skip-load" in sys.argv)
+        out = _run_logged()
         print(json.dumps(out, indent=2, ensure_ascii=False, default=str))

@@ -12,6 +12,7 @@ from app.core.cache_helpers import (
     make_technical_screener_key
 )
 from app.core.cache_config import CACHE_TTL_SCREENERS
+from app.core.cache_guard import guard_cache_key, guard_pagination
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +35,20 @@ async def get_technical_screener_data(
     Cached with 10-minute TTL.
     """
     cache_key = make_technical_screener_key(target_date, latest_only, symbol, min_score, passing_only, limit, offset)
+    # Part 2 / Phase 5: every argument above lands inside the key, so one crafted
+    # ``target_date`` could otherwise mint an unkeyable namespace entry (a glob in
+    # it would poison every ``technical:*`` sweep). Both checks answer before the
+    # cache and before the query. ``limit``/``offset`` already carry FastAPI
+    # ceilings; guard_pagination is the backstop for a route that forgets one.
+    #
+    # ``symbol`` is deliberately NOT run through guard_symbol here. That table is
+    # stock_indicators, which the known-symbol catalog does not cover, so an
+    # indicator row for a symbol missing from prices/static_stock_info/tasi would
+    # turn a legitimate 200 + rows into a 404 — a guard that rejects real data
+    # costs more than the junk it stops. The catalog gate is applied only on the
+    # routes whose rows come FROM a catalog table (see prices.py).
+    guard_pagination(limit, offset)
+    guard_cache_key(cache_key)
     
     async def fetch_screener():
         query = db.query(StockIndicator)

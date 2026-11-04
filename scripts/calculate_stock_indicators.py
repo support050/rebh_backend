@@ -31,6 +31,34 @@ from app.models.stock_indicators import StockIndicator
 from scripts.indicators_data_service import IndicatorsDataService
 from scripts.calculate_rsi_indicators import convert_to_float, get_val
 
+import logging
+
+logger = logging.getLogger(__name__)
+
+
+# [Batch-2 L1/L3] print→logging bridge. This script historically used raw `print`
+# calls, which bypass the pipeline's logging level/format/handler. Redefining the
+# module-level `print` routes every call through the logger WITHOUT touching the
+# ~35 call sites. Pure spacer lines ("=" * 60 …) are dropped; ✅/❌/⚠️ map to
+# INFO/ERROR/WARNING and routine detail goes to DEBUG (quiet under an INFO root).
+# This rebinding is module-local — Python resolves `print` from THIS module's
+# globals first, so the builtin is untouched everywhere else.
+def _print_to_log(*args, sep=" ", end="\n", file=None, flush=False):
+    msg = sep.join(str(a) for a in args).strip()
+    if not msg or set(msg) <= set("=-*"):
+        return
+    if "❌" in msg or "Error" in msg:
+        logger.error(msg)
+    elif "⚠️" in msg:
+        logger.warning(msg)
+    elif "✅" in msg:
+        logger.info(msg)
+    else:
+        logger.debug(msg)
+
+
+print = _print_to_log
+
 
 def resolve_target_date(db: Session, target_date: date = None):
     """Resolve the target date for calculations."""
@@ -225,10 +253,16 @@ def _bulk_upsert_indicators(save_db, rows) -> int:
                 except Exception as batch_err:
                     _rollback(save_db)
                     if attempt == 0:
-                        # Re-establish connection, then retry this batch
+                        # Re-establish the connection, then retry this batch.
+                        # [S1] Session.close() releases the (possibly dead)
+                        # connection back to the pool; the SAME session object
+                        # stays valid and will check out a fresh, pool_pre_ping-
+                        # validated connection on the next execute — and the
+                        # caller's `finally: save_db.close()` still closes this
+                        # exact object. Opening a *new* SessionLocal() here (the
+                        # old code) orphaned the reopened session — the caller
+                        # closed the ORIGINAL, so the new one leaked until GC.
                         save_db.close()
-                        from app.core.database import SessionLocal
-                        save_db = SessionLocal()
                     else:
                         # الفشل التاني: رجوع للكتابة صف بصف عشان نتجنّش فقدان الدفعة
                         print(f"⚠️  Batch upsert failed ({type(batch_err).__name__}) — "

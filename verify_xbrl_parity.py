@@ -7,7 +7,7 @@ backend_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, backend_dir)
 
 from app.services.xbrl_data_service import get_company
-from app.services.terminal_service import get_company_unified_page_data
+from app.services.terminal.forensic_service import get_company_unified_page_data
 
 def verify_company_xbrl_parity(symbol="1321"):
     print(f"\n=======================================================")

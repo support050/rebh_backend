@@ -26,6 +26,7 @@ from sqlalchemy import func
 
 from app.core.database import SessionLocal
 from app.models.economic_indicators import TreasuryYieldCurve
+from app.scrapers.scrapling_fetch import http_get as scrapling_http_get
 
 logger = logging.getLogger(__name__)
 
@@ -67,6 +68,69 @@ TARGET_COLUMNS = {
 }
 
 
+# Sanity window for a stored yield, in percent. Treasury par curve rates have
+# always lived inside this band (max ~19% in 1981, min ~0% post-2008); a value
+# outside it means the parse latched onto the wrong cell — drop the cell, never
+# the whole row, and log so the Runbook shows a warning.
+YIELD_MIN, YIELD_MAX = -2.0, 25.0
+
+
+def _to_yield(val_str: str) -> Optional[float]:
+    """Parse one CSV cell into a guarded float yield (None = absent/invalid)."""
+    if val_str in ("", "N/A", "ND", "."):
+        return None
+    try:
+        v = float(val_str)
+    except ValueError:
+        return None
+    if not (YIELD_MIN <= v <= YIELD_MAX):
+        logger.warning(f"  ⚠️ yield {v} outside sane window — cell dropped")
+        return None
+    return v
+
+
+def _fetch_text(url: str, headers: dict) -> tuple[Optional[str], int]:
+    """Fetch a monthly CSV body.
+
+    Measured 2026-11-03: home.treasury.gov answers plain `requests` with 200 +
+    the full CSV, so requests stays the PRIMARY path (cheap, no browser stack).
+    If the site ever starts 403-ing this server — as Akamai does for CME — the
+    shared Scrapling layer rotates real TLS fingerprints (chrome120, chrome,
+    safari180, …) and a bare curl_cffi pass covers images where `scrapling`
+    itself is missing. Returns (text, status); text None means unusable.
+    """
+    try:
+        resp = requests.get(url, headers=headers, timeout=30)
+        if resp.status_code == 200 and resp.text.lstrip().startswith("Date"):
+            return resp.text, 200
+        if resp.status_code == 404:
+            return None, 404
+        logger.warning(f"  ⚠️ requests got status={resp.status_code} "
+                       f"len={len(resp.text):,} — falling through to Scrapling")
+    except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as e:
+        logger.warning(f"  ⚠️ requests network error: {type(e).__name__} — "
+                       f"falling through to Scrapling")
+
+    # Fallback 1: Scrapling Fetcher (curl_cffi TLS impersonation, rotating).
+    res = scrapling_http_get(url, timeout=30, extra_headers=headers)
+    if res is not None and res.ok:
+        return res.text, res.status
+
+    # Fallback 2: bare curl_cffi — survives images where scrapling is absent
+    # (curl_cffi is its dependency, measured 2026-11-01 on gurufocus).
+    try:
+        from curl_cffi import requests as cc_requests
+        resp = cc_requests.get(url, headers=headers, impersonate="chrome",
+                               timeout=30)
+        if resp.status_code == 200 and resp.text.lstrip().startswith("Date"):
+            return resp.text, 200
+        if resp.status_code == 404:
+            return None, 404
+    except Exception as e:
+        logger.warning(f"  ⚠️ curl_cffi fallback failed: {type(e).__name__}")
+    return None, 0
+
+
 def fetch_treasury_csv(year: int, month: int) -> list[dict]:
     """Fetch one month of daily yield curve data, extracting only target columns."""
     yyyymm = f"{year}{month:02d}"
@@ -80,11 +144,12 @@ def fetch_treasury_csv(year: int, month: int) -> list[dict]:
     }
 
     for attempt in range(1, 4):
-        try:
-            resp = requests.get(url, headers=headers, timeout=30)
-            resp.raise_for_status()
-
-            reader = csv.DictReader(io.StringIO(resp.text))
+        text, status = _fetch_text(url, headers)
+        if status == 404:
+            logger.info(f"  ℹ️ No data for {year}-{month:02d} (404)")
+            return []
+        if text is not None:
+            reader = csv.DictReader(io.StringIO(text))
             rows = []
             for row in reader:
                 date_str = row.get("Date", "").strip()
@@ -98,15 +163,10 @@ def fetch_treasury_csv(year: int, month: int) -> list[dict]:
                 record = {"report_date": report_date}
                 has_any = False
                 for csv_col, db_field in TARGET_COLUMNS.items():
-                    val_str = row.get(csv_col, "").strip()
-                    if val_str in ("", "N/A", "ND", "."):
-                        record[db_field] = None
-                    else:
-                        try:
-                            record[db_field] = float(val_str)
-                            has_any = True
-                        except ValueError:
-                            record[db_field] = None
+                    val = _to_yield(row.get(csv_col, "").strip())
+                    record[db_field] = val
+                    if val is not None:
+                        has_any = True
 
                 if has_any:
                     rows.append(record)
@@ -114,24 +174,12 @@ def fetch_treasury_csv(year: int, month: int) -> list[dict]:
             logger.info(f"  ✅ {year}-{month:02d}: {len(rows)} records with target data")
             return rows
 
-        except requests.exceptions.HTTPError as e:
-            if e.response is not None and e.response.status_code == 404:
-                logger.info(f"  ℹ️ No data for {year}-{month:02d} (404)")
-                return []
-            if attempt < 3:
-                logger.warning(f"  ⚠️ Attempt {attempt} failed: {e}. Retrying...")
-                time.sleep(attempt * 2)
-            else:
-                logger.error(f"  ❌ Failed {year}-{month:02d} after 3 attempts: {e}")
-                return []
-
-        except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as e:
-            if attempt < 3:
-                logger.warning(f"  ⚠️ Network error attempt {attempt}: {e}. Retrying...")
-                time.sleep(attempt * 2)
-            else:
-                logger.error(f"  ❌ Network error for {year}-{month:02d}: {e}")
-                return []
+        if attempt < 3:
+            logger.warning(f"  ⚠️ Attempt {attempt} failed for {year}-{month:02d}. Retrying...")
+            time.sleep(attempt * 2)
+        else:
+            logger.error(f"  ❌ Failed {year}-{month:02d} after 3 attempts (all transports)")
+            return []
 
     return []
 
@@ -235,17 +283,30 @@ def scrape_treasury_gov(mode: str = "incremental") -> dict:
                     total_skipped += 1
                     continue
 
-                # Atomic UPSERT using ON CONFLICT on report_date
+                # Atomic UPSERT using ON CONFLICT on report_date. The EXISTS
+                # probe only picks the log counter — the statement itself
+                # decides insert-vs-update, so a race still cannot duplicate.
+                exists = (db.query(TreasuryYieldCurve.id)
+                            .filter(TreasuryYieldCurve.report_date == rd)
+                            .first()) is not None
+
                 stmt = pg_insert(TreasuryYieldCurve).values(
                     report_date=rd,
+                    updated_at=func.now(),
                     **update_values
                 )
+                # Core pg_insert bypasses the ORM onupdate hook, so stamp
+                # freshness explicitly inside the DO UPDATE clause.
                 stmt = stmt.on_conflict_do_update(
                     index_elements=['report_date'],
-                    set_=update_values
+                    set_={**update_values,
+                          "updated_at": func.now()}
                 )
                 db.execute(stmt)
-                total_updated += 1
+                if exists:
+                    total_updated += 1
+                else:
+                    total_inserted += 1
 
             db.commit()
             time.sleep(0.5)  # Be polite to Treasury servers

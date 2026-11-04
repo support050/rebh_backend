@@ -14,6 +14,12 @@ engine = create_engine(
     pool_recycle=1800,
     pool_pre_ping=True,
     connect_args={
+        # Fail fast when the line to Render's Postgres black-holes (observed
+        # 2026-11-03 while concurrent scraper jobs ran from home): without this
+        # psycopg2 waits on the OS TCP timeout (minutes per IP), the anyio
+        # threadpool fills with hung connects and the ENTIRE API stalls —
+        # browsers show blank pages until the link recovers.
+        "connect_timeout": 10,
         "keepalives": 1,
         "keepalives_idle": 30,
         "keepalives_interval": 10,

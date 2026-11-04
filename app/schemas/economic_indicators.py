@@ -18,6 +18,29 @@ class EconomicIndicatorResponse(EconomicIndicatorBase):
     class Config:
         from_attributes = True
 
+
+class FredSeriesMetadataResponse(BaseModel):
+    """Persisted per-series FRED metadata (table fred_series_metadata)."""
+    indicator_code: str
+    series_id: Optional[str] = None
+    title: Optional[str] = None
+    units: Optional[str] = None
+    frequency: Optional[str] = None
+    seasonal_adjustment: Optional[str] = None
+    source_agency: Optional[str] = None
+    fred_url: Optional[str] = None
+    latest_observation_date: Optional[date] = None
+    latest_observation_value: Optional[float] = None
+    last_updated_time: Optional[str] = None
+    next_release_date: Optional[date] = None
+    release_id: Optional[int] = None
+    release_calendar_url: Optional[str] = None
+    notes: Optional[str] = None
+    updated_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
 class TreasuryYieldCurveResponse(BaseModel):
     id: int
     report_date: date

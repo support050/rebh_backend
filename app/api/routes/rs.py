@@ -21,6 +21,7 @@ from app.core.cache_helpers import (
     make_rs_history_key,
     make_rs_advanced_key,
 )
+from app.core.cache_guard import guard_cache_key
 from app.core.cache_config import (
     CACHE_TTL_SCREENERS,
     CACHE_TTL_RS_HISTORY,
@@ -260,6 +261,15 @@ async def get_rs_history(
         from_date.isoformat() if from_date else None,
         to_date.isoformat() if to_date else None
     )
+    # Part 2 / Phase 5. Shape first (free), because ``symbol`` is a raw path
+    # segment: without this a caller could embed a glob or an over-long string in
+    # the key. cache_empty=True then changes what happens to the empty answer: it
+    # used to be stored as [] for the full 3-day TTL, so a symbol whose history
+    # landed later stayed blank on screen for days. Now it expires in
+    # NEGATIVE_CACHE_TTL (60 s), which also caps the repeat-query cost at one
+    # single-flight-protected query per minute per unknown code. 200 + [] stays
+    # 200 + []: only the staleness window and the DB load move, not the status.
+    guard_cache_key(cache_key)
     
     async def fetch_rs_history():
         symbol_str = str(symbol).strip()
@@ -278,6 +288,7 @@ async def get_rs_history(
     result = await cache_read_through(
         cache_key,
         CACHE_TTL_RS_HISTORY,
-        fetch_rs_history
+        fetch_rs_history,
+        cache_empty=True,
     )
     return result

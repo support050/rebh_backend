@@ -39,6 +39,12 @@ logger = logging.getLogger(__name__)
 VALID_STATUS = ("running", "success", "failed")
 VALID_TRIGGER = ("cron", "manual", "admin")
 
+# Env var a parent sets on a subprocess it launches AFTER already opening the
+# job_runs row (the cron wrapper and the Run Now dispatcher both do). The child
+# records itself only when a human ran it from a terminal: without this marker
+# every nightly fire and every click would write a second row for one run.
+PARENT_RECORDED_ENV = "JOB_RUN_PARENT_RECORDED"
+
 # Keys a job's return value may use to report how many rows it touched.
 _ROW_KEYS = ("rows_written", "rows", "records", "record_count", "count", "total")
 # Keys that carry the failure reason when a job returns a dict instead of raising.

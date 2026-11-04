@@ -4,13 +4,12 @@ from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-from webdriver_manager.chrome import ChromeDriverManager
 import pandas as pd
 import time
 import logging
 import os
 
-# إعداد الـ Logging
+# Logging setup
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -34,22 +33,23 @@ def _apply_client_timeout(driver):
 
 def build_driver(headless=True):
     """
-    إعداد متصفح كروم بنفس إعدادات السكريبت القديم
-    مع دعم Render/Docker deployment
+    Build the Chrome WebDriver with the same options as the legacy script,
+    plus Render/Docker deployment support.
     """
     import shutil
     
-    # Debug: Log environment variables for troubleshooting
+    # Environment diagnostics are kept visible on purpose: they are the first
+    # thing you read when a driver fails to start on a new machine.
     chrome_bin_env = os.environ.get('CHROME_BIN')
     chromedriver_env = os.environ.get('CHROMEDRIVER_PATH')
-    logger.info(f"🔍 DEBUG: CHROME_BIN env = {chrome_bin_env}")
-    logger.info(f"🔍 DEBUG: CHROMEDRIVER_PATH env = {chromedriver_env}")
+    logger.info(f"DEBUG: CHROME_BIN env = {chrome_bin_env}")
+    logger.info(f"DEBUG: CHROMEDRIVER_PATH env = {chromedriver_env}")
     
-    # Check if the paths exist
+    # Check whether the Render Chrome/ChromeDriver paths exist
     render_chrome = '/opt/render/project/.chrome/chrome-linux64/chrome'
     render_driver = '/opt/render/project/.chrome/chromedriver-linux64/chromedriver'
-    logger.info(f"🔍 DEBUG: Render Chrome exists = {os.path.exists(render_chrome)}")
-    logger.info(f"🔍 DEBUG: Render ChromeDriver exists = {os.path.exists(render_driver)}")
+    logger.info(f"DEBUG: Render Chrome exists = {os.path.exists(render_chrome)}")
+    logger.info(f"DEBUG: Render ChromeDriver exists = {os.path.exists(render_driver)}")
     
     options = Options()
     
@@ -59,7 +59,7 @@ def build_driver(headless=True):
     # of the page load that were blowing the 120s chromedriver read timeout.
     options.page_load_strategy = "eager"
     
-    # إعدادات أساسية للاستقرار
+    # Baseline stability flags
     options.add_argument("--no-sandbox")
     options.add_argument("--disable-dev-shm-usage")
     options.add_argument("--disable-gpu")
@@ -91,7 +91,7 @@ def build_driver(headless=True):
     if headless:
         options.add_argument("--headless=new")
     
-    # البحث عن Chrome binary
+    # Locate the Chrome binary
     chrome_bin = None
     
     # 1. Check environment variables first
@@ -126,6 +126,9 @@ def build_driver(headless=True):
             '/snap/bin/chromium',
             # Render apt buildpack path
             '/app/.apt/usr/bin/google-chrome',
+            # Windows default installs (Chrome is rarely on PATH there)
+            r'C:\Program Files\Google\Chrome\Application\chrome.exe',
+            r'C:\Program Files (x86)\Google\Chrome\Application\chrome.exe',
         ]
         for path in linux_chrome_paths:
             if os.path.exists(path):
@@ -161,6 +164,19 @@ def build_driver(headless=True):
                 chromedriver_path = path
                 break
 
+    # [Perf] Resolve the driver from the LOCAL webdriver-manager cache before any
+    # network call. ChromeDriverManager().install() asks Google for the latest
+    # driver version on every cold call; the binaries are already on disk under
+    # ~/.wdm from previous runs, and the version-matched pick avoids the
+    # "session not created" mismatch error.
+    if not chromedriver_path:
+        try:
+            from app.core.chromedriver_cache import resolve_cached_chromedriver
+            chromedriver_path = resolve_cached_chromedriver(chrome_bin)
+        except Exception as cache_err:
+            logger.debug("Local ChromeDriver cache lookup failed: %s", cache_err)
+            chromedriver_path = None
+
     # If we found a specific ChromeDriver, try using it first
     if chromedriver_path:
         try:
@@ -172,7 +188,8 @@ def build_driver(headless=True):
         except Exception as e:
             logger.warning(f"⚠️ Explicit ChromeDriver failed, falling back to manager: {e}")
 
-    # Fallback: webdriver-manager (with in-memory path caching to prevent repeated network calls)
+    # Last resort: webdriver-manager (network). Reached only when nothing is
+    # cached locally; the resolved path is memoized to avoid repeat lookups.
     global _CACHED_CHROMEDRIVER_PATH
     try:
         if '_CACHED_CHROMEDRIVER_PATH' not in globals() or not _CACHED_CHROMEDRIVER_PATH or not os.path.exists(_CACHED_CHROMEDRIVER_PATH):
@@ -189,7 +206,7 @@ def build_driver(headless=True):
 
 def clean_number(text):
     """
-    تنظيف الأرقام من الفواصل والنسب المئوية
+    Strip thousands separators and percent signs, return a float.
     """
     if not text:
         return 0.0
@@ -201,7 +218,7 @@ def clean_number(text):
 
 def scrape_daily_details(headless=True):
     """
-    سحب البيانات اليومية من صفحة التقرير التفصيلي
+    Scrape the daily details table from the Tadawul DetailedDaily report page.
     """
     url = "https://www.saudiexchange.sa/Resources/Reports-v2/DetailedDaily_en.html"
     driver = None
@@ -214,12 +231,12 @@ def scrape_daily_details(headless=True):
         logger.info(f"🌍 Navigating to {url}")
         driver.get(url)
         
-        # استنى لحد ما الجدول يظهر في الصفحة (الصفحة بتحمل بـ JavaScript)
+        # Wait for the table to render (the page is loaded by JavaScript)
         wait = WebDriverWait(driver, 45)
         for attempt in range(3):
             try:
                 wait.until(EC.presence_of_element_located((By.TAG_NAME, "table")))
-                time.sleep(3)  # هامش أمان لتحميل الصفوف بالكامل
+                time.sleep(3)  # safety margin so all rows finish rendering
                 tables = driver.find_elements(By.TAG_NAME, "table")
                 if tables and len(tables) > 0:
                     break
@@ -237,16 +254,16 @@ def scrape_daily_details(headless=True):
         target_table = None
         max_rows = 0
         
-        # البحث عن جدول الشركات (عادة هو أكبر جدول)
+        # Find the companies table (usually the largest one)
         for tbl in tables:
             try:
                 rows = tbl.find_elements(By.TAG_NAME, "tr")
                 row_count = len(rows)
                 logger.info(f"Table with {row_count} rows found.")
                 
-                # جدول الشركات لازم يكون فيه صفوف كتير (أكتر من 50 مثلاً)
+                # The companies table must have many rows (more than ~50)
                 if row_count > 50:
-                    # فحص إضافي: هل يحتوي على كلمة Symbol أو Company؟
+                    # Extra check: does it contain the word Symbol or Company?
                     if "Symbol" in tbl.text or "Company" in tbl.text:
                         if row_count > max_rows:
                             max_rows = row_count
@@ -260,14 +277,14 @@ def scrape_daily_details(headless=True):
             
         logger.info(f"✅ Target table identified with {max_rows} rows.")
         
-        # محاولة عمل Scroll للجدول المستهدف
+        # Try scrolling the target table into view
         try:
             driver.execute_script("arguments[0].scrollIntoView();", target_table)
             time.sleep(1)
         except:
             pass
 
-        # استخراج الصفوف من الجدول المختار
+        # Extract rows from the selected table
         tbody = target_table.find_element(By.TAG_NAME, "tbody")
         rows = tbody.find_elements(By.TAG_NAME, "tr")
         
@@ -281,10 +298,10 @@ def scrape_daily_details(headless=True):
                 continue
             
             try:
-                # العمود الأول رمز أو اسم
+                # First column is either the symbol or the company name
                 col0_text = cols[0].text.strip()
                 
-                # لو العمود الأول رقم، يبقى ده الرمز (Symbol)
+                # If the first column is numeric, it is the Symbol
                 if col0_text.isdigit():
                     symbol = col0_text
                     company = cols[1].text.strip()
@@ -326,5 +343,5 @@ def scrape_daily_details(headless=True):
 
 if __name__ == "__main__":
     # Test the scraper
-    results = scrape_daily_details(headless=False) # Headless=False عشان تشوف المتصفح وهو شغال
+    results = scrape_daily_details(headless=False)  # headless=False so you can watch the browser work
     print(f"Sample data: {results[:2] if results else 'No data'}")

@@ -29,12 +29,19 @@ class CSRFMiddleware(BaseHTTPMiddleware):
                 "/api/public",
                 "/api/ingest",
                 "/api/reports/admin",
+                # Machine door for cache busting (app/api/routes/cache.py
+                # .internal_router). CSRF is meaningless here: the route is not
+                # cookie-authenticated, so a forged cross-site form carries no
+                # credential. Authorization is the X-Internal-Key header, and
+                # the limiter caps key guessing at 20 requests/minute.
+                "/api/internal",
             )
             # /api/rebh and /api/engine used to be listed here. They are not:
             # both mount cookie-authenticated user writes (analyst notes, trade
             # journal, watchlist, council checklists), so exempting them left the
             # whole surface resting on `SameSite=Lax` alone. Machine callers use
-            # /api/scraper and /api/ingest (X-Internal-Key), which stay exempt.
+            # /api/scraper, /api/ingest and /api/internal (X-Internal-Key), which
+            # stay exempt.
             if not any(path_for_match.startswith(prefix) for prefix in excluded_prefixes):
                 csrf_header = request.headers.get("x-csrf-token")
                 csrf_cookie = request.cookies.get(CSRF_COOKIE_NAME)

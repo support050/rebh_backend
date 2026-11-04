@@ -485,16 +485,21 @@ def export_rs_hub_data(target_date: date = None):
 
         # Invalidate the API-side Redis copy (rs_hub:latest_data, TTL 24h) so
         # GET /rs/hub-data rebuilds from the freshly written file instead of
-        # serving yesterday's snapshot for up to a full day.
+        # serving yesterday's snapshot for up to a full day. Routed through
+        # cache_bust rather than a local unlink(): the key the API reads lives in
+        # the deployed Redis, so when this machine cannot reach it the script now
+        # asks the server to evict it over the internal HTTP door.
         try:
-            import redis as sync_redis
-            redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
-            _r = sync_redis.from_url(redis_url, decode_responses=True, socket_timeout=5)
-            _r.unlink("rs_hub:latest_data")   # non-blocking eviction
-            _r.close()
-            logger.info("🗑️ Invalidated rs_hub:latest_data cache key")
-        except Exception as cache_err:
-            logger.warning(f"⚠️ rs_hub cache invalidation skipped: {cache_err}")
+            from app.core import cache_bust
+            cache_report = cache_bust.bust(job="export_rs_hub_data")
+        except Exception as cache_err:                            # noqa: BLE001
+            cache_report = {"ok": False, "summary": f"{type(cache_err).__name__}: {cache_err}"}
+        if cache_report["ok"]:
+            logger.info("🗑️ rs_hub cache busted: %s", cache_report["summary"])
+        else:
+            logger.warning("⚠️ CACHE NOT BUSTED (rs_hub) — GET /rs/hub-data keeps "
+                           "serving the previous payload until its TTL (24h): %s",
+                           cache_report["summary"])
         
         # 11. رفع الملف إلى Cloudflare R2
         r2_account_id = os.getenv("R2_ACCOUNT_ID")

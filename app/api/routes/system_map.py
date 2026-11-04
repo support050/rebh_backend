@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import logging
 import threading
+import time
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -49,11 +50,11 @@ logger = logging.getLogger(__name__)
 CACHE_TTL_SECONDS = IN_MEMORY_TTL_SYSTEM_MAP
 REGISTRY_FILE = "backend/app/system_registry.py"
 
-# Every probe runs inside its own transaction with this timeout, so one slow
-# query cannot hang the admin page (and cannot become a full scan on a big
-# table). MAX() on an indexed date column is an index scan; if an index is
-# missing in this environment the probe dies at 2.5 s and degrades to 'unknown'
-# instead of stalling the request.
+# The probes of one build share a single armed transaction (see _arm) carrying
+# this budget, so one slow query cannot hang the admin page (and cannot become
+# a full scan on a big table). MAX() on an indexed date column is an index scan;
+# if an index is missing in this environment the probe dies at 2.5 s and
+# degrades to 'unknown' instead of stalling the request.
 PROBE_TIMEOUT_MS = 2500
 # Branches per UNION ALL freshness probe. Chunked so one timeout (or one bad
 # column) costs a chunk, not the whole map.
@@ -75,8 +76,9 @@ _NEUTRAL = ("ok", "unknown", "untracked")
 _RANK = {"ok": 0, "untracked": 0, "unknown": 0, "late": 1, "bad": 2}
 
 _lock = threading.Lock()
+_REBUILDING = False              # one background refresh at a time (guarded by _lock)
 _CACHE: Dict[str, Any] = {"built_at": None, "systems": {}, "error": None,
-                          "queries": {}}
+                          "queries": {}, "ledger_missing": False}
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -119,30 +121,57 @@ def _worst(*statuses: str) -> str:
     return worst
 
 
-def _probe(db: Session, sql: str, timeout_ms: int = PROBE_TIMEOUT_MS, **params) -> Optional[List[tuple]]:
-    """One SELECT → rows, or None when it failed.
+def _arm(db: Session, timeout_ms: int = PROBE_TIMEOUT_MS) -> None:
+    """Open the one transaction a build's probes share, with the budget set once.
 
-    Two things happen here on purpose:
-      · db.rollback() first ⇒ every probe gets its OWN short transaction, so
-        `SET LOCAL statement_timeout` applies to exactly this statement and is
-        gone when the transaction ends (nothing leaks into the pooled
-        connection).
-      · the rollback on failure: a failed statement leaves the session in an
-        aborted transaction, and without this the *next* probe would fail too
-        and the whole snapshot would light up red for one missing table.
+    `SET LOCAL` lives for the whole transaction, so a single pragma covers every
+    SELECT that follows. Sending it per probe (the old shape) put THREE round
+    trips behind every query — rollback, pragma, SELECT — and against the live
+    Render Postgres each hop measured ~700 ms of pure latency: ~33 hops for an
+    11-query build, which was most of the 8 s the Runbook took to open. Armed
+    once, the build costs one hop per SELECT.
+
+    The shared transaction is also one consistent read snapshot, so the chunked
+    freshness probes cannot see a table mid-write between two of them.
     """
     try:
         db.rollback()
         db.execute(text("SET LOCAL statement_timeout = :ms"), {"ms": timeout_ms})
+    except SQLAlchemyError:
+        db.rollback()
+
+
+def _probe(db: Session, sql: str, timeout_ms: int = PROBE_TIMEOUT_MS, **params) -> Optional[List[tuple]]:
+    """One SELECT, in the already-armed transaction -> rows, or None on failure.
+
+    Two rules that must not be undone:
+      · the caller arms first (_arm). No pragma is sent here, which is what keeps
+        a build at one round trip per query.
+      · the rollback on failure: a dead statement leaves the session in an aborted
+        transaction, and without this the *next* probe would fail too and the
+        whole snapshot would light up red for one missing table. That rollback
+        ends the transaction, so the timeout is re-armed here for whatever is
+        still left to run — cost only on the path that already failed.
+    """
+    try:
         return [tuple(r) for r in db.execute(text(sql), params).fetchall()]
     except SQLAlchemyError as e:
-        db.rollback()
         logger.debug("system-map probe failed: %s", e)
+        db.rollback()
+        _arm(db, timeout_ms)
         return None
     except Exception as e:                              # driver-level surprises
-        db.rollback()
         logger.debug("system-map probe failed (non-SQLAlchemy): %s", e)
+        db.rollback()
+        _arm(db, timeout_ms)
         return None
+
+
+# ═════════════════════════════════════════════════════════════════════════════ 
+
+# Keeping the pragma at one per build is deliberate: 11 SELECTs at ~700 ms of
+# network latency each is the difference between an instant Runbook and an 8 s
+# one, so new probes must reuse the armed transaction, never re-arm themselves.
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -204,19 +233,61 @@ def _run_capability(job_name: str) -> Dict[str, Any]:
             "reason": "no callable registered for this job_name"}
 
 
+def _data_supersedes(owned: List[Dict[str, Any]],
+                     since: Optional[datetime]) -> Optional[str]:
+    """Newest data date, when the job's own tables prove a run the ledger missed.
+
+    ``job_runs`` can only ever see cron, Run Now and the Admin endpoints. Running
+    the script from a terminal — the very command printed on this card — opens no
+    row for most jobs (breadth_job.py self-records since 2026-11-03; the others
+    still do not), so a genuine failure can sit on the card long after the data
+    was rebuilt. The data is the ground truth, and the test is strict: every table
+    the job writes whose freshness was actually MEASURED must be un-stale, and the
+    newest of them must be on or after the run being judged. Anything less keeps
+    the ledger's verdict.
+
+    "Un-stale" means anything but ``late``/``bad`` — so a manual-only table with no
+    lag threshold (``eurodollar_futures``, status ``unknown`` because nothing is
+    expected of it) still counts, as long as a date was read from it. A table whose
+    probe timed out has no ``latest`` and is simply not evidence either way.
+    Returns the newest date seen (ISO) when the ledger was overtaken, else None.
+    """
+    measured = [t for t in owned if t["latest"]]
+    if not measured or any(t["status"] in ("late", "bad") for t in measured):
+        return None
+    # The LOWEST date among them, not the highest: "every table this job writes
+    # reaches at least this far" is the claim that actually proves the run
+    # happened, and a forward-dated table (weekly stages carry a period-end date)
+    # must not be allowed to speak for the daily ones.
+    through = min(t["latest"] for t in measured)
+    # Both sides are ISO strings, so ``<`` is a date comparison; ``latest`` may
+    # carry a time suffix when the registry's date column is a timestamp.
+    return None if since and through < since.date().isoformat() else through
+
+
 def _build_job(job: Dict[str, Any], last: Optional[Dict[str, Any]],
                failures_7d: int, stuck_running: int,
-               ledger_missing: bool, now: datetime) -> Dict[str, Any]:
+               ledger_missing: bool, now: datetime,
+               owned: Optional[List[Dict[str, Any]]] = None,
+               *, corpse: bool = False) -> Dict[str, Any]:
     """One job entry + its verdict.
 
     Rules (shown in the UI legend, derived from the Runbook spec):
       · never recorded             → bad   (no row since job_runs existed)
       · last run failed            → bad
-      · last run still 'running'   → late, or bad once past the age budget
-                                     (a killed process leaves the row open)
+      · last run still 'running'   → late while inside the runner's own
+                                     STALE_RUNNING_MINUTES, then a dead process
+                                     (a reload kills the Run Now thread mid-run).
+                                     A corpse of a previous server generation
+                                     (``corpse=True``) is judged dead at once.
       · success older than budget  → late up to 2× budget, bad beyond
       · success with 0 rows        → late (the process worked, wrote nothing)
       · untracked entry            → 'untracked'; never affects system health
+    The three ledger-only verdicts (never recorded / failed / 0 rows) are then
+    handed to ``_data_supersedes``: fresh tables outrank a stale ledger line, and
+    the row says WHY instead of flipping silently (``superseded: true``). An
+    abandoned 'running' row is judged the same way — it is a bookkeeping gap,
+    not a fact about the data.
     """
     budget = job["max_allowed_age_hours"]
     payload: Dict[str, Any] = {
@@ -228,11 +299,20 @@ def _build_job(job: Dict[str, Any], last: Optional[Dict[str, Any]],
         "max_allowed_age_hours": budget,
         "writes": job["writes"],
         "note": job["note"],
+        # Same command list the Schedule tab shows: a job is copy-pasteable from
+        # either surface, and registry.commands_for() is the only place that
+        # decides what that command is.
+        "commands": registry.commands_for(job),
+        # When the list above is legitimately empty (a library module with no
+        # __main__ door), the card says WHY instead of showing a blank slot.
+        "cli_absence_reason": registry.cli_absence_reason(job),
         "failures_7d": failures_7d,
         "stuck_running": stuck_running,
         "last_run": None,
         "status": "unknown",
         "message": "",
+        # True when the ledger said worse but the tables proved otherwise.
+        "superseded": False,
         "run": _run_capability(job["job_name"]),
     }
 
@@ -247,6 +327,14 @@ def _build_job(job: Dict[str, Any], last: Optional[Dict[str, Any]],
         return payload
 
     if last is None:
+        through = _data_supersedes(owned or [], None)
+        if through:
+            payload["status"] = "ok"
+            payload["superseded"] = True
+            payload["message"] = ("No job_runs row for this job_name, but all its "
+                                  f"tables hold data through {through} — it runs "
+                                  "outside the ledger.")
+            return payload
         payload["status"] = "bad"
         payload["message"] = "Never recorded — no job_runs row for this job_name."
         return payload
@@ -264,12 +352,50 @@ def _build_job(job: Dict[str, Any], last: Optional[Dict[str, Any]],
     }
 
     if last["status"] == "failed":
+        reason = (f"Last run failed {age_hours}h ago "
+                  f"(triggered by {last['triggered_by']}).")
+        through = _data_supersedes(owned or [], started)
+        if through:
+            payload["status"] = "ok"
+            payload["superseded"] = True
+            payload["message"] = (reason + " Superseded — all its tables hold data "
+                                  f"through {through}, written by a run job_runs never "
+                                  "saw (the terminal command on this card).")
+            return payload
         payload["status"] = "bad"
-        payload["message"] = (f"Last run failed {age_hours}h ago "
-                              f"(triggered by {last['triggered_by']}).")
+        payload["message"] = reason
         return payload
 
     if last["status"] == "running":
+        # The runner's OWN abandonment threshold, not the cadence budget: a
+        # weekly job whose thread died 2h ago would otherwise read "Running for
+        # 2.1h" for six days. A server reload kills the Run Now thread before it
+        # closes its row, so an open row past this age is a dead process — say
+        # that, and let the tables prove whether the work still got done.
+        #
+        # ``corpse`` short-circuits the waiting: the row predates this process,
+        # so no thread that exists can own it and it is dead NOW, one minute
+        # after the reload or not. Kept separate from the age rule because only
+        # Run Now rows can be proven this way (job_runner.row_is_a_corpse).
+        stale_hours = job_runner.STALE_RUNNING_MINUTES / 60.0
+        if corpse or (age_hours and age_hours > stale_hours):
+            why = ("opened by a server generation that no longer exists — a reload "
+                   "kills the Run Now thread mid-run" if corpse else
+                   "abandoned past %.0fh, the same limit Run Now uses to unlock itself"
+                   % stale_hours)
+            reason = (f"Row opened {age_hours}h ago is still 'running' — the process "
+                      f"died without closing it ({why}).")
+            through = _data_supersedes(owned or [], started)
+            if through:
+                payload["status"] = "ok"
+                payload["superseded"] = True
+                payload["message"] = (reason + " Superseded — its tables hold data "
+                                      f"through {through}, so a later run finished "
+                                      "the work.")
+                return payload
+            payload["status"] = "bad"
+            payload["message"] = reason
+            return payload
         if budget and age_hours and age_hours > budget:
             payload["status"] = "bad"
             payload["message"] = (f"Still 'running' after {age_hours}h — the process "
@@ -286,6 +412,23 @@ def _build_job(job: Dict[str, Any], last: Optional[Dict[str, Any]],
         return payload
 
     if last["rows_written"] == 0:
+        # A "success, nothing to write" is NOT a failed run: the ledger row is
+        # green, the process worked, the source simply had no new observation.
+        # So the failed/never-recorded rule ("the data must be dated on or AFTER
+        # this run, to prove a LATER run rebuilt it") does not apply — the run is
+        # already the proof. Requiring it here would strand every economic job:
+        # ``report_date`` is the SOURCE's publication date, not a run timestamp,
+        # so GuruFocus EY/PE legitimately top out at 2026-10-30 while a correct
+        # scrape on 2026-11-01 writes 0 rows. Each table's own lag threshold
+        # (its ``status``) is the real freshness guard, so pass ``since=None`` and
+        # let only a genuinely stale table keep the card amber.
+        through = _data_supersedes(owned or [], None)
+        if through:
+            payload["status"] = "ok"
+            payload["superseded"] = True
+            payload["message"] = ("0 rows written because nothing was missing — all its "
+                                  f"tables hold data through {through}.")
+            return payload
         payload["status"] = "late"
         payload["message"] = "Last run succeeded but reported 0 rows written."
         return payload
@@ -389,6 +532,30 @@ def _fetch_latest_values(db: Session, pairs, columns: Dict[str, set],
     return out, probed
 
 
+def _fetch_series_latest(db: Session, counter: Dict[str, int]) -> Dict[str, date]:
+    """Newest report_date per indicator_code — ONE SELECT for every shared-table job.
+
+    ``economic_indicators`` is written by nine registered jobs but the registry
+    can attribute its table row to exactly one of them, so the aggregate freshness
+    probe proves nothing for the other eight (manual:gurufocus included). Reading
+    every series in one GROUP BY costs the build a single round trip however many
+    jobs start sharing the table.
+    """
+    rows = _probe(db,
+                  "SELECT %s, MAX(%s) FROM %s GROUP BY 1"
+                  % (_quote(registry.SERIES_KEY_COLUMN),
+                     _quote(registry.SERIES_DATE_COLUMN),
+                     _quote(registry.SERIES_TABLE)))
+    counter["series"] += 1
+    if rows is None:
+        return {}
+    out: Dict[str, date] = {}
+    for code, latest in ((r[0], _as_date(r[1])) for r in rows):
+        if code and latest:
+            out[str(code)] = latest
+    return out
+
+
 def _build_table(entry: Dict[str, Any], today: date, estimates: Dict[str, int],
                  columns: Dict[str, set], latest_values: Dict[tuple, Any],
                  probed: set) -> Dict[str, Any]:
@@ -460,6 +627,43 @@ def _build_table(entry: Dict[str, Any], today: date, estimates: Dict[str, int],
     return payload
 
 
+def _series_evidence(codes: List[str], series: Dict[str, date], today: date,
+                     max_lag: Optional[int]) -> Optional[Dict[str, Any]]:
+    """A table-shaped evidence entry built from ONE job's own indicator codes.
+
+    Shaped like a freshness row because that is what ``_data_supersedes`` reads
+    (``latest`` + ``status``), so a job whose data lives in a shared table gets
+    judged by exactly the same rule as a job that owns its table outright.
+
+    Deliberately unforgiving: a declared series with no rows at all is a gap, not
+    a clean bill of health, and the LOWEST of its dates is what counts — the same
+    "prove the whole job ran" logic that stops one forward-dated breadth table
+    from speaking for the daily ones.
+    """
+    if not codes or not series:
+        return None                      # nothing declared, or the probe failed
+    dates = [series.get(c) for c in codes]
+    if any(d is None for d in dates):
+        return None                      # a declared series was never written
+    latest = min(dates)
+    lag = registry.trading_days_between(latest, today)
+    if max_lag is None:
+        status = "unknown"               # nothing expected of it — still a date
+    elif lag <= max_lag:
+        status = "ok"
+    else:
+        status = "late" if lag <= max_lag + 3 else "bad"
+    return {
+        "table": "%s[%s]" % (registry.SERIES_TABLE, ", ".join(codes)),
+        "date_column": registry.SERIES_DATE_COLUMN,
+        "latest": latest.isoformat(),
+        "lag_trading_days": lag,
+        "status": status,
+        "source_job": None,
+        "row_estimate": None,
+    }
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 #  Snapshot builder + cache
 # ══════════════════════════════════════════════════════════════════════════════
@@ -491,9 +695,13 @@ def _system_checks_sql(system: Dict[str, Any]) -> List[Dict[str, str]]:
     return out
 
 
-def _build_snapshot() -> Tuple[Dict[str, Dict[str, Any]], Dict[str, int]]:
+def _build_snapshot() -> Tuple[Dict[str, Dict[str, Any]], Dict[str, int], bool]:
     """Everything the map needs, in a query count that does NOT depend on how
     many systems, jobs or tables are registered.
+
+    Returns ``(systems, query_counter, ledger_missing)`` — the last flag is part
+    of the payload because /schedule serves from this snapshot and must still be
+    able to say "job_runs is not readable" rather than "never recorded".
 
     Data SELECTs per build:
       1  job_runs   — newest row per job_name (single DISTINCT ON)
@@ -501,18 +709,24 @@ def _build_snapshot() -> Tuple[Dict[str, Dict[str, Any]], Dict[str, int]]:
       1  job_runs   — rows still 'running' (GROUP BY)
       1  pg_class   — existence + reltuples for every registry table
       1  information_schema.columns — real columns of those tables
+      1  economic_indicators — newest date per indicator_code (GROUP BY), the
+                               evidence for jobs that share the table
       ⌈pairs/12⌉   — MAX(date) freshness, chunked UNION ALL (≈5 today)
-    = ≈10 SELECTs. Each is preceded by its own `SET LOCAL statement_timeout`,
-    so ≈2× that many statements hit the wire, and the timeout pragmas are not
-    queries. The per-pair fallback only runs for the branches of a failed chunk.
+    = ≈10 SELECTs, and because _arm() sets the timeout once for the whole build
+    that is ≈10 round trips over the wire — not the 3× it used to cost when
+    every probe rolled back and re-armed itself first, which against a remote
+    Postgres was most of the 8 s the page took to open. The per-pair fallback
+    only runs for the branches of a failed chunk.
     """
     now = datetime.now(timezone.utc)
     today = now.date()
     counter: Dict[str, int] = {"last_runs": 0, "failures": 0, "stuck": 0,
                                "class": 0, "columns": 0, "latest_grouped": 0,
-                               "latest_fallback": 0}
+                               "latest_fallback": 0, "series": 0}
     db = SessionLocal()
     try:
+        # One pragma for the whole build — see _arm().
+        _arm(db)
         last_runs = _fetch_last_runs(db)
         counter["last_runs"] += 1
         ledger_missing = last_runs is None
@@ -537,19 +751,56 @@ def _build_snapshot() -> Tuple[Dict[str, Dict[str, Any]], Dict[str, int]]:
         pairs = [(t, c) for t in table_names for c in sorted(specs[t])]
         latest_values, probed = _fetch_latest_values(db, pairs, columns, counter)
 
+        # Shared-table evidence, read once for every system: which indicator_code
+        # reaches how far. series_lag is the table's own threshold, so a scoped
+        # entry is held to the same freshness bar as the aggregate one.
+        series = _fetch_series_latest(db, counter)
+        series_lag = next(
+            (e["max_lag_trading_days"] for s in registry.list_systems()
+             for e in s["tables"] if e["table"] == registry.SERIES_TABLE), None)
+
         systems: Dict[str, Dict[str, Any]] = {}
+        consumers = registry.job_consumers()
         for system in registry.list_systems():
-            jobs = [
-                _build_job(job, runs.get(job["job_name"]),
-                           failures.get(job["job_name"], 0),
-                           stuck.get(job["job_name"], 0),
-                           ledger_missing, now)
-                for job in system["jobs"]
-            ]
+            # Tables BEFORE jobs, on purpose: the table verdicts are the evidence
+            # a stale ledger line is judged against (_data_supersedes). Both are
+            # pure computation over the probes above, so the query count is
+            # unchanged — only the order of the two loops.
             tables = [
                 _build_table(entry, today, estimates, columns, latest_values, probed)
                 for entry in system["tables"]
             ]
+            owned_by_job: Dict[str, List[Dict[str, Any]]] = {}
+            for t in tables:
+                if t["source_job"]:
+                    owned_by_job.setdefault(t["source_job"], []).append(t)
+            # A job that writes a table shared with others owns no table ROW, so
+            # nothing above can overturn its ledger line. Hand it its own series
+            # evidence here, before the jobs are judged.
+            for job in system["jobs"]:
+                scoped = _series_evidence(registry.series_evidence(job["job_name"]),
+                                          series, today, series_lag)
+                if scoped:
+                    owned_by_job.setdefault(job["job_name"], []).append(scoped)
+            jobs = []
+            for job in system["jobs"]:
+                last = runs.get(job["job_name"])
+                jobs.append(_build_job(
+                    job, last,
+                    failures.get(job["job_name"], 0),
+                    stuck.get(job["job_name"], 0),
+                    ledger_missing, now,
+                    owned_by_job.get(job["job_name"], []),
+                    # Proven-dead rather than merely old: costs no extra query,
+                    # because _ACTIVE and BOOT_AT are already in this process.
+                    corpse=job_runner.row_is_a_corpse(
+                        job["job_name"],
+                        (last or {}).get("started_at"),
+                        (last or {}).get("triggered_by"))))
+            # Reverse lineage: if this job stops, these are the pages that go
+            # stale. Computed from the registry (table.pages → job.writes).
+            for j in jobs:
+                j["pages"] = consumers.get(j["job_name"], [])
             verdicts = [j["status"] for j in jobs if j["status"] not in _NEUTRAL]
             verdicts += [t["status"] for t in tables if t["status"] not in _NEUTRAL]
             systems[system["id"]] = {
@@ -566,20 +817,58 @@ def _build_snapshot() -> Tuple[Dict[str, Dict[str, Any]], Dict[str, int]]:
                 "issues": system["issues"],
                 "checks_sql": _system_checks_sql(system),
             }
-        return systems, counter
+        return systems, counter, ledger_missing
     finally:
         db.close()
 
 
+def _rebuild() -> None:
+    """Refresh the snapshot off the request path (the stale-while-revalidate arm).
+
+    Builds OUTSIDE the lock, then swaps the result in under it -- so the thread
+    never holds the lock for seconds while a page load waits on it.
+    """
+    global _REBUILDING
+    try:
+        systems, queries, ledger_missing = _build_snapshot()
+        with _lock:
+            _CACHE["systems"], _CACHE["queries"], _CACHE["error"] = systems, queries, None
+            _CACHE["ledger_missing"] = ledger_missing
+            _CACHE["built_at"] = datetime.now(timezone.utc)
+    except Exception as e:                       # keep serving the last good snapshot
+        logger.exception("system-map background rebuild failed")
+        with _lock:
+            _CACHE["error"] = "%s: %s" % (type(e).__name__, e)
+    finally:
+        _REBUILDING = False
+
+
 def _get_snapshot(force: bool = False) -> Dict[str, Any]:
-    """The cached snapshot. Building never raises — a failure keeps the last good data."""
+    """The cached snapshot, with stale-while-revalidate. Building never raises.
+
+    · fresh          -> return the cache (0 SQL)
+    · stale          -> return the cache NOW and rebuild on a daemon thread, so the
+                        60 s poll never makes an admin pay for a build; the panels
+                        simply pick up the new verdicts on the next tick
+    · cold / force   -> build here. Cold because there is nothing to show yet, and
+                        force because "Refresh" means *now* -- the button is
+                        disabled until the fresh payload arrives
+    A failed build keeps the last good data and records the error for the banner.
+    """
+    global _REBUILDING
     with _lock:
         built_at = _CACHE["built_at"]
         fresh = built_at and (datetime.now(timezone.utc) - built_at) < timedelta(seconds=CACHE_TTL_SECONDS)
         if fresh and not force:
             return _CACHE
+        if built_at and not force:
+            if not _REBUILDING:
+                _REBUILDING = True
+                threading.Thread(target=_rebuild, name="system-map-rebuild", daemon=True).start()
+            return _CACHE
         try:
-            _CACHE["systems"], _CACHE["queries"] = _build_snapshot()
+            (_CACHE["systems"], _CACHE["queries"],
+             _CACHE["ledger_missing"]) = _build_snapshot()
             _CACHE["error"] = None
         except Exception as e:
             logger.exception("system-map snapshot failed")
@@ -629,14 +918,8 @@ def _query_summary(raw: Dict[str, Any]) -> Dict[str, Any]:
 # ══════════════════════════════════════════════════════════════════════════════
 #  Routes
 # ══════════════════════════════════════════════════════════════════════════════
-@router.get("/systems", summary="System Map — sidebar list with live health")
-def get_systems(refresh: bool = False) -> Dict[str, Any]:
-    """Every registered system, its static description and a health verdict.
-
-    health = worst status among the system's tracked jobs and measurable tables.
-    """
-    raw = _get_snapshot(force=refresh)
-    systems = raw["systems"]
+def _systems_rows(systems: Dict[str, Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """The sidebar list: registry summaries joined with the snapshot verdicts."""
     rows = []
     for meta in registry.system_summaries():
         live = systems.get(meta["id"]) or {}
@@ -648,14 +931,30 @@ def get_systems(refresh: bool = False) -> Dict[str, Any]:
             "tables_bad": sum(1 for t in live.get("tables", []) if t["status"] == "bad"),
             "tables_late": sum(1 for t in live.get("tables", []) if t["status"] == "late"),
         })
+    return rows
+
+
+def _envelope(raw: Dict[str, Any]) -> Dict[str, Any]:
+    """The provenance fields every read on this router stamps onto its payload."""
     return {
-        "systems": rows,
         "generated_at": _generated(raw),
         "cache_ttl_seconds": CACHE_TTL_SECONDS,
         "registry_file": REGISTRY_FILE,
         "db_queries": _query_summary(raw),
         "build_error": raw.get("error"),
     }
+
+
+@router.get("/systems", summary="System Map — sidebar list with live health")
+def get_systems(refresh: bool = False) -> Dict[str, Any]:
+    """Every registered system, its static description and a health verdict.
+
+    health = worst status among the system's tracked jobs and measurable tables.
+    The Runbook page asks for this plus its detail plus the lineage; see
+    ``get_runbook`` for the single-request form.
+    """
+    raw = _get_snapshot(force=refresh)
+    return {"systems": _systems_rows(raw["systems"]), **_envelope(raw)}
 
 
 @router.get("/systems/{system_id}", summary="System Map — full Runbook for one system")
@@ -669,15 +968,7 @@ def get_system_detail(system_id: str, refresh: bool = False) -> Dict[str, Any]:
     raw = _get_snapshot(force=refresh)
     live = raw["systems"].get(system_id) or _degraded_system(
         registry.get_system(system_id), raw.get("error") or "snapshot unavailable")
-    return {
-        **live,
-        "generated_at": _generated(raw),
-        "cache_ttl_seconds": CACHE_TTL_SECONDS,
-        "registry_file": REGISTRY_FILE,
-        "global_checks_sql": registry.checks_sql()[:4],
-        "db_queries": _query_summary(raw),
-        "build_error": raw.get("error"),
-    }
+    return {**live, **_envelope(raw), "global_checks_sql": registry.checks_sql()[:4]}
 
 
 @router.get("/pipelines", summary="scraper → table → pages map (legacy /admin tab)")
@@ -759,52 +1050,211 @@ def _scan_one_table(db: Session, t: Dict[str, Any], window_days: int) -> Dict[st
     return finding
 
 
+@router.get("/pages", summary="Page ↔ script lineage — navbar spine, both directions")
+def get_page_lineage(refresh: bool = False) -> Dict[str, Any]:
+    """Which scripts feed each page, and which pages depend on each script.
+
+    The navbar itself lives in the frontend (components/Navbar.tsx and
+    components/MarketSidebar.tsx): this returns the DATA half keyed by router
+    pathname, and the frontend joins its own menu labels onto it. A spine page
+    that is absent here has no registered lineage — the panel shows that as a
+    gap instead of pretending the page needs nothing.
+
+    Costs no SQL: it inverts the snapshot /systems already built, so the page
+    list and the job verdicts cannot disagree with the Runbook.
+    """
+    raw = _get_snapshot(force=refresh)
+    return _lineage_payload(raw)
+
+
+@router.get("/runbook", summary="One request for the whole page: list + details + lineage")
+def get_runbook(system: Optional[str] = None,
+                refresh: bool = False) -> Dict[str, Any]:
+    """The page's single round trip: sidebar, every system's detail, the lineage.
+
+    /systems, /systems/{id} and /pages used to fire together on mount. All three
+    read the same cached snapshot, so they never disagreed — but they DID queue:
+    _get_snapshot() holds the build lock, so the second and third request sat
+    waiting for the first to finish building, and against a remote Postgres that
+    is what made opening the page cost seconds for no extra information.
+
+    One payload removes the queue and makes switching systems free: every
+    system's full entry ships in ``details``, so clicking another row in the
+    sidebar renders from data already in the browser — no request, no wait.
+
+    An unknown ``system`` falls back to the first registered system instead of
+    404ing: a stale ?system= bookmark must still open the Runbook.
+    """
+    raw = _get_snapshot(force=refresh)
+    systems = raw["systems"]
+    env = _envelope(raw)
+    checks = registry.checks_sql()[:4]
+    known = [m["id"] for m in registry.system_summaries()]
+    return {
+        "systems": _systems_rows(systems),
+        # The shared envelope is stamped into each entry so the frontend keeps
+        # using the SystemMapDetail shape it already has.
+        "details": {sid: {**live, **env, "global_checks_sql": checks}
+                    for sid, live in systems.items()},
+        "active": system if system in systems else (known[0] if known else None),
+        "lineage": _lineage_payload(raw),
+        **env,
+    }
+
+
+def warm_snapshot(delay_seconds: float = 1.5) -> None:
+    """Build the snapshot off the request path so the first page open is instant.
+
+    Called from the app startup hook. It never blocks startup and never raises:
+    the build runs in a daemon thread a moment after boot (a cold build against
+    the live Render Postgres is ~11 round trips, and uvicorn must not wait for
+    that). If the thread dies or the DB is unreachable, the endpoint simply
+    builds on demand exactly as it always did.
+    """
+    import os
+    if os.environ.get("PYTEST_CURRENT_TEST"):        # keep tests silent & hermetic
+        return
+
+    def _run() -> None:
+        try:
+            time.sleep(delay_seconds)
+            _get_snapshot()
+            logger.info("system-map snapshot warmed for the first page open")
+        except Exception as e:                        # pragma: no cover - best effort
+            logger.warning("system-map warm-up skipped: %s", e)
+
+    threading.Thread(target=_run, name="system-map-warm", daemon=True).start()
+
+
+def _lineage_payload(raw: Dict[str, Any]) -> Dict[str, Any]:
+    """The snapshot re-keyed by page path: feeders per page, pages per script.
+
+    Pure Python over the cached snapshot — no SQL — so /pages and /runbook can
+    never disagree with the Runbook panels, and 137 pages cost zero queries.
+    """
+    systems = raw["systems"]
+
+    live_tables: Dict[Tuple[str, str], Dict[str, Any]] = {}
+    live_jobs: Dict[str, Dict[str, Any]] = {}
+    for sid, sys in systems.items():
+        for t in sys["tables"]:
+            live_tables[(sid, t["table"])] = t
+        for j in sys["jobs"]:
+            live_jobs.setdefault(j["job_name"], j)
+    # Registry commands, for the rare job no live snapshot carries (untracked
+    # entry points are still copy-pasteable from a terminal).
+    cmd_index = {j["job_name"]: j["commands"] for j in registry.schedule_jobs()}
+
+    pages = []
+    for path, row in sorted(registry.page_lineage().items()):
+        sid = row["systems"][0]["id"] if row["systems"] else None
+        tables = []
+        for t in row["tables"]:
+            live = live_tables.get((t.get("system_id") or sid, t["table"])) or {}
+            tables.append({
+                **t,
+                "status": live.get("status", "unknown"),
+                "latest": live.get("latest"),
+                "lag_trading_days": live.get("lag_trading_days"),
+                "row_estimate": live.get("row_estimate"),
+                "measurable": live.get("date_column", t["date_column"]) is not None,
+            })
+        jobs = []
+        for j in row["jobs"]:
+            live = live_jobs.get(j["job_name"]) or {}
+            last = live.get("last_run") or {}
+            jobs.append({
+                **j,
+                "status": live.get("status", "unknown"),
+                "message": live.get("message", ""),
+                "last_run_at": last.get("started_at"),
+                "last_run_status": last.get("status"),
+                "rows_written": last.get("rows_written"),
+                "commands": live.get("commands") or cmd_index.get(j["job_name"]) or [],
+            })
+        verdicts = ([x["status"] for x in jobs if x["status"] not in _NEUTRAL]
+                    + [x["status"] for x in tables if x["status"] not in _NEUTRAL])
+        pages.append({
+            "path": path,
+            "systems": row["systems"],
+            "jobs": jobs,
+            "tables": tables,
+            "no_writer_tables": row["no_writer_tables"],
+            "has_feeder": bool(jobs),
+            "status": _worst(*verdicts) if verdicts else "ok",
+        })
+
+    consumers = registry.job_consumers()
+    scripts = []
+    for job_name, paths in sorted(consumers.items()):
+        live = live_jobs.get(job_name) or {}
+        scripts.append({
+            "job_name": job_name,
+            "file": live.get("file", ""),
+            "cadence": live.get("expected_schedule", ""),
+            "status": live.get("status", "unknown"),
+            "writes": live.get("writes", []),
+            "pages": paths,
+            "commands": live.get("commands") or [],
+            "runnable": bool((live.get("run") or {}).get("runnable")),
+        })
+    registered = {p["path"] for p in pages}
+    return {
+        "pages": pages,
+        "scripts": scripts,
+        "counts": {"pages": len(registered), "scripts": len(scripts)},
+        "registry_file": REGISTRY_FILE,
+        "generated_at": _generated(raw),
+        "snapshot_error": raw.get("error"),
+        "note": "Page → feeders comes from registry.page_lineage(); a table with "
+                "no source_job is listed under no_writer_tables instead of being "
+                "counted as a feeder. Navbar labels come from the frontend, so "
+                "adding a menu item needs no registry edit — but a menu item with "
+                "no lineage here shows up as an unregistered page.",
+    }
+
+
 @router.get("/schedule", summary="Schedule tab — every job with cadence/role/storage/commands")
-def get_schedule() -> Dict[str, Any]:
-    """The /admin 'What to Run & When' catalog, derived from the registry so it can
-    never drift from the Runbook. Layers two live signals per job: the Run Now
-    capability (job_runner) and the newest job_runs row (one SELECT for all jobs).
+def get_schedule(refresh: bool = False) -> Dict[str, Any]:
+    """The /admin 'What to Run & When' catalog, served from the SAME snapshot the
+    Runbook reads. ``registry.schedule_jobs()`` and the map's job lists are the
+    same 28 jobs (verified equal), so sharing one build loses nothing.
+
+    That sharing is the fix: this surface used to open its own session and read
+    ONLY job_runs, so it printed the raw ledger row ("failed") beside a Runbook
+    that had already overturned it with fresh tables. ``verdict`` is the rule
+    (ledger + table freshness); ``last_run`` stays the untouched ledger row, so
+    an admin can still read what the ledger literally says.
 
     Cadence/role/storage/commands come straight from the registry; ``runnable`` is
     the ONLY gate for a working Run Now — heavy scripts without a registered
     callable render as Copy-command only on the frontend."""
-    jobs = registry.schedule_jobs()
-    db = SessionLocal()
-    try:
-        last_runs = _fetch_last_runs(db)
-    finally:
-        db.close()
-    ledger_missing = last_runs is None
-    last_runs = last_runs or {}
-    now = datetime.now(timezone.utc)
+    raw = _get_snapshot(force=refresh)
+    live_by_name = {j["job_name"]: j
+                    for sys_ in raw["systems"].values() for j in sys_["jobs"]}
     out: List[Dict[str, Any]] = []
-    for job in jobs:
+    for job in registry.schedule_jobs():
         cap = _run_capability(job["job_name"])
-        last = last_runs.get(job["job_name"])
-        age_hours = None
-        if last and last.get("started_at"):
-            age_hours = round((now - last["started_at"]).total_seconds() / 3600, 1)
+        live = live_by_name.get(job["job_name"]) or {}
         out.append({
             **job,
+            "cli_absence_reason": registry.cli_absence_reason(job),
             "runnable": cap["runnable"],
             "delegated_to": cap.get("delegated_to"),
             "run_reason": cap.get("reason"),
-            "last_run": None if last is None else {
-                "status": last["status"],
-                "started_at": _iso(last["started_at"]),
-                "rows_written": last["rows_written"],
-                "error_message": last["error_message"],
-                "triggered_by": last["triggered_by"],
-                "age_hours": age_hours,
-            },
+            # The derived verdict, and the ledger row it was judged from.
+            "verdict": live.get("status", "unknown"),
+            "verdict_message": live.get("message", ""),
+            "superseded": bool(live.get("superseded", False)),
+            "last_run": live.get("last_run"),
         })
     return {
         "jobs": out,
         "cadences": list(registry.CADENCES),
         "roles": list(registry.ROLES),
         "storages": list(registry.STORAGES),
-        "ledger_missing": ledger_missing,
-        "generated_at": now.isoformat(),
+        "ledger_missing": bool(raw.get("ledger_missing")),
+        "generated_at": _generated(raw),
         "registry_file": REGISTRY_FILE,
     }
 
@@ -822,6 +1272,7 @@ def scan_integrity(window_days: int = 90) -> Dict[str, Any]:
     findings: List[Dict[str, Any]] = []
     db = SessionLocal()
     try:
+        _arm(db)
         for t in targets:
             findings.append(_scan_one_table(db, t, window_days))
     finally:
@@ -876,4 +1327,36 @@ def run_job_now(job_name: str, current_admin=Depends(get_current_admin)) -> Dict
 def get_job_status(job_name: str) -> Dict[str, Any]:
     """1 SELECT, newest row per job_name via ix_job_runs_name_started, read-only,
     3 s statement timeout (app/services/job_runner.py)."""
-    return job_runner.status_for(job_name)
+    payload = job_runner.status_for(job_name)
+    _expire_snapshot_after(last_run_finished(payload))
+    return payload
+
+
+def last_run_finished(payload: Dict[str, Any]) -> Optional[datetime]:
+    """The terminal timestamp of the polled run, or None while it is still open."""
+    last = payload.get("last_run") or {}
+    if last.get("status") not in ("success", "failed"):
+        return None
+    raw = last.get("finished_at") or last.get("started_at")
+    try:
+        return datetime.fromisoformat(raw) if raw else None
+    except (TypeError, ValueError):
+        return None
+
+
+def _expire_snapshot_after(finished_at: Optional[datetime]) -> None:
+    """Drop the cached snapshot when a run just reached a terminal state.
+
+    The Runbook serves a 60 s stale-while-revalidate snapshot, so without this a
+    successful Run Now keeps showing the PRE-run verdict for up to a minute after
+    /status already reports the fresh row — the card looked stuck on the old
+    failure. Clearing ``built_at`` makes the next /systems or /schedule read
+    rebuild cold; the poll only reads the ledger, so this stays cheap.
+    """
+    if finished_at is None:
+        return
+    built_at = _CACHE.get("built_at")
+    if built_at and finished_at <= built_at:
+        return                                   # snapshot already covers this run
+    with _lock:
+        _CACHE["built_at"] = None

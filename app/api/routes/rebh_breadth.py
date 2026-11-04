@@ -36,6 +36,7 @@ from typing import Optional
 
 from app.api.deps import get_current_user
 from app.core.cache_config import CACHE_TTL_BREADTH
+from app.core.cache_guard import guard_cache_key
 from app.core.cache_helpers import cache_read_through
 from app.core.database import get_db
 from app.models.breadth import UserDashboard
@@ -77,9 +78,17 @@ async def today(db: Session = Depends(get_db)):
 
 @router.get("/series")
 async def series(
-    keys: Optional[str] = Query(None, description="comma-separated series keys; default all 125"),
-    from_: Optional[str] = Query(None, alias="from", description="YYYY-MM-DD inclusive"),
-    to: Optional[str] = Query(None, description="YYYY-MM-DD inclusive"),
+    # max_length is the Phase 5 ceiling, sized on evidence rather than taste: the
+    # published snapshot has 125 series keys whose full comma-joined form is 1295
+    # characters (api_samples/series.json), and the frontend does send that whole
+    # list (app/breadth/_lib/store.ts builds ?keys=<all wanted keys>). 2000 keeps
+    # every legitimate request flowing while refusing a megabyte-long probe.
+    # guard_cache_key is NOT called here: for this route the key is legitimately
+    # longer than CACHE_KEY_MAX_LENGTH, and cache_read_through already fails open
+    # (serves from the process-memoised snapshot) instead of writing junk.
+    keys: Optional[str] = Query(None, max_length=2000, description="comma-separated series keys; default all 125"),
+    from_: Optional[str] = Query(None, alias="from", max_length=40, description="YYYY-MM-DD inclusive"),
+    to: Optional[str] = Query(None, max_length=40, description="YYYY-MM-DD inclusive"),
     db: Session = Depends(get_db),
 ):
     """{dates:[...], series:{key:[...]}} — same shape as api_samples/series.json."""
@@ -136,7 +145,14 @@ async def stocks(
     db: Session = Depends(get_db),
 ):
     """{stocks, leaders, nh_vol_list, names} — same shape as api_samples/stocks.json."""
+    # Part 2 / Phase 5: ``group`` is interpolated straight into the key, and the
+    # lookup that would reject a bogus name only runs INSIDE build(), i.e. after
+    # the cache and after the snapshot row is loaded. Guarding the key shape
+    # first means a glob character or a 200 KB value is answered with 422 before
+    # either. Legitimate group names ("Software & Services", "Real Estate Mgmt &
+    # Dev't") are ~35 chars, so the 200-char ceiling rejects nothing real.
     cache_key = f"rebh:breadth:stocks:{group or 'all'}"
+    guard_cache_key(cache_key)
 
     def build():
         D = _latest_snapshot(db)
@@ -157,7 +173,9 @@ async def stockbee(
     db: Session = Depends(get_db),
 ):
     """{date: {key: [symbols]}} — same shape as api_samples/stockbee_names.json."""
+    # Same gate as /stocks: both parameters are user text that becomes key text.
     cache_key = f"rebh:breadth:stockbee:{date or 'all'}:{key or 'all'}"
+    guard_cache_key(cache_key)
 
     def build():
         lists = _latest_snapshot(db)["sb_lists"]
@@ -208,7 +226,10 @@ async def ohlc_all(db: Session = Depends(get_db)):
 @router.get("/ohlc/{symbol}")
 async def ohlc_symbol(symbol: str, db: Session = Depends(get_db)):
     """One symbol's adjusted OHLC windows + MAs + TASI reference for RS line."""
+    # Path parameter → key text: guarded before the cache and before the snapshot
+    # read. An unknown symbol still answers 404 from build(), exactly as before.
     cache_key = f"rebh:breadth:ohlc:{symbol.strip()}"
+    guard_cache_key(cache_key)
 
     def build():
         D = _latest_snapshot(db)

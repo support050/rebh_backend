@@ -12,6 +12,7 @@ hardcoded assumptions from the universal engine:
 from typing import Dict, List, Optional, Any, Tuple
 from datetime import datetime, date
 import re
+import threading
 
 
 # -----------------------------------------------------------------------------
@@ -632,6 +633,11 @@ def get_sector_porter_forces(sector: str) -> Dict[str, Any]:
 # ──────────────────────────────────────────────────────────────────────────────
 _SECTOR_MEDIANS_CACHE: Dict[str, Dict[str, Any]] = {}
 _SECTOR_MEDIANS_WARMED: bool = False  # True after full-universe pre-load
+# [R1] Thread lock: stage 8.9 runs the universe through a ThreadPoolExecutor(8),
+# and get_sector_margin_and_growth() WRITES into the shared dict on a cache miss
+# (and warm_sector_medians_cache() populates it). The lock serialises those
+# writes so concurrent workers can never race the shared cache.
+_SECTOR_MEDIANS_LOCK = threading.RLock()
 
 
 def _sector_baseline(sector: str) -> Dict[str, Any]:
@@ -674,6 +680,9 @@ def warm_sector_medians_cache() -> int:
     if _SECTOR_MEDIANS_WARMED:
         return len(_SECTOR_MEDIANS_CACHE)
 
+    # NOTE: warm_sector_medians_cache() is called ONCE before stage 8.9's
+    # ThreadPoolExecutor starts, so it runs single-threaded — the RLock is only
+    # needed on the miss path in get_sector_margin_and_growth().
     try:
         import json, statistics
         from app.services.xbrl_data_service import _all_json_files
@@ -752,7 +761,11 @@ def get_sector_margin_and_growth(sector: str) -> Dict[str, Any]:
     if sector in _SECTOR_MEDIANS_CACHE:
         return _SECTOR_MEDIANS_CACHE[sector]
 
-    # Baseline calibrated defaults cached immediately to avoid repeated lookups
-    res = _sector_baseline(sector)
-    _SECTOR_MEDIANS_CACHE[sector] = res
-    return res
+    # [R1] Miss path: compute + store under the lock so concurrent engine
+    # workers (stage 8.9 ThreadPoolExecutor) cannot race the shared dict.
+    with _SECTOR_MEDIANS_LOCK:
+        if sector in _SECTOR_MEDIANS_CACHE:   # another thread filled it first
+            return _SECTOR_MEDIANS_CACHE[sector]
+        res = _sector_baseline(sector)
+        _SECTOR_MEDIANS_CACHE[sector] = res
+        return res

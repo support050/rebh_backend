@@ -18,7 +18,9 @@ from app.core.cache_helpers import (
     make_prices_seasonality_key,
     make_prices_tasi_history_key
 )
-from app.core.cache_config import CACHE_TTL_PRICES_HISTORY, CACHE_TTL_PRICES_LATEST
+from app.core.cache_config import (CACHE_TTL_PRICES_HISTORY, CACHE_TTL_PRICES_LATEST,
+                                   MAX_QUERY_LIMIT)
+from app.core.cache_guard import guard_symbol
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +34,7 @@ from pathlib import Path
 async def get_price_history(
     symbol: str,
     db: Session = Depends(get_db),
-    limit: int = Query(10000, le=50000),
+    limit: int = Query(10000, le=MAX_QUERY_LIMIT),
 ):
     """
     Get historical OHLCV + all oscillator data for a symbol.
@@ -40,6 +42,18 @@ async def get_price_history(
     stock_indicators: everything else (RSI, MCAs, SMA, 52w, etc.)
     Cached with 24-hour TTL (CACHE_TTL_PRICES_HISTORY).
     """
+    # Part 2 / Phase 5: the catalog gate answers 404 BEFORE the key and the query
+    # exist, which closes two things. One: the cost of a typo or a probe was a
+    # full OHLCV + indicator join over up to 50 000 rows, and each distinct junk
+    # symbol also minted its own 3-day cache key (unbounded keyspace growth from
+    # free input). Two: an unknown code now gets "no such symbol" instead of a
+    # confident empty chart. The catalog is one set of index-only scans per
+    # process-hour, and it fails open — an unavailable catalog validates nothing,
+    # so a broken lookup can never 404 a real ticker. Membership is guaranteed to
+    # cover this route because its rows come from `prices` itself, which is one of
+    # the catalog sources: a symbol with price history is by construction a known
+    # symbol.
+    guard_symbol(db, symbol)
     cache_key = make_prices_history_key(symbol, limit)
     
     async def fetch_history():
@@ -196,6 +210,7 @@ async def get_price_seasonality(
     (null = month without a computed return, e.g. first month of data).
     Redis read-through cache, same TTL as /history.
     """
+    guard_symbol(db, symbol)          # 404 before the cache key and the scan
     cache_key = make_prices_seasonality_key(symbol, years)
 
     async def fetch_seasonality():

@@ -1,12 +1,12 @@
 # app/services/rs_line.py
 """
-RS Line Service — يحسب المؤشرين من بيانات الـ DB مباشرة:
+RS Line Service — computes both indicators straight from DB data:
   1. TraderLion RS Line  (stock/benchmark ratio + new-high-before-price)
   2. RS MA Crossover LevelUp (EMA/SMA crossover on RS Line)
 
-البيانات من:
-  - جدول prices  → سعر إغلاق السهم
-  - جدول market_pulse → سعر إغلاق TASI (البنشمارك)
+Data sources:
+  - prices table      → stock close price
+  - market_pulse table → TASI close price (the benchmark)
 """
 
 import pandas as pd
@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 
 def _calc_ma(series: pd.Series, period: int, ma_type: str) -> pd.Series:
-    """حساب Moving Average — EMA أو SMA"""
+    """Moving Average — EMA or SMA"""
     if ma_type.upper() == "EMA":
         return series.ewm(span=period, adjust=False).mean()
     return series.rolling(window=period).mean()
@@ -29,8 +29,8 @@ def _calc_ma(series: pd.Series, period: int, ma_type: str) -> pd.Series:
 
 def _normalize_symbol(symbol: str) -> str:
     """
-    تحويل الرمز من صيغة Yahoo (.SR) لصيغة الـ DB
-    مثال: '2222.SR' → '2222'
+    Convert a Yahoo-style symbol (.SR) into the DB form
+    example: '2222.SR' → '2222'
     """
     if symbol.endswith(".SR"):
         return symbol.replace(".SR", "")
@@ -38,11 +38,11 @@ def _normalize_symbol(symbol: str) -> str:
 
 
 def _fetch_stock_close(db: Session, symbol: str, start_date: str, end_date: str) -> pd.Series:
-    """سحب بيانات Close للسهم من جدول prices"""
+    """Fetch the stock close series from the prices table"""
     from app.models.price import Price
 
     db_symbol = _normalize_symbol(symbol)
-    logger.info(f"📊 جاري سحب بيانات {db_symbol} من DB")
+    logger.info(f"📊 Fetching {db_symbol} close series from DB")
 
     results = (
         db.query(Price.date, Price.close)
@@ -65,10 +65,10 @@ def _fetch_stock_close(db: Session, symbol: str, start_date: str, end_date: str)
 
 
 def _fetch_tasi_close(db: Session, start_date: str, end_date: str) -> pd.Series:
-    """سحب بيانات Close لمؤشر TASI من جدول market_pulse"""
+    """Fetch the TASI benchmark close series from the market_pulse table"""
     from app.models.market_pulse import MarketPulse
 
-    logger.info(f"📊 جاري سحب بيانات TASI من DB (market_pulse)")
+    logger.info("📊 Fetching TASI benchmark from DB (market_pulse)")
 
     results = (
         db.query(MarketPulse.date, MarketPulse.close)
@@ -105,7 +105,7 @@ def calculate_rs_line(
     bench_close:  Optional[pd.Series] = None,
 ) -> pd.DataFrame:
     """
-    يحسب RS Line كاملة من بيانات الـ DB:
+    Compute the full RS Line from DB data:
       RS Line = Stock Close / TASI Close × scale_factor
       MA1 (fast) on RS Line
       MA2 (slow) on RS Line
@@ -113,7 +113,7 @@ def calculate_rs_line(
       RS New High Before Price (RSNHBP)
     
     scale_factor:
-      - 3000  → TraderLion RS Line — القيم ~7.61 (تطابق TradingView)
+      - 3000  → TraderLion RS Line — values ~7.61 (matches TradingView)
 
     stock_close / bench_close:
       Optional pre-loaded series. When supplied, the corresponding DB fetch is
@@ -123,29 +123,29 @@ def calculate_rs_line(
     """
     end = end_date or datetime.today().strftime("%Y-%m-%d")
 
-    # سحب البيانات من الـ DB (أو استخدام الجاهز منها)
+    # Load from the DB, or reuse the series handed in by the caller
     if stock_close is None:
         stock_close = _fetch_stock_close(db, symbol, start_date, end)
     if bench_close is None:
         bench_close = _fetch_tasi_close(db, start_date, end)
 
-    # دمج البيانات مع الحفاظ على خط زمني السهم، وملء فراغات المؤشر (زي TradingView)
+    # Align on the stock's timeline and fill benchmark gaps (as TradingView does)
     df = pd.DataFrame({"stock": stock_close, "bench": bench_close})
     
-    # 1. Forward fill للبنشمارك عشان لو المؤشر مقفول والسهم شغال ياخد آخر إغلاق
+    # 1. Forward-fill the benchmark so a stock session still gets the last index close
     df["bench"] = df["bench"].ffill()
     
-    # 2. حذف الأيام اللي ملهاش بيانات خالص
+    # 2. Drop sessions with no data at all
     df = df.dropna()
 
     if df.empty:
         raise ValueError(f"No overlapping data between {symbol} and {benchmark}")
 
     # ── RS Line ──────────────────────────────────────
-    # scale_factor=100 → RS MA Crossover | scale_factor=3000 → TraderLion (يطابق TradingView)
+    # scale_factor=100 → RS MA Crossover | scale_factor=3000 → TraderLion (matches TradingView)
     df["rs_line"] = (df["stock"] / df["bench"]) * scale_factor
 
-    # ── MAs على RS Line ─────────────────────────────
+    # ── MAs on the RS Line ─────────────────────────────
     df["ma1"] = _calc_ma(df["rs_line"], ma1_period, ma1_type)
     df["ma2"] = _calc_ma(df["rs_line"], ma2_period, ma2_type)
 
@@ -167,11 +167,11 @@ def calculate_rs_line(
 
 def df_to_response(df: pd.DataFrame, symbol: str, benchmark: str,
                    include_series: bool = True) -> dict:
-    """تحويل DataFrame إلى dict مطابق لـ RSLineResponse schema
-
-    include_series=False → يحسب الـ summary فقط بدون بناء قائمة كل الشموع
-    (تُستخدم في حساب الدفعة اليومية، لأن الـ data list لا تُقرأ أصلاً هناك
-    وتكلّف iterrows() على ~1400 صف لكل سهم).
+    """Convert the DataFrame into a dict matching the RSLineResponse schema
+    
+    include_series=False → compute only the summary, without building the candle
+    list (used by the daily batch calculation, where the data list is never read
+    and iterrows() over ~1400 rows per symbol would be wasted work).
     """
     last  = df.iloc[-1]
     bulls = df[df["cross_bull"]]

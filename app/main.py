@@ -60,6 +60,35 @@ from app.core.csrf import CSRFMiddleware
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
+# ── DB fail-fast (2026-11-03) ──────────────────────────────────────────────
+# When the home↔Render Postgres link black-holes under concurrent scraper
+# jobs, connection-level SQLAlchemy errors escaped as bare ASGI exceptions:
+# the connection was killed with NO response, so the Next proxy and the
+# browser kept waiting — every open tab stalled and pages rendered blank.
+# Answer 503 + Retry-After instead; clients fail fast and the UI stays live.
+from fastapi import Request
+from fastapi.responses import JSONResponse
+from sqlalchemy.exc import DisconnectionError
+from sqlalchemy.exc import OperationalError as SAOperationalError
+from sqlalchemy.exc import TimeoutError as SATimeoutError
+
+_db_avail_logger = logging.getLogger("app.db")
+
+
+async def db_unavailable_handler(request: Request, exc: Exception) -> JSONResponse:
+    _db_avail_logger.warning("DB unavailable on %s %s: %s",
+                             request.method, request.url.path, type(exc).__name__)
+    return JSONResponse(
+        status_code=503,
+        content={"detail": "Database temporarily unavailable — retry shortly",
+                 "reason": "db_unavailable"},
+        headers={"Retry-After": "15"},
+    )
+
+
+for _db_exc_cls in (SAOperationalError, DisconnectionError, SATimeoutError):
+    app.add_exception_handler(_db_exc_cls, db_unavailable_handler)
+
 app.add_middleware(GZipMiddleware, minimum_size=1000)
 app.add_middleware(CSRFMiddleware)
 
@@ -138,7 +167,12 @@ protected_dependencies = [Depends(get_current_user)]
 admin_dependencies = [Depends(get_current_admin)]
 
 app.include_router(stocks.router, dependencies=protected_dependencies)
-app.include_router(cache.router, dependencies=admin_dependencies)
+# /api/cache/* — the registry has always documented this path; the mount was
+# missing the /api prefix, so nothing could ever reach it.
+# /api/internal/cache/* — X-Internal-Key door for scripts and jobs (NO cookie
+# auth: it is CSRF-exempt precisely because it carries no ambient credentials).
+app.include_router(cache.router, prefix="/api", dependencies=admin_dependencies)
+app.include_router(cache.internal_router, prefix="/api")
 
 app.include_router(rs.router, prefix="/api", dependencies=protected_dependencies)  # RS V1 endpoints
 app.include_router(rs_v2.router, prefix="/api", dependencies=protected_dependencies)  # RS V2 endpoints
@@ -168,8 +202,8 @@ app.include_router(xbrl_financials.router, dependencies=protected_dependencies)
 # (the frontend useUpload chain was dead and its raw fetch carried no CSRF or
 # credentials). Workbook ingestion runs through the scripts in backend/scripts
 # which share the same xbrl_parser / xbrl_data_service layer.
-from app.api.routes import terminal as terminal_router
-app.include_router(terminal_router.router, dependencies=protected_dependencies)
+# Terminal router retired: endpoints moved into the REBH engine router under
+# /api/rebh/terminal/* (see app/api/routes/rebh_engine.py, TERMINAL SUITE section).
 app.include_router(market_pulse_router.router, prefix="/api/market-pulse", tags=["Market Pulse"])
 app.include_router(rs_line_router.router, tags=["RS Line Indicators"], dependencies=protected_dependencies)
 app.include_router(mansfield_rs_router.router, prefix="/api/indicators/mansfield-rs", tags=["Indicators"], dependencies=protected_dependencies)
@@ -225,13 +259,33 @@ async def startup_event():
     
     redis_connected = await redis_cache.init_redis()
     if not redis_connected:
-        print("⚠️ Redis unavailable — authentication will fail-closed (503) until Redis recovers")
+        # Loud on purpose (Phase 2): the old line said "Redis unavailable" and
+        # the app carried on fail-open, so a wrong port (REDIS_URL pointing at a
+        # box with no listener) could look healthy for weeks. host:port only —
+        # never the password.
+        print(
+            "WARNING: Redis UNREACHABLE at "
+            f"{redis_cache.describe_target()} — cache falls open (every request "
+            "reads the DB) and authentication FAILS CLOSED (503) until Redis "
+            "recovers. Check REDIS_URL in this environment.",
+            flush=True,
+        )
     else:
-        print("✅ Redis cache initialized successfully")
+        print(
+            f"✅ Redis cache initialized successfully ({redis_cache.describe_target()})",
+            flush=True,
+        )
     
     # ── Start Scheduler (only if ENABLE_SCHEDULER=true) ──
     from app.core.scheduler import start_scheduler
     start_scheduler()
+
+    # Warm the System Map snapshot in the background. Without this the first
+    # admin who opens /admin/system-map pays a full cold build (~11 round trips
+    # to Postgres) while the browser waits; with it the page renders from cache.
+    # Daemon thread, cannot raise, cannot delay startup.
+    from app.api.routes.system_map import warm_snapshot
+    warm_snapshot()
 
 
 @app.on_event("shutdown")
@@ -256,30 +310,42 @@ async def health_check():
     yes/no answer only. Row counts, importer names and per-source status used to
     be published here: a free map of the data estate and of how stale each
     source is. They live on /health/detail behind the admin guard.
+
+    Redis is now probed for real (ping + server version + round-trip latency)
+    instead of trusting whether a socket object happens to exist. A dead cache
+    is a DEGRADATION, not an outage: requests still answer from Postgres, so
+    this stays HTTP 200 with "degraded". Answering 500 here would have Render
+    restart a container that is serving traffic perfectly.
     """
     import datetime
 
-    redis_ok = bool(redis_cache.redis_client)
+    redis_info = await redis_cache.health()
+    redis_ok = redis_info["status"] == "ok"
     return {
-        "status": "healthy",
-        "redis": "connected" if redis_ok else "disconnected",
+        "status": "healthy" if redis_ok else "degraded",
+        "redis": redis_info,
+        # Flat alias kept for anything that still reads the old yes/no shape.
+        "redis_connected": redis_ok,
         "timestamp": datetime.datetime.utcnow().isoformat() + "Z",
-        "message": "API is running" + (" with cache" if redis_ok else " without cache"),
+        "message": "API is running" + (
+            " with cache" if redis_ok else " without cache (serving from the database)"
+        ),
     }
 
 
 @app.get("/health/detail")
 async def health_detail(current_admin: Annotated[User, Depends(get_current_admin)]):
-    """Diagnostics: importer status + database totals. Admin only."""
+    """Diagnostics: importer status + database totals + cache counters. Admin only."""
     import datetime
     from app.services.rebh_importers_service import get_importers_health_status
 
-    redis_ok = bool(redis_cache.redis_client)
+    redis_info = await redis_cache.health()
     importers_status = get_importers_health_status()
     overall = importers_status.get("overall_status")
     return {
         "status": "healthy" if overall in ("healthy", "ok") else "degraded",
-        "redis": "connected" if redis_ok else "disconnected",
+        "redis": redis_info,
+        "cache": redis_cache.stats_snapshot(),
         "importers": importers_status.get("importers"),
         "totals": importers_status.get("database_totals"),
         "timestamp": datetime.datetime.utcnow().isoformat() + "Z",

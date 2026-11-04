@@ -19,9 +19,34 @@ from pathlib import Path
 # Add project root to sys.path to allow importing from 'app'
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 
-# Reduce logging for performance
-logging.basicConfig(level=logging.WARNING, format='%(asctime)s - %(message)s')
+# [Batch-2 L1] INFO (was WARNING) so the print→logger bridge below still surfaces
+# meaningful ✅/⚠️/❌ lines when this script is run standalone. Under the pipeline
+# this call is a no-op — the entrypoint configures the root first — so it never
+# affects the shared run log.
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(message)s')
 logger = logging.getLogger(__name__)
+
+
+# [Batch-2 L1/L3] print→logging bridge. Module-local rebinding of `print` so this
+# script's ~140 console calls flow through logging instead of raw stdout; the
+# builtin `print` is untouched in every other module. Spacer lines dropped; ✅/❌/
+# ⚠→INFO/ERROR/WARNING, routine detail→DEBUG (suppressed under the INFO root, so
+# the per-date loop stays quiet).
+def _print_to_log(*args, sep=" ", end="\n", file=None, flush=False):
+    msg = sep.join(str(a) for a in args).strip()
+    if not msg or set(msg) <= set("=-*"):
+        return
+    if "❌" in msg or "Error" in msg:
+        logger.error(msg)
+    elif "⚠️" in msg:
+        logger.warning(msg)
+    elif "✅" in msg:
+        logger.info(msg)
+    else:
+        logger.debug(msg)
+
+
+print = _print_to_log
 
 class RSCalculatorUltraFast:
     def __init__(self, db_url):
@@ -81,11 +106,11 @@ class RSCalculatorUltraFast:
         """تنفيذ استعلام مع إعادة المحاولة عند الفشل"""
         for attempt in range(max_retries):
             try:
-                if not self._test_connection():
-                    logger.info(f"🔁 Attempting to reconnect (attempt {attempt + 1}/{max_retries})")
-                    self._reconnect()
-                    time.sleep(2 ** attempt)  # Exponential backoff
-                
+                # [S2] No manual pre-flight `SELECT 1` any more: the engine is
+                # built with pool_pre_ping=True, so a dropped WAN connection is
+                # detected and replaced transparently when engine.connect() checks
+                # a connection out of the pool. The old self._test_connection()
+                # call added an extra round-trip BEFORE every single statement.
                 with self.engine.connect() as conn:
                     result = conn.execute(text(sql), params or {})
                     conn.commit()

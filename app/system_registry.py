@@ -28,7 +28,9 @@ MAINTENANCE
 
 from __future__ import annotations
 
+import re
 from datetime import date, datetime, timedelta
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 # ─── Trading calendar ─────────────────────────────────────────────────────────
@@ -160,6 +162,94 @@ def _b(layer: str, path: str, description: str) -> Dict[str, str]:
 def _i(severity: str, text: str) -> Dict[str, str]:
     """severity: 'bug' | 'watch' | 'note'."""
     return {"severity": severity, "text": text}
+
+
+# ─── Terminal commands: one copy-paste door per job ────────────────────────────
+# Only a handful of jobs hand-write `commands=` (backfills and multi-mode scripts),
+# but the Runbook wants a copyable terminal command under Run Now on EVERY card.
+# So the plain single-run command is DERIVED here — and derived conservatively:
+# it is emitted only when the job's own file really carries an
+# `if __name__ == "__main__"` door, so the button can never hand the operator a
+# command that would just re-import a library and exit silently.
+_REPO_ROOT = Path(__file__).resolve().parents[2]      # .../LUMIVST
+_PY_BACKEND = r'.\venv\Scripts\python.exe'            # cwd = backend/
+_PY_ROOT = r'..\venv\Scripts\python.exe'              # cwd = backend/, env = repo venv
+
+# Jobs whose verified interpreter is the PROJECT-ROOT venv (the breadth engine
+# dependencies live there, not in backend/venv — see BREADTH ENGINE notes in
+# scripts). Everything else runs under backend/venv, matching the hand-written
+# commands already in this file.
+_ROOT_VENV_JOBS = frozenset({"breadth_daily"})
+
+_main_door_cache: Dict[str, bool] = {}
+_MAIN_GUARD_RE = re.compile(r'if\s+__name__\s*==\s*["\']__main__["\']')
+
+
+def _has_main_door(file: str) -> bool:
+    """Does this script actually run standalone? Cached.
+
+    Matches the real ``if __name__ == "__main__":`` statement, NOT the bare
+    substring: a docstring that merely mentions __main__ (rebh_importers_service,
+    core/scheduler) would otherwise ship a command that imports the module and
+    does nothing — which is worse than showing no command at all.
+    """
+    if file in _main_door_cache:
+        return _main_door_cache[file]
+    try:
+        text = (_REPO_ROOT / file).read_text(encoding="utf-8", errors="replace")
+        verdict = bool(_MAIN_GUARD_RE.search(text))
+    except OSError:
+        verdict = False
+    _main_door_cache[file] = verdict
+    return verdict
+
+
+def derived_command(job: Dict[str, Any]) -> Optional[Dict[str, str]]:
+    """The single-run CLI for a job that declares none. None = no honest command.
+
+    ``fred:<CODE>`` cards get their own code appended, because
+    app/scrapers/fred_scraper.py reads positional ``sys.argv`` codes (verified in
+    its __main__ door) — so each of the seven FRED cards runs ONE series instead
+    of seven cards all claiming to scrape everything.
+    """
+    file = job.get("file") or ""
+    if not file or not _has_main_door(file):
+        return None
+    rel = file.split("backend/", 1)[1] if file.startswith("backend/") else file
+    py = _PY_ROOT if job.get("job_name") in _ROOT_VENV_JOBS else _PY_BACKEND
+    tail = ""
+    if str(job.get("job_name", "")).startswith("fred:"):
+        tail = ' ' + job["job_name"].split(":", 1)[1]
+    return {"label": "Run from a terminal", "kind": "full",
+            "cli": f'{py} "{rel}"{tail}'}
+
+
+def commands_for(job: Dict[str, Any]) -> List[Dict[str, str]]:
+    """Explicit commands when present, else the derived single-run door.
+
+    Shared by GET /schedule and GET /systems/{id} so the two surfaces can never
+    disagree about what the terminal command is.
+    """
+    explicit = list(job.get("commands") or [])
+    if explicit:
+        return explicit
+    derived = derived_command(job)
+    return [derived] if derived else []
+
+
+def cli_absence_reason(job: Dict[str, Any]) -> str:
+    """Why a card shows no copyable command — said out loud instead of left blank."""
+    if job.get("commands"):
+        return ""
+    file = job.get("file") or ""
+    if not file:
+        return "no script path registered"
+    if not (_REPO_ROOT / file).exists():
+        return f"{file.split('/')[-1]} is not on disk — the registry entry is stale"
+    if not _has_main_door(file):
+        return (f"{file.split('/')[-1]} has no __main__ door — it is a library "
+                "module, so use the Admin button / Run Now")
+    return ""
 
 
 # ─── Hour budgets for the three cron cadences ─────────────────────────────────
@@ -743,7 +833,12 @@ SYSTEMS: List[Dict[str, Any]] = [
             _b("scraper", "backend/app/scrapers/eurodollar_scraper.py",
                "Investing.com snapshot — Scrapling impersonated HTTP (rotating "
                "fingerprints) → stealth browser → requests"),
-            _b("scraper", "backend/app/scrapers/cmefedwatch_scraper.py", "CME FedWatch snapshot"),
+            _b("scraper", "backend/app/scrapers/cmefedwatch_scraper.py",
+               "CME FedWatch — curl_cffi TLS impersonation replaying the QuikStrike "
+               "ASP.NET UpdatePanel postbacks (no browser, no Selenium, no proxy): "
+               "the 9 FOMC meeting tabs, Now/1D/1W/1M horizons, the Fed Fund "
+               "futures ladder, the conditional matrix and the 75-cell Dot Plot → "
+               "6 tables"),
             _b("scraper", "backend/app/scrapers/gurufocus_scraper.py",
                "SP500_EY / SP500_PE — Scrapling HTTP + pure-Python __NUXT__ decoder, "
                "stealth-browser fallback; Selenium removed 2026-10-23 — exists, not "
@@ -770,8 +865,10 @@ SYSTEMS: List[Dict[str, Any]] = [
                "removed 2026-10-23: StealthyFetcher + page_action pulls the bulletin "
                ".xlsx into BytesIO for pandas"),
             _b("model", "backend/app/models/economic_indicators.py",
-               "5 models in one file: economic_indicators, treasury_yield_curves, "
-               "sp500_history, eurodollar_futures, cme_fedwatch"),
+               "11 models in one file: economic_indicators, fred_series_metadata, "
+               "treasury_yield_curves, sp500_history, eurodollar_futures, cme_fedwatch "
+               "+ the five FedWatch tables added 2026-10-31 / 2026-11-01 (snapshot, "
+               "horizon, futures, meeting, dotplot)"),
             _b("model", "backend/app/models/saudi_macro.py", "saudi_economic_indicators"),
             _b("model", "backend/app/models/sukuk_bonds.py", "sukuk_market_data"),
         ],
@@ -847,13 +944,34 @@ SYSTEMS: List[Dict[str, Any]] = [
             _j("manual:cme_fedwatch", "backend/app/scrapers/cmefedwatch_scraper.py",
                "manual only — Admin button POST /api/economic-indicators/scrape/cme-fedwatch "
                "or Run Now",
-               None, "manual", writes=["cme_fedwatch"], tracked=True,
+               None, "manual", tracked=True,
+               writes=["cme_fedwatch", "cme_fedwatch_snapshot", "cme_fedwatch_horizon",
+                       "cme_fedwatch_futures", "cme_fedwatch_meeting",
+                       "cme_fedwatch_dotplot"],
                cadence="daily", role="ingestion", storage="snapshot",
-               note="not scheduled: QuikStrike is flaky from server IPs. Since "
-                    "2026-10-13 both the Admin endpoint and Run Now record under "
-                    "track_job('manual:cme_fedwatch'); the scraper now returns "
-                    "{ok, rows} so rows_written is real, and a failed snapshot is "
-                    "recorded red instead of an empty success."),
+               commands=[{"label": "Re-scrape today (all tabs + dot plot)",
+                          "kind": "full",
+                          "cli": '.\\venv\\Scripts\\python.exe '
+                                 '"app/scrapers/cmefedwatch_scraper.py" --force'}],
+               note="NOT an IP or browser problem: cmegroup.com sits behind Akamai, "
+                    "which answers 403 to plain requests AND to cloudscraper (measured "
+                    "2026-10-31). Since the 2026-11-01 upgrade the scraper replays the "
+                    "QuikStrike ASP.NET UpdatePanel postbacks over curl_cffi with a real "
+                    "browser TLS fingerprint — no Selenium, no driver, no proxy — and "
+                    "drives every sidebar control: the 9 official FOMC meeting tabs "
+                    "(Meeting Information + Ease/No Change/Hike each), the "
+                    "Target-Rate horizons Now/1D/1W/1M, the Fed Fund futures ladder, "
+                    "the conditional matrix and the Dot Plot table. Writes 6 tables "
+                    "(see writes=); live counts on 2026-11-01 are 9 meetings, "
+                    "1,042 horizon rows, 75 dot-plot cells, 13 futures, 1 snapshot. "
+                    "Tables came from migrations 2026_10_31_fedwatch (snapshot/horizon/"
+                    "futures) and 2026_11_01_fedwatch2 (meeting/dotplot). Returns "
+                    "{ok, rows, detail} so rows_written covers all six tables. "
+                    "Trap: running the module directly (python app/scrapers/"
+                    "cmefedwatch_scraper.py --force) goes through __main__, which opens "
+                    "no track_job row — so a good CLI scrape leaves this card showing "
+                    "the last Admin/Run-Now attempt. Since 2026-10-13 the Admin endpoint "
+                    "and Run Now both record under track_job('manual:cme_fedwatch')."),
             _j("manual:gurufocus", "backend/app/scrapers/gurufocus_scraper.py",
                "manual only — Admin monthly buttons /scrape/SP500_EY and /scrape/SP500_PE "
                "or Run Now",
@@ -940,17 +1058,50 @@ SYSTEMS: List[Dict[str, Any]] = [
                     "1-row 'Yahoo SR3=F' snapshot means the fallback ran, not a ladder.",
                pages=["/interest-rate/eurodollar-futures"]),
             _t("cme_fedwatch", "scrape_date", None, "manual:cme_fedwatch",
-               note="snapshot only — CME/QuikStrike blocks server IPs (Selenium)",
+               note="conditional matrix (meeting_date × rate_range → probability). "
+                    "Transport is curl_cffi TLS impersonation — Akamai 403s requests/"
+                    "cloudscraper, and no browser is involved",
+               pages=["/interest-rate/cme-fedwatch"]),
+            _t("cme_fedwatch_snapshot", "scrape_date", None, "manual:cme_fedwatch",
+               note="one row per scrape: the tool's 'Current' header — meeting info, "
+                    "Ease/No Change/Hike aggregates, current target range, chart axis "
+                    "labels",
+               pages=["/interest-rate/cme-fedwatch"]),
+            _t("cme_fedwatch_horizon", "scrape_date", None, "manual:cme_fedwatch",
+               note="Target Rate (bps) / Probability(%) buckets across Now / 1 Day / "
+                    "1 Week / 1 Month for every meeting — what the Compare view reads "
+                    "(1,042 rows on 2026-11-01)",
+               pages=["/interest-rate/cme-fedwatch"]),
+            _t("cme_fedwatch_futures", "scrape_date", None, "manual:cme_fedwatch",
+               note="the Fed Fund Futures ladder above the matrix; lets each meeting "
+                    "tab resolve to a contract + mid price without a click per tab",
+               pages=["/interest-rate/cme-fedwatch"]),
+            _t("cme_fedwatch_meeting", "scrape_date", None, "manual:cme_fedwatch",
+               note="one row per FOMC meeting tab — all nine, not only the nearest "
+                    "(9 on 2026-11-01)",
+               pages=["/interest-rate/cme-fedwatch"]),
+            _t("cme_fedwatch_dotplot", "scrape_date", None, "manual:cme_fedwatch",
+               note="the 'Dot Plot - Table' grid: participants' year-end projections "
+                    "as target_rate × year_label → count + the tool's own heat colour "
+                    "(75 cells)",
                pages=["/interest-rate/cme-fedwatch"]),
             _t("saudi_economic_indicators", "period", 40, "macro_importer",
                note="`period` is a real DATE since the 2026-10-26 macro migration "
                     "(the business period SAMA/GaStat published, not when we scraped "
                     "it). Monthly/quarterly cadence, so the lag budget is a month "
                     "plus slack. Written by scripts/SAMA&GaStat.py (manual), not a "
-                    "cron job"),
+                    "cron job. NOT read by the bonds/indicators pages: its only "
+                    "reader is GET /api/rebh/market-macro (rebh_engine.py), called "
+                    "from app/rebh/tools/components/MarketMonitorTab.tsx",
+               pages=["/rebh/tools"]),
             _t("sukuk_market_data", "updated_at", 10, "sukuk_importer",
                note="`as_of` is a String; updated_at is the only real timestamp. "
-                    "Written by scripts/Sukuk&Bonds.py (manual), not by a cron job"),
+                    "Written by scripts/Sukuk&Bonds.py (manual), not by a cron job. "
+                    "Read here only by the data-health aggregation "
+                    "(app/services/rebh_importers_service.py counts it) — no page in "
+                    "this system queries the table; the REBH labs readers are "
+                    "registered under the rebh system",
+               pages=["/rebh/health"]),
         ],
         "issues": [
             _i("note", "2026-10-13 · Importer wrappers retired. The cron jobs and "
@@ -1078,13 +1229,16 @@ SYSTEMS: List[Dict[str, Any]] = [
                         "outside the Bug-2 scope, so it was not touched — reported here "
                         "so nobody assumes market-macro was the only one."),
             _i("watch", "eurodollar + CME FedWatch have Admin buttons but are not "
-                       "scheduled: both sources block datacenter IPs (403 / error page). "
-                       "Their tables are snapshots, so a stale snapshot is expected, not "
-                       "an outage — max_lag is intentionally None."),
-            _i("note", "gurufocus_scraper.py and cmefedwatch_scraper.py need headless "
-                       "Chrome; the scheduler comment says GuruFocus was un-scheduled for "
-                       "RAM/CPU reasons on the server. The Admin monthly buttons still "
-                       "call them."),
+                       "scheduled. For eurodollar the reason is real (Investing.com 403s "
+                       "datacenter IPs). For CME FedWatch it is NOT a block any more — "
+                       "curl_cffi reaches it fine — it stays manual only because nothing "
+                       "was ever put on the cron. Their tables are snapshots, so a stale "
+                       "snapshot is expected, not an outage — max_lag is intentionally None."),
+            _i("note", "gurufocus_scraper.py keeps a stealth-browser FALLBACK (HTTP "
+                       "first); cmefedwatch_scraper.py needs no browser at all since "
+                       "2026-11-01 — it is pure curl_cffi postback replay. The scheduler "
+                       "comment says GuruFocus was un-scheduled for RAM/CPU reasons on "
+                       "the server. The Admin monthly buttons still call them."),
             _i("note", "/valuation/economy, /valuation/bond and /valuation/treasury-* "
                        "render the same tables from the REBH-side valuation service, so a "
                        "macro outage shows up in two different places of the UI."),
@@ -2067,6 +2221,39 @@ _normalise_tables()
 _INDEX: Dict[str, Dict[str, Any]] = {s["id"]: s for s in SYSTEMS}
 
 
+# ── Series-scoped evidence for shared tables ─────────────────────────────────
+# ``economic_indicators`` is ONE table holding a dozen unrelated series, but a
+# registry table row can name exactly one ``source_job`` (it names fred:UNRATE).
+# Every other writer into it then has no measured table of its own: when its
+# ledger line goes stale nothing can overturn it, and the card stays red even
+# after a successful run from a terminal. This map is the missing attribution —
+# job_name → the indicator_code(s) that prove THAT job's data — read by the
+# Runbook with one GROUP BY per snapshot (system_map._fetch_series_latest), so
+# covering nine shared-table jobs costs the same one SELECT as covering two.
+SERIES_EVIDENCE: Dict[str, List[str]] = {
+    "manual:gurufocus": ["SP500_EY", "SP500_PE"],
+    "scraper:sp500_ey": ["SP500_EY"],
+}
+
+SERIES_TABLE = "economic_indicators"
+SERIES_KEY_COLUMN = "indicator_code"
+SERIES_DATE_COLUMN = "report_date"
+
+
+def series_evidence(job_name: str) -> List[str]:
+    """The indicator_codes that count as THIS job's data; [] when it has none.
+
+    ``fred:<CODE>`` jobs resolve from their own name — the code in the job_name
+    is literally the FRED series id they write (fred:BAMLC0A3CA → BAMLC0A3CA) —
+    so listing all seven here would only create a second place to be wrong.
+    """
+    if job_name in SERIES_EVIDENCE:
+        return SERIES_EVIDENCE[job_name]
+    if job_name.startswith("fred:"):
+        return [job_name.split(":", 1)[1]]
+    return []
+
+
 def list_systems() -> List[Dict[str, Any]]:
     """All registered systems, in the order they should appear in the sidebar."""
     return SYSTEMS
@@ -2154,6 +2341,170 @@ def _job_by_name(system: Dict[str, Any], job_name: Optional[str]) -> Optional[Di
         if job["job_name"] == job_name:
             return job
     return None
+
+
+# ─── Page ↔ script lineage: the navbar spine, read in both directions ─────────
+def normalise_page(path: Optional[str]) -> str:
+    """'/bonds/' , '/screeners?tab=power-play' , '/rebh' + '' → a router pathname.
+
+    The frontend navbar carries query strings on purpose (one page, several
+    tabs), and the registry stores some pages with a trailing slash. Lineage has
+    to key on what Next.js actually matches, or the same page appears twice.
+    """
+    p = (path or "").split("?", 1)[0].split("#", 1)[0].strip().rstrip("/")
+    return p or "/"
+
+
+def page_lineage() -> Dict[str, Dict[str, Any]]:
+    """Memoised view of ``_build_page_lineage()`` — SYSTEMS is static import data."""
+    global _PAGE_LINEAGE_CACHE
+    if _PAGE_LINEAGE_CACHE is None:
+        _PAGE_LINEAGE_CACHE = _build_page_lineage()
+    return _PAGE_LINEAGE_CACHE
+
+
+_PAGE_LINEAGE_CACHE: Optional[Dict[str, Dict[str, Any]]] = None
+
+# Jobs that write ONE shared table but only answer for SOME pages: every FRED
+# series lives in economic_indicators, so "which job feeds this page" cannot be
+# read off the table. Verified page by page from the frontend metadata files
+# (app/economic-indicators/_data/indicatorMetadata.ts, app/spread/_data/
+# spreadMetadata.ts) and the fetch each page actually makes
+# (/api/economic-indicators/<CODE>). Anything listed here is attached to its own
+# pages only, never to the whole table.
+_SERIES_PAGES: Dict[str, List[str]] = {
+    "fred:UNRATE": ["/economic-indicators", "/economic-indicators/unrate", "/valuation/economy"],
+    "fred:PAYEMS": ["/economic-indicators", "/economic-indicators/payems",
+                    "/economic-indicators/nfp-change"],
+    "fred:IC4WSA": ["/economic-indicators", "/economic-indicators/ic4wsa"],
+    "fred:BAMLC0A3CA": ["/spread/a-corporate"],
+    "fred:BAMLC0A4CBBB": ["/spread/bbb-corporate"],
+    "fred:BAMLC0A3CAEY": ["/market/a-effective-yield"],
+    "fred:SAUCPALTT01GPM": ["/rebh/tools"],
+    "manual:gurufocus": ["/market/sp500-earnings-yield", "/market/sp500-pe-ratio"],
+    "scraper:sp500_ey": ["/market/sp500-earnings-yield"],
+}
+
+
+def _job_serves(job_name: str, path: str) -> bool:
+    scope = _SERIES_PAGES.get(job_name)
+    return scope is None or path in scope
+
+
+def _build_page_lineage() -> Dict[str, Dict[str, Any]]:
+    """page path → the tables it reads and the scripts that must have run for it.
+
+    Two attribution rules, both inherited from how the registry is written (and
+    the same rule ``pipelines()`` uses):
+      · a table that lists ``pages`` feeds exactly those pages — narrow and
+        deliberate, e.g. the six FedWatch tables name only
+        /interest-rate/cme-fedwatch;
+      · a table that lists no pages belongs to the whole system, so every page
+        registered under that system reads it.
+
+    Each entry also says whether a table has NO writer at all
+    (``no_writer_tables``): a page made of reference/seeded tables is not
+    “broken when a script stops”, and must not be shown as if it were.
+    """
+    pages: Dict[str, Dict[str, Any]] = {}
+
+    def entry(path: str, system: Dict[str, Any]) -> Dict[str, Any]:
+        row = pages.setdefault(path, {
+            "path": path,
+            "systems": [],
+            "tables": [],
+            "jobs": [],
+            "no_writer_tables": [],
+        })
+        sid = system["id"]
+        if not any(s["id"] == sid for s in row["systems"]):
+            row["systems"].append({
+                "id": sid,
+                "name": system["name"],
+                "in_navbar": system.get("in_navbar", False),
+                "navbar_label": system.get("navbar_label"),
+            })
+        return row
+
+    for system in SYSTEMS:
+        # One table is usually written by SEVERAL jobs (economic_indicators takes
+        # every fred:<CODE> job plus gurufocus/sp500_ey; sp500_history takes sp500
+        # and sp500_pe). ``_t(source_job=)`` can only name one, so the page's
+        # feeder list is widened here to every job in the system that writes the
+        # table — otherwise /spread/a-corporate would claim UNRATE feeds it.
+        writers: Dict[str, List[Dict[str, Any]]] = {}
+        for job in system["jobs"]:
+            for tbl_name in job["writes"]:
+                writers.setdefault(tbl_name, []).append(job)
+
+        for path in [normalise_page(p) for p in system["pages"]]:
+            entry(path, system)                     # register the page even with 0 tables
+        for tbl in system["tables"]:
+            # ``via`` says how much to trust the link: "table" = the table entry
+            # names this page on purpose; "system" = the table named no pages, so
+            # every page of its system is claimed (the registry's own convention,
+            # and deliberately marked so the UI never passes a guess for a fact).
+            via = "table" if tbl["pages"] else "system"
+            readers = [normalise_page(p) for p in (tbl["pages"] or system["pages"])]
+            for path in readers:
+                row = entry(path, system)
+                seen = next((t for t in row["tables"] if t["table"] == tbl["table"]), None)
+                if seen is None:
+                    row["tables"].append({
+                        "table": tbl["table"],
+                        "system_id": system["id"],
+                        "date_column": tbl["date_column"],
+                        "source_job": tbl["source_job"],
+                        "verified": tbl.get("verified", True),
+                        "note": tbl.get("note", ""),
+                        "via": via,
+                    })
+                elif via == "table" and seen["via"] == "system":
+                    seen["via"] = "table"          # a narrower claim wins
+                job = _job_by_name(system, tbl["source_job"])
+                for feed in [job] + [w for w in writers.get(tbl["table"], [])
+                                     if w is not job]:
+                    if not feed or not _job_serves(feed["job_name"], path):
+                        continue
+                    known = next((j for j in row["jobs"]
+                                  if j["job_name"] == feed["job_name"]), None)
+                    if known is None:
+                        row["jobs"].append({
+                            "job_name": feed["job_name"],
+                            "file": feed["file"],
+                            "system_id": system["id"],
+                            "cadence": feed["cadence"],
+                            "role": feed["role"],
+                            "expected_schedule": feed["expected_schedule"],
+                            "tracked": feed.get("tracked", True),
+                            "via": via,
+                        })
+                    elif via == "table" and known["via"] == "system":
+                        known["via"] = "table"
+                if not job and not writers.get(tbl["table"]):
+                    if tbl["table"] not in row["no_writer_tables"]:
+                        row["no_writer_tables"].append(tbl["table"])
+    for row in pages.values():
+        row["tables"].sort(key=lambda t: (t["via"] != "table", t["table"]))
+        row["jobs"].sort(key=lambda j: (j["via"] != "table", j["job_name"]))
+    return pages
+
+
+def job_consumers() -> Dict[str, List[str]]:
+    """job_name → the pages that read what it writes.
+
+    This is the direction the Runbook needs when a script dies: "breadth_daily
+    stopped — which navbar pages are down or serving stale data?"
+    """
+    out: Dict[str, List[str]] = {}
+    for path, row in page_lineage().items():
+        for job in row["jobs"]:
+            pages = out.setdefault(job["job_name"], [])
+            if path not in pages:
+                pages.append(path)
+    for pages in out.values():
+        pages.sort()
+    return out
 
 
 def all_job_names() -> List[str]:
@@ -2244,7 +2595,7 @@ def schedule_jobs() -> List[Dict[str, Any]]:
                         job["expected_schedule"], job.get("trigger", "cron")),
                     "role": job.get("role", "ingestion"),
                     "storage": job.get("storage", "cumulative"),
-                    "commands": list(job.get("commands") or []),
+                    "commands": list(job.get("commands") or []) or commands_for(job),
                     "writes": list(job.get("writes") or []),
                     "expected_schedule": job["expected_schedule"],
                     "trigger": job.get("trigger", "cron"),

@@ -6,8 +6,12 @@ REBH Engine Service Integration
 - Financial Models (Buffett FCF, Graham Net-Net, Magic Formula, Lynch Fair Value)
 """
 from typing import Dict, List, Optional, Any
+import logging
+
 from app.services.xbrl_data_service import get_company
 from app.services.rebh_data_guard_service import verify_balance_sheet_identity
+
+logger = logging.getLogger(__name__)
 
 
 # --- 1. DERIVATIONS ---
@@ -553,7 +557,17 @@ def calculate_valuation_models(symbol: str, price: Optional[float] = None, marke
     )
     dep = cf_items.get("Depreciation and Amortization", {}).get(latest_cf_p) or 0.0
     
-    mc = market_cap_m or (te * 1.5 if te else 1000.0)  # Default fallback if market cap not provided
+    # [C3] Prefer the REAL market cap supplied by the caller. Only fall back to the
+    # te*1.5 estimate when none was given, and tag the source so the pipeline can
+    # raise an operator-facing data-quality warning. Kept at DEBUG per-call so the
+    # batch callers / valuation endpoints don't flood the log.
+    if market_cap_m:
+        mc = float(market_cap_m)
+        _mcap_source = "real"
+    else:
+        mc = (te * 1.5) if te else 1000.0
+        _mcap_source = "fallback"
+        logger.debug("valuation %s: no market_cap_m → te*1.5 estimate ≈ %s (data-quality risk)", symbol, round(mc, 1))
     
     models = {}
     
@@ -596,6 +610,8 @@ def calculate_valuation_models(symbol: str, price: Optional[float] = None, marke
     return {
         "symbol": symbol,
         "company_name": company_name,
+        "market_cap_used_m": round(mc, 2),
+        "market_cap_source": _mcap_source,
         "models": models
     }
 

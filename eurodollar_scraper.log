@@ -117,3 +117,28 @@
 ✅ تم سحب 25 عقد بنجاح!
 2026-10-26 09:50:55 [INFO] 💾 CSV محفوظ: eurodollar_2026-10-26.csv (25 صف)
 2026-10-26 09:51:06 [INFO] 💾 DB: 25 جديد | 0 محدث
+2026-11-01 00:24:46 [INFO] ============================================================
+2026-11-01 00:24:46 [INFO] 🚀 Eurodollar Futures Scraper [Scrapling v4]
+2026-11-01 00:24:46 [INFO]    التاريخ: 2026-11-01
+2026-11-01 00:24:46 [INFO] ============================================================
+2026-11-01 00:24:46 [INFO]    proxy: غير مُضبوط (مباشر)؛ من datacenter يُرجَّح 403
+2026-11-01 00:24:47 [INFO] Fetched (200) <GET https://www.investing.com/rates-bonds/eurodollar-futures> (referer: https://www.investing.com/)
+2026-11-01 00:24:47 [INFO] [scrapling http] 200 via chrome120: 229,588 chars <- https://www.investing.com/rates-bonds/eurodollar-futures
+2026-11-01 00:24:47 [INFO]     ✅ الجدول خرج من HTTP (http:chrome120) — بدون متصفح
+2026-11-01 00:24:48 [INFO]     📊 25 عقد مستخرج
+2026-11-01 00:24:48 [INFO] 
+✅ تم سحب 25 عقد بنجاح!
+2026-11-01 00:24:48 [INFO] 💾 CSV محفوظ: eurodollar_2026-11-01.csv (25 صف)
+2026-11-01 00:24:55 [INFO] 💾 DB: 25 جديد | 0 محدث
+2026-11-01 18:13:13 [INFO] ============================================================
+2026-11-01 18:13:13 [INFO] 🚀 Eurodollar Futures Scraper [Scrapling v4]
+2026-11-01 18:13:13 [INFO]    التاريخ: 2026-11-01
+2026-11-01 18:13:13 [INFO] ============================================================
+2026-11-01 18:13:13 [INFO]    proxy: غير مُضبوط (مباشر)؛ من datacenter يُرجَّح 403
+2026-11-01 18:13:14 [INFO] Fetched (200) <GET https://www.investing.com/rates-bonds/eurodollar-futures> (referer: https://www.investing.com/)
+2026-11-01 18:13:14 [INFO] [scrapling http] 200 via chrome120: 229,825 chars <- https://www.investing.com/rates-bonds/eurodollar-futures
+2026-11-01 18:13:14 [INFO]     ✅ الجدول خرج من HTTP (http:chrome120) — بدون متصفح
+2026-11-01 18:13:14 [INFO]     📊 25 عقد مستخرج
+2026-11-01 18:13:14 [INFO] 
+✅ تم سحب 25 عقد بنجاح!
+2026-11-01 18:13:14 [INFO] 💾 CSV محفوظ: eurodollar_2026-11-01.csv (25 صف)

@@ -11,7 +11,7 @@ import os
 import re
 from datetime import datetime
 
-# إعداد الـ Logging
+# Logging setup
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -25,24 +25,26 @@ MIN_COMPANIES_EXPECTED = int(os.environ.get("DFI_MIN_COMPANIES", "150"))
 
 def build_driver(headless=True):
     """
-    إعداد متصفح كروم بنفس إعدادات السكريبت القديم
-    مع دعم Render/Docker deployment
+    Build the Chrome WebDriver with the same options as the legacy script,
+    plus Render/Docker deployment support.
     """
     import shutil
 
+    # Environment diagnostics stay visible on purpose — they are the first thing
+    # you inspect when the driver refuses to start on a new machine.
     chrome_bin_env = os.environ.get('CHROME_BIN')
     chromedriver_env = os.environ.get('CHROMEDRIVER_PATH')
-    logger.info(f"🔍 DEBUG: CHROME_BIN env = {chrome_bin_env}")
-    logger.info(f"🔍 DEBUG: CHROMEDRIVER_PATH env = {chromedriver_env}")
+    logger.info(f"DEBUG: CHROME_BIN env = {chrome_bin_env}")
+    logger.info(f"DEBUG: CHROMEDRIVER_PATH env = {chromedriver_env}")
 
     render_chrome = '/opt/render/project/.chrome/chrome-linux64/chrome'
     render_driver = '/opt/render/project/.chrome/chromedriver-linux64/chromedriver'
-    logger.info(f"🔍 DEBUG: Render Chrome exists = {os.path.exists(render_chrome)}")
-    logger.info(f"🔍 DEBUG: Render ChromeDriver exists = {os.path.exists(render_driver)}")
+    logger.info(f"DEBUG: Render Chrome exists = {os.path.exists(render_chrome)}")
+    logger.info(f"DEBUG: Render ChromeDriver exists = {os.path.exists(render_driver)}")
 
     options = Options()
 
-    # إعدادات أساسية للاستقرار
+    # Baseline stability flags
     options.add_argument("--no-sandbox")
     options.add_argument("--disable-dev-shm-usage")
     options.add_argument("--disable-gpu")
@@ -60,7 +62,7 @@ def build_driver(headless=True):
     if headless:
         options.add_argument("--headless=new")
 
-    # البحث عن Chrome binary
+    # Locate the Chrome binary
     chrome_bin = None
 
     for env_var in ['CHROME_BIN', 'GOOGLE_CHROME_BIN', 'CHROMIUM_BIN']:
@@ -89,6 +91,9 @@ def build_driver(headless=True):
             '/opt/google/chrome/google-chrome',
             '/snap/bin/chromium',
             '/app/.apt/usr/bin/google-chrome',
+            # Windows default installs (Chrome is rarely on PATH there)
+            r'C:\Program Files\Google\Chrome\Application\chrome.exe',
+            r'C:\Program Files (x86)\Google\Chrome\Application\chrome.exe',
         ]
         for path in linux_chrome_paths:
             if os.path.exists(path):
@@ -119,6 +124,17 @@ def build_driver(headless=True):
                 chromedriver_path = path
                 break
 
+    # [Perf] Local webdriver-manager cache BEFORE any network call: asking Google
+    # for the latest driver version on every cold start is a wasted round-trip
+    # when the binaries already live under ~/.wdm from previous runs.
+    if not chromedriver_path:
+        try:
+            from app.core.chromedriver_cache import resolve_cached_chromedriver
+            chromedriver_path = resolve_cached_chromedriver(chrome_bin)
+        except Exception as cache_err:
+            logger.debug("Local ChromeDriver cache lookup failed: %s", cache_err)
+            chromedriver_path = None
+
     if chromedriver_path:
         try:
             logger.info(f"📍 Found explicit ChromeDriver at: {chromedriver_path}")
@@ -129,8 +145,9 @@ def build_driver(headless=True):
         except Exception as e:
             logger.warning(f"⚠️ Explicit ChromeDriver failed, falling back to manager: {e}")
 
+    # Last resort: webdriver-manager (network call), only when nothing is cached.
     try:
-        logger.info("🔄 Attempting to use webdriver-manager...")
+        logger.info("🔄 Attempting to use webdriver-manager (network)...")
         from webdriver_manager.chrome import ChromeDriverManager
         service = Service(ChromeDriverManager().install())
         driver = webdriver.Chrome(service=service, options=options)
@@ -143,8 +160,8 @@ def build_driver(headless=True):
 
 def clean_number(text):
     """
-    تنظيف الأرقام من الفواصل والنسب المئوية
-    القيم زي '-' أو 'M' أو الفاضية بترجع None
+    Strip thousands separators and percent signs.
+    Placeholders such as '-', 'M' and empty strings return None.
     """
     if text is None:
         return None
@@ -152,7 +169,7 @@ def clean_number(text):
     if text in ("", "-", "—", "M", "*", "**"):
         return None
     text = text.replace(',', '').replace('%', '').strip()
-    # إزالة علامات * الخاصة بالإيقاف/الشطب لو اتلزقت بالرقم
+    # Remove suspension/delisting '*' markers stuck to the number
     text = text.replace('*', '').strip()
     try:
         return float(text)
@@ -161,7 +178,7 @@ def clean_number(text):
 
 
 def clean_symbol_or_company(text):
-    """تنظيف اسم الشركة/القطاع من علامات * (موقوفة) و ** (مشطوبة)"""
+    """Strip the '*' (suspended) and '**' (delisted) markers from names/sectors."""
     if text is None:
         return ""
     return re.sub(r'\s*\*+\s*$', '', text.strip()).strip()
@@ -169,8 +186,8 @@ def clean_symbol_or_company(text):
 
 def scrape_daily_financial_indicators(headless=True):
     """
-    سحب بيانات صفحة Daily Financial Indicators من موقع تداول السعودية.
-    ترجع 3 قوائم: بيانات الشركات، ملخص القطاعات، وإجمالي السوق.
+    Scrape the Tadawul Daily Financial Indicators page.
+    Returns 3 lists: company rows, sector summaries, and the market total.
     """
     url = "https://www.saudiexchange.sa/Resources/Reports-v2/DailyFinancialIndicators_en.html"
     driver = None
@@ -187,7 +204,7 @@ def scrape_daily_financial_indicators(headless=True):
         logger.info(f"🌍 Navigating to {url}")
         driver.get(url)
 
-        # استنى لحد ما الجدول يظهر — 3 محاولات مع تأخير متزايد
+        # Wait for the table to render — 3 attempts with increasing backoff
         wait = WebDriverWait(driver, 45)
         table_found = False
         for attempt in range(3):
@@ -203,10 +220,10 @@ def scrape_daily_financial_indicators(headless=True):
                 else:
                     logger.error("❌ All 3 attempts to find table failed. Aborting scrape.")
                     raise
-        time.sleep(2)  # هامش أمان لتحميل الصفوف بالكامل
+        time.sleep(2)  # safety margin so all rows finish rendering
 
 
-        # محاولة استخراج تاريخ التقرير (مثال: "Main Market 2026/07/01")
+        # Try to read the report date from the page (e.g. "Main Market 2026-07-01")
         try:
             page_text = driver.find_element(By.TAG_NAME, "body").text
             date_match = re.search(r'Main Market\s+(\d{4}/\d{2}/\d{2})', page_text)
@@ -247,7 +264,7 @@ def scrape_daily_financial_indicators(headless=True):
         except Exception:
             pass
 
-        # استخراج الصفوف
+        # Extract the table rows
         try:
             tbody = target_table.find_element(By.TAG_NAME, "tbody")
             rows = tbody.find_elements(By.TAG_NAME, "tr")
@@ -264,14 +281,14 @@ def scrape_daily_financial_indicators(headless=True):
         for i, row in enumerate(rows):
             cols = row.find_elements(By.TAG_NAME, "td")
             if len(cols) < 11:
-                continue  # صف هيدر أو صف غير مكتمل
+                continue  # header row or incomplete row
 
             try:
                 col0_text = cols[0].text.strip()
                 if not col0_text:
                     continue
 
-                # -------- صف الشركة (أول عمود رقم = Symbol) --------
+                # -------- company row (numeric first column = Symbol) --------
                 if col0_text.isdigit():
                     symbol = col0_text
                     company = clean_symbol_or_company(cols[1].text)
@@ -291,14 +308,14 @@ def scrape_daily_financial_indicators(headless=True):
                     if len(companies) == 1:
                         print(f"DEBUG FIRST COMPANY ROW: {entry}")
 
-                # -------- صف "Market" الإجمالي --------
+                # -------- "Market" total row --------
                 elif col0_text.strip().lower() == "market":
                     market_total = {}
                     for name, cell in zip(columns_map, cols[2:12]):
                         market_total[name] = clean_number(cell.text)
                     logger.info(f"📈 Market total row captured: {market_total}")
 
-                # -------- صف ملخص قطاع (اسم قطاع بدل رقم) --------
+                # -------- sector summary row (sector name instead of a number) --------
                 else:
                     sector_name = clean_symbol_or_company(col0_text)
                     entry = {"Sector": sector_name}
@@ -325,7 +342,7 @@ def scrape_daily_financial_indicators(headless=True):
 
 
 def save_to_csv(companies, sectors, market_total, report_date, output_dir="."):
-    """حفظ النتائج في ملفات CSV"""
+    """Save the scrape results to CSV files"""
     date_tag = (report_date or datetime.now().strftime("%Y-%m-%d")).replace("/", "-")
 
     companies_path = os.path.join(output_dir, f"daily_financial_indicators_companies_{date_tag}.csv")
@@ -349,7 +366,7 @@ def save_to_csv(companies, sectors, market_total, report_date, output_dir="."):
 
 
 def save_to_db(companies):
-    """حفظ النتائج في قاعدة البيانات لتغذية صفحات Valuation
+    """Save the results to the DB to feed the Valuation pages
 
     Returns (added, updated). A DB error is re-raised after the rollback: the
     caller turns it into ok=False, so a failed write can no longer be logged as
@@ -483,6 +500,6 @@ if __name__ == "__main__":
 
     save_to_csv(companies, sectors, market_total, report_date, output_dir=".")
     
-    # تحديث قاعدة البيانات 
+    # Update the database
     if companies:
         save_to_db(companies)

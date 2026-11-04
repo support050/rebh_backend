@@ -14,17 +14,163 @@ Activation:
   Set env var  ENABLE_SCHEDULER=true  on Render (or locally).
 """
 
+import functools
 import logging
 import os
+import socket
 import sys                                       # BREADTH_ENGINE_PY_DEFAULT = sys.executable
-from typing import Any, Callable, Dict, List, Tuple
+from datetime import datetime
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 
+from app.core import cache_bust
+from app.core.cache_config import (
+    PATTERN_BREADTH_SNAPSHOT,
+    PREFIX_ECONOMIC,
+    PREFIX_MARKET_REPORTS,
+    SCHED_LOCK_DEFAULT_TTL_SECONDS,
+    SCHED_LOCK_PREFIX,
+    SCHED_LOCK_PROBE_TIMEOUT_SECONDS,
+    SCHED_LOCK_SLOT_FORMAT,
+    SCHED_LOCK_TTL_SECONDS,
+)
+
 logger = logging.getLogger(__name__)
 EGYPT_TZ = "Africa/Cairo"
 _scheduler: BackgroundScheduler | None = None
+
+# The cron times below are expressed in Africa/Cairo, so the slot that identifies
+# "this scheduled occurrence" must be computed in the same zone or a job that
+# fires at 23:30 Cairo would be fenced under two different days depending on the
+# host's locale. zoneinfo + tzdata ship with the app; if the zone database is
+# missing, the fallback is the host's own zone, which still identifies one slot
+# per day — it just may disagree with a worker in another region by a few hours.
+try:
+    from zoneinfo import ZoneInfo
+    _EGYPT_TZ = ZoneInfo(EGYPT_TZ)
+except Exception as _tz_error:                    # noqa: BLE001 - degrade, never abort
+    _EGYPT_TZ = None
+    logger.warning("scheduler: Africa/Cairo unavailable (%s) — job slots use local time",
+                   type(_tz_error).__name__)
+
+
+# ─── Part 3 / Phase 9: one runner per scheduled slot ──────────────────────
+# BackgroundScheduler is started by every process that has ENABLE_SCHEDULER=true,
+# and it keeps its jobs in memory (no jobstore), so nothing tells a second web
+# replica or a second worker that a sibling already fired the same cron entry.
+# The result is N scrapes of the same source in the same minute and N writers on
+# the same tables — which is also how a rate-limited upstream starts answering
+# 403s for the whole platform.
+#
+# One SET NX per (job, slot) makes the first claimant the only runner. Three
+# rules, in the order they are checked:
+#
+#   * claimed              → run;
+#   * somebody else holds it → SKIP, log only. No job_runs row is written by the
+#     loser, because the winner's row describes the run that actually happened;
+#     recording a "skipped" for every loser would turn a healthy cluster into a
+#     dashboard full of red.
+#   * Redis cannot be asked  → RUN, with a WARNING. The fence is a duplicate
+#     guard, not a correctness gate: a missing day of data is worse than a
+#     double scrape, and a cache outage must not stop the pipeline (the same
+#     fail-open discipline the data path uses).
+#
+# The lock is deliberately NOT released when the job finishes. It doubles as an
+# idempotency fence for the slot: releasing it would let a second worker re-run a
+# scrape that already succeeded minutes ago. The TTL is therefore sized above
+# each job's worst-case runtime (SCHED_LOCK_TTL_SECONDS), so a crashed holder
+# cannot strand the slot for long, and cron will not ask for that slot again
+# until tomorrow, by which time the key is gone.
+#
+# Admin "Run Now" is unaffected: it dispatches JOB_CALLABLES through
+# app/services/job_runner.py, never through the decorated functions below, so a
+# manual trigger stays possible on the same day as a scheduled run. Passing
+# force=True to a decorated callable does the same for anything calling it
+# directly (tests, scripts) — no production path does.
+
+
+def worker_id() -> str:
+    """The lock value: which process claims to own this slot."""
+    return f"{socket.gethostname()}:{os.getpid()}"
+
+
+def current_slot(when: Optional[datetime] = None) -> str:
+    """The slot id (one per day, in the schedule's own timezone)."""
+    if when is None:
+        when = datetime.now(_EGYPT_TZ or datetime.now().astimezone().tzinfo)
+    elif when.tzinfo is None:
+        when = when.replace(tzinfo=_EGYPT_TZ)
+    else:
+        when = when.astimezone(_EGYPT_TZ or when.tzinfo)
+    return when.strftime(SCHED_LOCK_SLOT_FORMAT)
+
+
+def sched_lock_key(job_name: str, slot: Optional[str] = None) -> str:
+    return f"{SCHED_LOCK_PREFIX}:{job_name}:{slot or current_slot()}"
+
+
+def sched_lock_ttl(job_name: str) -> int:
+    """Per-job ceiling, defaulting to SCHED_LOCK_DEFAULT_TTL_SECONDS."""
+    return int(SCHED_LOCK_TTL_SECONDS.get(job_name, SCHED_LOCK_DEFAULT_TTL_SECONDS))
+
+
+def claim_job_slot(job_name: str, *, ttl_seconds: Optional[int] = None,
+                   client=None, slot: Optional[str] = None) -> Tuple[bool, str]:
+    """Try to own this job's slot. Never raises — see the three rules above.
+
+    The sync client comes from app/core/cache_bust.py, the one place that already
+    knows how to reach Redis from a worker thread (APScheduler runs jobs off the
+    event loop, and a redis-py pool belongs to the loop that created it, so the
+    async singleton cannot be reused here — the same reason _clear_cache() is
+    sync). An injected client is used as-is and never closed: that is the test
+    seam, and it keeps this function usable from scripts that own a connection.
+    """
+    key = sched_lock_key(job_name, slot)
+    ttl = sched_lock_ttl(job_name) if ttl_seconds is None else int(ttl_seconds)
+    owns_client = client is None
+    try:
+        client = client or cache_bust._client(timeout=SCHED_LOCK_PROBE_TIMEOUT_SECONDS)
+        if client.set(key, worker_id(), nx=True, ex=ttl):
+            logger.info("🔒 [Scheduler] slot claimed %s ttl=%ss", key, ttl)
+            return True, "claimed"
+        try:
+            holder = client.get(key) or ""
+        except Exception:                         # noqa: BLE001 - log detail only
+            holder = ""
+        # Silent by design (the brief's "تجاهل التشغيل بصمت"), at INFO because a
+        # loser is normal once more than one process is scheduled.
+        return False, f"slot already held by {holder or 'another worker'}"
+    except Exception as e:                        # noqa: BLE001 - fail open, run
+        logger.warning(
+            "⚠️ [Scheduler] cannot check the slot fence for %s (%s) — running anyway. "
+            "If more than one process has ENABLE_SCHEDULER=true, expect a duplicate "
+            "run of this job.", key, type(e).__name__)
+        return True, "redis-unavailable"
+    finally:
+        if owns_client and client is not None:
+            try:
+                client.close()
+            except Exception:                     # noqa: BLE001
+                pass
+
+
+def cron_exclusive(job_name: str, *, ttl_seconds: Optional[int] = None):
+    """Wrap a cron entry point in the slot fence described above."""
+    def decorator(fn: Callable[..., Any]) -> Callable[..., Any]:
+        @functools.wraps(fn)
+        def wrapper(*args: Any, **kwargs: Any) -> Any:
+            if kwargs.pop("force", False):
+                logger.info("⏩ [Scheduler] %s forced — slot fence bypassed", job_name)
+            else:
+                claimed, detail = claim_job_slot(job_name, ttl_seconds=ttl_seconds)
+                if not claimed:
+                    logger.info("⏭️ [Scheduler] %s skipped: %s", job_name, detail)
+                    return None
+            return fn(*args, **kwargs)
+        return wrapper
+    return decorator
 
 
 # ─── Job: Daily ────────────────────────────────────────────────
@@ -44,6 +190,7 @@ MONTHLY_SCRAPER_KEYS: Tuple[str, ...] = (
 )
 
 
+@cron_exclusive("daily")
 def job_daily_scrapers():
     logger.info("=" * 50)
     logger.info("📅 [Scheduler] DAILY scrapers starting…")
@@ -60,6 +207,7 @@ def job_daily_scrapers():
 
 
 # ─── Job: Weekly ───────────────────────────────────────────────
+@cron_exclusive("weekly")
 def job_weekly_scrapers():
     logger.info("📆 [Scheduler] WEEKLY scrapers starting…")
     for key in WEEKLY_SCRAPER_KEYS:
@@ -70,6 +218,7 @@ def job_weekly_scrapers():
 
 
 # ─── Job: Monthly ─────────────────────────────────────────────
+@cron_exclusive("monthly")
 def job_monthly_scrapers():
     logger.info("🗓️ [Scheduler] MONTHLY scrapers starting…")
 
@@ -102,6 +251,7 @@ def job_monthly_scrapers():
 
 
 # ─── Job: Market Reports ──────────────────────────────────────
+@cron_exclusive("market_reports")
 def job_market_reports_scrapers():
     logger.info("=" * 50)
     logger.info("📊 [Scheduler] MARKET REPORTS scrapers starting…")
@@ -127,6 +277,7 @@ def job_market_reports_scrapers():
 
 
 # ─── Job: Filings Importer (Phase 12) ──────────────────────────
+@cron_exclusive("filings_importer")
 def job_filings_importer():
     logger.info("📑 [Scheduler] Official Filings check starting…")
     _safe_job("filings_importer")
@@ -134,6 +285,7 @@ def job_filings_importer():
 
 
 # ─── Job: REBH Engine Vintage Snapshot (Phase 12) ─────────────
+@cron_exclusive("engine_vintages")
 def job_engine_vintages():
     logger.info("⚙️ [Scheduler] REBH Engine Vintage Snapshot job starting…")
     _safe_job("engine_vintages")
@@ -148,6 +300,13 @@ def job_engine_vintages():
 # BREADTH_ENGINE_PY exists only as an escape hatch (e.g. CI with a dedicated runner);
 # leave it unset in normal operation.
 BREADTH_ENGINE_PY_DEFAULT = sys.executable
+# Ceiling for the breadth subprocess. Raised 2026-11-01 from 1800s to a full hour:
+# a clean rebuild is ~500s, but the loader retries the Render connection up to 6
+# times whenever the managed Postgres restarts, and the 30-minute cap killed one
+# of those runs outright -- job_runs then recorded TimeoutExpired while the engine
+# had in fact rebuilt every table. The Runbook's budget for this job is 26h, so an
+# hour of ceiling is still nowhere near "late".
+BREADTH_TIMEOUT_SECONDS = 3600
 
 
 def _breadth_daily_body():
@@ -156,9 +315,15 @@ def _breadth_daily_body():
     Deliberately NOT wrapped in track_job here: the cron entry point below and
     the admin run-now dispatcher each open their own job_runs row, so one click
     or one cron fire produces exactly one record.
+
+    The marker below is what keeps that promise now that breadth_job.py records
+    its OWN terminal runs: both parents dispatch through this function, so the
+    child is told the row already exists instead of opening a duplicate.
     """
     import subprocess
     from pathlib import Path
+
+    from app.services.job_tracking import PARENT_RECORDED_ENV
 
     backend_dir = Path(__file__).resolve().parents[2]          # .../backend
     py = os.getenv("BREADTH_ENGINE_PY") or BREADTH_ENGINE_PY_DEFAULT
@@ -167,7 +332,8 @@ def _breadth_daily_body():
     logger.info(f"🌐 [Scheduler] MARKET BREADTH starting… py={py}")
     proc = subprocess.run(
         [py, "-X", "utf8", str(script)], cwd=str(backend_dir),
-        capture_output=True, text=True, timeout=1800,
+        env=dict(os.environ, **{PARENT_RECORDED_ENV: "breadth_daily"}),
+        capture_output=True, text=True, timeout=BREADTH_TIMEOUT_SECONDS,
     )
     tail = (proc.stdout or "")[-600:]
     if proc.returncode != 0:
@@ -177,6 +343,7 @@ def _breadth_daily_body():
     return tail
 
 
+@cron_exclusive("breadth_daily")
 def job_breadth_daily():
     """Cron entry point: records the run under triggered_by='cron'."""
     from app.services.job_tracking import track_job
@@ -191,37 +358,33 @@ def job_breadth_daily():
         raise                                              # let _safe/APScheduler record it
 
 
-def _scan_delete(r, pattern: str) -> int:
-    """Unlink every key matching ``pattern`` via chunked SCAN.
+def _bust_cache(patterns, label: str) -> dict:
+    """One place that turns a cache eviction into a log line nobody misreads.
 
-    SCAN (count=500) instead of the blocking KEYS command: KEYS is O(N) over
-    the whole keyspace and stalls Redis for every other request.
-    UNLINK instead of DELETE: reclamation happens in Redis background threads,
-    so batch evictions never block the single event loop on our shared instance.
+    Delegates the SCAN+UNLINK walk to cache_bust. The old shape here logged a
+    failure as "cache clear skipped" — which is true and useless. What the
+    reader needs is: WHICH host was unreachable, and that users will keep
+    seeing the previous payload until the TTL lapses.
     """
-    deleted = 0
-    cursor = 0
-    while True:
-        cursor, keys = r.scan(cursor=cursor, match=pattern, count=500)
-        if keys:
-            r.unlink(*keys)
-            deleted += len(keys)
-        if cursor == 0:
-            break
-    return deleted
+    report = cache_bust.evict(list(patterns))
+    if report["reachable"]:
+        logger.info("  🧹 busted %s cache: %s key(s) from %s",
+                    label, report["deleted"], report["target"])
+    else:
+        logger.warning(
+            "  ⚠️ CACHE NOT BUSTED (%s): %s is unreachable (%s) — readers keep the "
+            "previous payload until the TTL lapses.",
+            label, report["target"], report["error"])
+    return report
 
 
 def _clear_breadth_cache():
-    """Invalidate rebh:breadth:* Redis keys so the API rebuilds from fresh tables."""
-    try:
-        import redis as sync_redis
-        redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
-        r = sync_redis.from_url(redis_url, decode_responses=True, socket_timeout=5)
-        n = _scan_delete(r, "rebh:breadth:*")
-        logger.info(f"  🗑️ Cleared {n} breadth cache keys")
-        r.close()
-    except Exception as e:
-        logger.warning(f"  ⚠️ Breadth cache clear skipped: {e}")
+    """Invalidate rebh:breadth:* so the API rebuilds from fresh tables.
+
+    breadth_job now busts its own keyspace, so this is the parent-side safety
+    net for the cron and Run Now paths — evicting twice is idempotent.
+    """
+    return _bust_cache([PATTERN_BREADTH_SNAPSHOT], "breadth")
 
 
 def _clear_market_reports_cache():
@@ -231,16 +394,7 @@ def _clear_market_reports_cache():
     safety net); the daily cron and the admin Run Now (job_runner._post_run_hooks)
     both funnel through here so a finished scrape is visible immediately.
     """
-    try:
-        from app.core.cache_config import PREFIX_MARKET_REPORTS
-        import redis as sync_redis
-        redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
-        r = sync_redis.from_url(redis_url, decode_responses=True, socket_timeout=5)
-        n = _scan_delete(r, f"{PREFIX_MARKET_REPORTS}:*")
-        logger.info(f"  🗑️ Cleared {n} market-reports cache keys")
-        r.close()
-    except Exception as e:
-        logger.warning(f"  ⚠️ Market-reports cache clear skipped: {e}")
+    return _bust_cache([f"{PREFIX_MARKET_REPORTS}:*"], "market-reports")
 
 
 # ─── Helpers ───────────────────────────────────────────────────
@@ -331,9 +485,14 @@ def _with_one_retry(fn: Callable[[], Any]) -> Any:
 
 
 def _eurodollar():
+    # force=False on purpose: the scraper's own same-day guard returns
+    # "already scraped today" instead of re-hitting Investing.com, which 403s a
+    # datacenter IP. Forcing it made Run Now write a failure over a table that
+    # already held today's ladder. The Admin endpoint takes ?force=true when a
+    # genuine re-pull is wanted.
     return _with_one_retry(lambda: __import__(
         "app.scrapers.eurodollar_scraper", fromlist=["scrape_eurodollar_futures"]
-    ).scrape_eurodollar_futures(save_db=True, force=True, print_results=False))
+    ).scrape_eurodollar_futures(save_db=True, force=False, print_results=False))
 
 
 def _cme_fedwatch():
@@ -475,18 +634,12 @@ JOB_LABELS: Dict[str, str] = {
     "macro_importer": "SAMA & GaStat Macro + Buffett",
 }
 
-# Jobs whose output is served through a Redis cache. The cron groups clear it
-# once at the end of the group; a single manual run has to clear it too, or the
-# admin sees stale numbers right after a successful Run Now.
-# The three manual:* keys serve economic-indicator / eurodollar / fedwatch
-# caches as well, so they join the clear list even though no cron fires them.
-MANUAL_ECONOMIC_KEYS: Tuple[str, ...] = (
-    "manual:eurodollar", "manual:cme_fedwatch", "manual:gurufocus",
-    # macro_importer writes saudi_economic_indicators, served through the
-    # economic:* cache — clear it after a manual run so the UI shows fresh numbers.
-    "macro_importer",
-)
-ECONOMIC_CACHE_JOBS: Tuple[str, ...] = DAILY_SCRAPER_KEYS + WEEKLY_SCRAPER_KEYS + MONTHLY_SCRAPER_KEYS + MANUAL_ECONOMIC_KEYS
+# Which cache each job invalidates is no longer listed here. That mapping used to
+# be a second hand-maintained list (ECONOMIC_CACHE_JOBS = the three cron groups +
+# the manual keys), and it drifted from the scripts' copies: a Run Now of, say,
+# engine_vintages busted nothing at all. There is now ONE table —
+# cache_bust.JOB_GROUPS — consulted by job_runner._post_run_hooks and by every
+# script, so adding a job means adding one row there.
 
 
 def _safe_job(key: str) -> None:
@@ -495,22 +648,14 @@ def _safe_job(key: str) -> None:
 
 
 def _clear_cache():
-    """
-    Clear economic indicator cache keys using a SYNC Redis connection.
-    APScheduler runs jobs in a background thread, so we can't reliably
-    access the async event loop. A direct sync redis.Redis call avoids
-    the 'Event loop is closed' / 'Future attached to a different loop' errors.
-    """
-    try:
-        import redis as sync_redis
+    """Clear the economic-indicator keyspace (economic:*).
 
-        redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
-        r = sync_redis.from_url(redis_url, decode_responses=True, socket_timeout=5)
-        n = _scan_delete(r, "economic:*")
-        logger.info(f"  🗑️ Cleared {n} cache keys")
-        r.close()
-    except Exception as e:
-        logger.warning(f"  ⚠️ Cache clear skipped: {e}")
+    Kept SYNC on purpose: APScheduler runs jobs in a background thread, so we
+    can't reliably reach the async event loop — a direct sync client (here
+    inside cache_bust.evict) avoids the 'Event loop is closed' / 'Future
+    attached to a different loop' errors.
+    """
+    return _bust_cache([f"{PREFIX_ECONOMIC}:*"], "economic")
 
 
 # ─── Start / Stop ─────────────────────────────────────────────

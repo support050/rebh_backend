@@ -5,101 +5,127 @@ import numpy as np
 from sqlalchemy import create_engine, text
 import logging
 
-# إضافة المسار للمجلد الرئيسي للوصول للإعدادات
+# Append the project root to sys.path so the settings module is importable
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 
 from app.core.config import settings
 
-# إعداد الـ Logging لمتابعة سير العملية
+# Logging setup — used to follow the progress of the run
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
+def _bulk_update_prices_change(conn, updates, chunk_size=500):
+    """
+    Update prices.change for many rows using ONE statement per chunk.
+
+    Why this exists: psycopg2's executemany still sends one round-trip per row,
+    so the 294-symbol batch cost 294 WAN trips (~82s in the stage-10 timing).
+    `UPDATE ... FROM (VALUES ...)` ships the whole batch in a single statement
+    and Postgres resolves it by primary key in one pass -> 1 round-trip.
+    Returns the number of rows touched.
+    """
+    if not updates:
+        return 0
+
+    affected = 0
+    for start in range(0, len(updates), chunk_size):
+        batch = updates[start:start + chunk_size]
+        # NOTE: CAST(:p AS type) is deliberate — SQLAlchemy's text() does NOT
+        # treat ":name::type" as a bind parameter (the Postgres cast right after
+        # the name makes the lexer skip it), so the raw ":" would reach psycopg2
+        # and the statement would fail with a syntax error.
+        rows_sql = ", ".join(
+            f"(CAST(:id_{i} AS bigint), CAST(:ch_{i} AS numeric))" for i in range(len(batch))
+        )
+        params = {}
+        for i, row in enumerate(batch):
+            params[f"id_{i}"] = row["id"]
+            params[f"ch_{i}"] = row["change"]
+        res = conn.execute(
+            text(
+                f"UPDATE prices AS p SET change = v.ch "
+                f"FROM (VALUES {rows_sql}) AS v(id, ch) WHERE p.id = v.id"
+            ),
+            params,
+        )
+        affected += res.rowcount or 0
+    return affected
+
+
 class TechnicalCalculator:
+    # Every distinct symbol, walked key-by-key off idx_prices_symbol_date. The
+    # recursive "skip scan" idiom costs ~6ms; a plain SELECT DISTINCT on the same
+    # 993K-row table has to sort and takes ~2.3s.
+    _SYMBOLS_SQL = """
+        WITH RECURSIVE syms AS (
+            (SELECT symbol FROM prices ORDER BY symbol LIMIT 1)
+            UNION ALL
+            SELECT (SELECT symbol FROM prices WHERE symbol > syms.symbol ORDER BY symbol LIMIT 1)
+            FROM syms WHERE syms.symbol IS NOT NULL
+        )
+        SELECT symbol FROM syms WHERE symbol IS NOT NULL
+    """
+
+    LOOKBACK_ROWS = 500
+
     def __init__(self, db_url):
         self.engine = create_engine(db_url)
-        self._ensure_columns_exist()
-
-    def _ensure_columns_exist(self):
-        """تأكد من وجود الأعمدة الجديدة في stock_indicators (الحصرية لجدول prices فقط)"""
-        logger.info("🔍 التحقق من وجود الأعمدة في stock_indicators...")
-
-        columns_to_add = {
-            'sma_10':  'NUMERIC(14, 4)',
-            'sma_21':  'NUMERIC(14, 4)',
-            'sma_50':  'NUMERIC(14, 4)',
-            'sma_150': 'NUMERIC(14, 4)',
-            'sma_200': 'NUMERIC(14, 4)',
-            'sma_200_1m_ago': 'NUMERIC(14, 4)',
-            'sma_200_2m_ago': 'NUMERIC(14, 4)',
-            'sma_200_3m_ago': 'NUMERIC(14, 4)',
-            'sma_200_4m_ago': 'NUMERIC(14, 4)',
-            'sma_200_5m_ago': 'NUMERIC(14, 4)',
-            'sma_30w': 'NUMERIC(14, 4)',
-            'sma_40w': 'NUMERIC(14, 4)',
-            'fifty_two_week_high': 'NUMERIC(14, 4)',
-            'fifty_two_week_low':  'NUMERIC(14, 4)',
-            'average_volume_50':   'NUMERIC(20, 2)',
-            'price_minus_sma_10':  'NUMERIC(14, 4)',
-            'price_minus_sma_21':  'NUMERIC(14, 4)',
-            'price_minus_sma_50':  'NUMERIC(14, 4)',
-            'price_minus_sma_150': 'NUMERIC(14, 4)',
-            'price_minus_sma_200': 'NUMERIC(14, 4)',
-            'price_vs_sma_10_percent':  'NUMERIC(14, 4)',
-            'price_vs_sma_21_percent':  'NUMERIC(14, 4)',
-            'price_vs_sma_50_percent':  'NUMERIC(14, 4)',
-            'price_vs_sma_150_percent': 'NUMERIC(14, 4)',
-            'price_vs_sma_200_percent': 'NUMERIC(14, 4)',
-            'percent_off_52w_high': 'NUMERIC(14, 4)',
-            'percent_off_52w_low':  'NUMERIC(14, 4)',
-            'vol_diff_50_percent':  'NUMERIC(14, 4)',
-            # Power Play columns
-            'percent_change_15d':   'NUMERIC(14, 4)',
-            'percent_change_20d':   'NUMERIC(14, 4)',
-            'percent_change_63d':   'NUMERIC(14, 4)',
-            'percent_change_126d':  'NUMERIC(14, 4)',
-            'beta':                 'NUMERIC(12, 4)',
-        }
-
-        for col_name, col_type in columns_to_add.items():
-            try:
-                with self.engine.begin() as conn:
-                    conn.execute(text(
-                        f"ALTER TABLE stock_indicators ADD COLUMN IF NOT EXISTS {col_name} {col_type}"
-                    ))
-                    logger.info(f"✅ تم التأكد من وجود العمود: {col_name}")
-            except Exception as e:
-                logger.warning(f"⚠️ تحذير: {col_name}: {e}")
+        # [Perf] Removed _ensure_columns_exist(): it issued one
+        # `ALTER TABLE stock_indicators ADD COLUMN IF NOT EXISTS ...` per column
+        # (35 statements, each in its own transaction) on EVERY instantiation —
+        # 35+ seconds of WAN round-trips for a schema that is already stable,
+        # plus live DDL performed from a data script. Table shape is owned by the
+        # ORM models and Alembic migrations, not by this script.
 
     def load_data(self):
         """
-        تحميل آخر 500 يوم فقط لكل سهم بدل كل التاريخ.
-        أكبر مؤشر = SMA200 + shift(126) = 326 يوم — 500 يوم كافية بأمان.
-        النتيجة: ~145K سجل بدل 965K سجل (توفير ~85% من الـ RAM).
+        Load the last LOOKBACK_ROWS (500) trading rows per symbol, not all history.
+
+        Longest indicator = SMA200 + shift(126) = 326 rows, so 500 is safe.
+
+        [Perf] Rewritten on both sides of the wire, measured on production data
+        (993,729 price rows -> 140,640 loaded):
+          1. Server side: the old ROW_NUMBER() OVER (PARTITION BY symbol ORDER BY
+             date DESC) window forced a seq scan + sort of ALL rows just to keep
+             the last 500 each (28.8s). A LATERAL probe per symbol with
+             "ORDER BY date DESC LIMIT 500" walks the existing
+             idx_prices_symbol_date backwards instead (6.4s), returning the exact
+             same rows.
+          2. Client side: NUMERIC columns are cast to float8 in SQL. psycopg2
+             builds a Decimal object for every numeric cell (140K rows x 5 cols),
+             which dominated the fetch.
+        Combined wall time: 50.5s -> 25.9s, value-identical (max diff 0.0 and the
+        same NULL counts on all 140,640 rows).
+
+        No ORDER BY in the SQL: calculate() starts with sort_values(['symbol','date']).
         """
-        query = """
-            SELECT id, symbol, date, open, close, high, low, volume_traded
-            FROM (
-                SELECT id, symbol, date, open, close, high, low, volume_traded,
-                       ROW_NUMBER() OVER (PARTITION BY symbol ORDER BY date DESC) AS rn
-                FROM prices
-            ) sub
-            WHERE rn <= 500
-            ORDER BY symbol, date
+        query = f"""
+            SELECT p.id, p.symbol, p.date, p.open, p.close, p.high, p.low, p.volume_traded
+            FROM ({self._SYMBOLS_SQL}) s
+            CROSS JOIN LATERAL (
+                SELECT id, symbol, date,
+                       open::float8, close::float8, high::float8,
+                       low::float8, volume_traded::float8
+                FROM prices pr
+                WHERE pr.symbol = s.symbol
+                ORDER BY pr.date DESC
+                LIMIT {self.LOOKBACK_ROWS}
+            ) p
         """
-        logger.info("⏳ جاري تحميل البيانات من قاعدة البيانات (آخر 500 يوم لكل سهم)...")
+        logger.info("⏳ Loading price history (last %d rows per symbol)...", self.LOOKBACK_ROWS)
         with self.engine.connect() as conn:
             df = pd.read_sql(text(query), conn)
         df['date'] = pd.to_datetime(df['date'])
-        logger.info(f"✅ تم تحميل {len(df)} سجل.")
+        logger.info(f"✅ Loaded {len(df)} price rows.")
         return df
 
     def calculate(self, df):
-        logger.info("📈 جاري حساب المؤشرات الفنية...")
+        logger.info("📈 Calculating technical indicators...")
 
         df = df.sort_values(['symbol', 'date'])
 
-        # فلترة أيام العطلات (أيام الأسعار الثابتة)
+        # Drop holiday rows (rows whose prices are unchanged from the previous session)
         columns_to_check = ['open', 'high', 'low', 'close']
         mask = (df[columns_to_check] != df.groupby('symbol')[columns_to_check].shift(1)).any(axis=1) | \
                (df.groupby('symbol')['date'].cumcount() == 0)
@@ -107,7 +133,7 @@ class TechnicalCalculator:
 
         grouped = df.groupby('symbol')
 
-        # 1. SMAs اليومية
+        # 1. Daily SMAs
         for window in [10, 20, 21, 50, 100, 150, 200]:
             df[f'sma_{window}'] = grouped['close'].transform(
                 lambda x: x.rolling(window=window).mean()
@@ -127,11 +153,11 @@ class TechnicalCalculator:
         )
 
         # 4. Change
-        logger.info("   ... حساب التغير (Change)")
+        logger.info("   ... computing change")
         df['change'] = grouped['close'].transform(lambda x: x.diff())
 
-        # 4b. Power Play: حساب التغيرات المئوية
-        logger.info("   ... حساب percent_change_15d, 20d, 63d, 126d")
+        # 4b. Power Play: percent changes over fixed horizons
+        logger.info("   ... computing percent_change_15d / 20d / 63d / 126d")
         df['percent_change_15d'] = grouped['close'].transform(
             lambda x: ((x - x.shift(15)) / x.shift(15).replace(0, np.nan)) * 100
         )
@@ -146,15 +172,15 @@ class TechnicalCalculator:
         )
 
         # 5. Historical 200MA
-        logger.info("   ... حساب 200MA التاريخية")
+        logger.info("   ... computing historical 200MA series")
         for months_ago, days in [(1, 21), (2, 42), (3, 63), (4, 84), (5, 105)]:
             col_name = f'sma_200_{months_ago}m_ago'
             df[col_name] = grouped['close'].transform(
                 lambda x, d=days: x.rolling(window=200).mean().shift(d)
             )
 
-        # 6. 30W و 40W SMAs
-        logger.info("   ... حساب 30W و 40W SMAs")
+        # 6. 30W and 40W SMAs
+        logger.info("   ... computing 30W and 40W SMAs")
         df['week_ending'] = df['date'] + pd.to_timedelta((4 - df['date'].dt.dayofweek) % 7, unit='D')
         weekly_closes = df.groupby(['symbol', 'week_ending'])['close'].last().reset_index()
         weekly_closes = weekly_closes.sort_values(['symbol', 'week_ending'])
@@ -173,7 +199,7 @@ class TechnicalCalculator:
         df['sma_40w'] = df['sma_40w_calc']
         df = df.drop(['sma_30w_calc', 'sma_40w_calc', 'week_ending'], axis=1)
 
-        # 7. النسب المئوية (Price vs SMA)
+        # 7. Ratios (Price vs SMA)
         for window in [10, 20, 21, 50, 100, 150, 200]:
             col_sma = f'sma_{window}'
             df[f'price_vs_sma_{window}_percent'] = (
@@ -194,16 +220,16 @@ class TechnicalCalculator:
         ) * 100
 
         # 8. Beta Calculation vs TASI Benchmark
-        logger.info("   ... حساب Beta (Volatility) vs Benchmark (TASI)")
+        logger.info("   ... computing beta (volatility) vs TASI benchmark")
 
         tasi_df = df[df['symbol'].isin(['TASI', 'TASI.SR', '^TASI', 'TASI.CM'])]
         if not tasi_df.empty:
             market_df = tasi_df.groupby('date')['close'].last().reset_index()
             market_df.rename(columns={'close': 'market_close'}, inplace=True)
-            logger.info("   ✅ تم العثور على مؤشر TASI في البيانات ليستخدم كـ Benchmark")
+            logger.info("   ✅ TASI index present in loaded data — using it as benchmark")
         else:
             try:
-                logger.info("   📊 جاري تحميل بيانات TASI من جدول historical_reports...")
+                logger.info("   📊 Loading TASI series from historical_reports...")
                 hr_query = """
                     SELECT report_date AS date, close_price AS market_close
                     FROM historical_reports
@@ -214,21 +240,21 @@ class TechnicalCalculator:
                     market_df = pd.read_sql(text(hr_query), conn)
 
                 if market_df.empty:
-                    raise Exception("جدول historical_reports فارغ — لا توجد بيانات TASI")
+                    raise Exception("historical_reports is empty — no TASI benchmark data available")
 
                 market_df['date'] = pd.to_datetime(market_df['date'])
-                # تحويل close_price من نص إلى رقم (الجدول يخزّنها كـ String)
+                # close_price is stored as String in the table — coerce it to a number
                 market_df['market_close'] = pd.to_numeric(
                     market_df['market_close'].astype(str).str.replace(',', ''), errors='coerce'
                 )
                 market_df = market_df.dropna(subset=['market_close'])
-                logger.info(f"   ✅ تم تحميل {len(market_df)} سجل من historical_reports (آخر تاريخ: {market_df['date'].max().date()}).")
+                logger.info(f"   ✅ Loaded {len(market_df)} rows from historical_reports (latest: {market_df['date'].max().date()}).")
 
             except Exception as e:
-                logger.error(f"   ❌ فشل تحميل TASI من historical_reports: {e}")
+                logger.error(f"   ❌ Failed to load TASI from historical_reports: {e}")
                 market_df = df.groupby('date')['close'].mean().reset_index()
                 market_df.rename(columns={'close': 'market_close'}, inplace=True)
-                logger.info("   ⚠️ Fallback: تم حساب المؤشر العام تلقائياً من متوسط أسعار الأسهم")
+                logger.info("   ⚠️ Fallback: synthetic benchmark built from the mean close of all stocks")
 
         df = df.sort_values(['symbol', 'date']).reset_index(drop=True)
         market_df = market_df.sort_values('date').reset_index(drop=True)
@@ -253,21 +279,21 @@ class TechnicalCalculator:
 
     def save_latest(self, df):
         """
-        يحفظ:
-          - حقل change فقط في جدول prices عبر executemany (أسرع من loop)
-          - جميع إحصائيات السوق في stock_indicators عبر UPSERT
+        Persists:
+          - prices.change only, via a single bulk UPDATE ... FROM (VALUES ...) statement
+          - all market statistics in stock_indicators via UPSERT
         """
-        logger.info("💾 جاري تحضير البيانات للحفظ...")
+        logger.info("💾 Preparing data for save...")
 
         latest_dates = df.groupby('symbol')['date'].max().reset_index()
         latest_data = pd.merge(df, latest_dates, on=['symbol', 'date'])
 
-        logger.info(f"🚀 جاري تحديث {len(latest_data)} سهم...")
+        logger.info(f"🚀 Updating {len(latest_data)} symbols...")
 
         with self.engine.connect() as conn:
             trans = conn.begin()
             try:
-                # ─── 1. Bulk UPDATE prices.change (executemany) ───────────
+                # ─── 1. Bulk UPDATE prices.change (one statement) ────────
                 change_updates = [
                     {
                         'change': round(float(row['change']), 2) if pd.notnull(row['change']) else None,
@@ -275,12 +301,10 @@ class TechnicalCalculator:
                     }
                     for _, row in latest_data.iterrows()
                 ]
-                conn.execute(
-                    text("UPDATE prices SET change = :change WHERE id = :id"),
-                    change_updates
-                )
+                _n = _bulk_update_prices_change(conn, change_updates)
+                logger.info("✅ prices.change updated in one bulk statement: %d rows", _n)
 
-                # ─── 2. UPSERT في stock_indicators ────────────────────────
+                # ─── 2. UPSERT into stock_indicators ────────────────────────
                 for _, row in latest_data.iterrows():
                     symbol   = row['symbol']
                     rec_date = row['date'].date() if hasattr(row['date'], 'date') else row['date']
@@ -395,27 +419,27 @@ class TechnicalCalculator:
                     """), si_params)
 
                 trans.commit()
-                logger.info("✅ تم حفظ الإحصائيات في stock_indicators بنجاح.")
+                logger.info("✅ Saved indicator statistics to stock_indicators.")
             except Exception as e:
                 trans.rollback()
-                logger.error(f"❌ خطأ أثناء التحديث: {e}")
+                logger.error(f"❌ Update failed: {e}")
                 raise
 
     def save_change_only_and_return_tech_map(self, df):
         """
         Atomic Pipeline Mode:
-          1. Updates ONLY the 'change' column in prices via executemany (سطر SQL واحد)
+          1. Updates ONLY the 'change' column in prices with a single bulk statement
           2. Returns a dict of {symbol: {sma_10: x, sma_50: y, ...}} for later merging
           3. Does NOT write to stock_indicators (that happens later in one atomic shot)
         """
-        logger.info("💾 جاري تحضير البيانات (Atomic Mode - prices.change فقط)...")
+        logger.info("💾 Preparing data (atomic mode — prices.change only)...")
 
         latest_dates = df.groupby('symbol')['date'].max().reset_index()
         latest_data = pd.merge(df, latest_dates, on=['symbol', 'date'])
 
-        logger.info(f"🚀 جاري تحديث change لـ {len(latest_data)} سهم...")
+        logger.info(f"🚀 Updating change for {len(latest_data)} symbols...")
 
-        # ─── 1. Bulk UPDATE prices.change (executemany — أسرع من loop) ───
+        # ─── 1. Bulk UPDATE prices.change (single statement, one round-trip) ───
         with self.engine.connect() as conn:
             trans = conn.begin()
             try:
@@ -426,19 +450,16 @@ class TechnicalCalculator:
                     }
                     for _, row in latest_data.iterrows()
                 ]
-                conn.execute(
-                    text("UPDATE prices SET change = :change WHERE id = :id"),
-                    change_updates
-                )
+                _n = _bulk_update_prices_change(conn, change_updates)
                 trans.commit()
-                logger.info("✅ تم تحديث change في prices بنجاح.")
+                logger.info("✅ prices.change updated in one bulk statement: %d rows", _n)
             except Exception as e:
                 trans.rollback()
-                logger.error(f"❌ خطأ أثناء تحديث prices.change: {e}")
+                logger.error(f"❌ prices.change update failed: {e}")
                 raise
 
         # ─── 2. Build tech_map: {symbol: {col: value, ...}} ──────────────
-        # ملاحظة: fv و pm بياخدوا r=row كـ default argument لتفادي closure bug
+        # Note: fv and pm take r=row as a default argument to avoid the closure bug
         tech_map = {}
         for _, row in latest_data.iterrows():
             symbol   = row['symbol']
@@ -496,7 +517,7 @@ class TechnicalCalculator:
                 'beta': fv('beta'),
             }
 
-        logger.info(f"✅ تم تجهيز بيانات المؤشرات الفنية لـ {len(tech_map)} سهم (في الذاكرة).")
+        logger.info(f"✅ Technical indicators ready for {len(tech_map)} symbols (held in memory).")
         return tech_map
 
 

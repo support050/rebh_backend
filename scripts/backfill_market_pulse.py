@@ -29,6 +29,31 @@ from app.services.market_pulse_calc import (
     OHLCVInput, HistoryRow, compute_signals, build_record, get_calc_settings,
 )
 
+import logging
+
+logger = logging.getLogger(__name__)
+
+
+# [Batch-2 L1/L3] print→logging bridge. Module-local rebinding of `print` so this
+# script's console output flows through the pipeline's logging (levels + handler)
+# instead of raw stdout; the builtin `print` is untouched in every other module.
+# Spacer lines are dropped; ✅/❌/⚠️ map to INFO/ERROR/WARNING, routine detail→DEBUG.
+def _print_to_log(*args, sep=" ", end="\n", file=None, flush=False):
+    msg = sep.join(str(a) for a in args).strip()
+    if not msg or set(msg) <= set("=-*"):
+        return
+    if "❌" in msg or "Error" in msg:
+        logger.error(msg)
+    elif "⚠️" in msg:
+        logger.warning(msg)
+    elif "✅" in msg:
+        logger.info(msg)
+    else:
+        logger.debug(msg)
+
+
+print = _print_to_log
+
 
 def parse_num(val: str | None) -> float | None:
     """Parse string like '11,031.32' → float."""
