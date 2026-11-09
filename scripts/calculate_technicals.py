@@ -78,31 +78,31 @@ class TechnicalCalculator:
         # plus live DDL performed from a data script. Table shape is owned by the
         # ORM models and Alembic migrations, not by this script.
 
-    def load_data(self):
+    def load_data(self, symbols=None, lookback_rows=None):
         """
-        Load the last LOOKBACK_ROWS (500) trading rows per symbol, not all history.
-
-        Longest indicator = SMA200 + shift(126) = 326 rows, so 500 is safe.
-
-        [Perf] Rewritten on both sides of the wire, measured on production data
-        (993,729 price rows -> 140,640 loaded):
-          1. Server side: the old ROW_NUMBER() OVER (PARTITION BY symbol ORDER BY
-             date DESC) window forced a seq scan + sort of ALL rows just to keep
-             the last 500 each (28.8s). A LATERAL probe per symbol with
-             "ORDER BY date DESC LIMIT 500" walks the existing
-             idx_prices_symbol_date backwards instead (6.4s), returning the exact
-             same rows.
-          2. Client side: NUMERIC columns are cast to float8 in SQL. psycopg2
-             builds a Decimal object for every numeric cell (140K rows x 5 cols),
-             which dominated the fetch.
-        Combined wall time: 50.5s -> 25.9s, value-identical (max diff 0.0 and the
-        same NULL counts on all 140,640 rows).
-
-        No ORDER BY in the SQL: calculate() starts with sort_values(['symbol','date']).
+        Load trading rows per symbol.
+        - If symbols is provided: loads only those symbols.
+        - If lookback_rows is 0 or None with --full-history: loads ALL available history.
+        - Default: loads LOOKBACK_ROWS (500).
         """
+        if symbols:
+            # Single or list of specific symbols
+            sym_list = [symbols] if isinstance(symbols, str) else list(symbols)
+            placeholders = ", ".join(f"'{s}'" for s in sym_list)
+            sym_sql = f"SELECT unnest(ARRAY[{placeholders}]) AS symbol"
+        else:
+            sym_sql = self._SYMBOLS_SQL
+
+        if lookback_rows and lookback_rows > 0:
+            limit_clause = f"LIMIT {lookback_rows}"
+            logger.info("⏳ Loading price history (last %d rows per symbol)...", lookback_rows)
+        else:
+            limit_clause = ""
+            logger.info("⏳ Loading ALL historical price rows per symbol...")
+
         query = f"""
             SELECT p.id, p.symbol, p.date, p.open, p.close, p.high, p.low, p.volume_traded
-            FROM ({self._SYMBOLS_SQL}) s
+            FROM ({sym_sql}) s
             CROSS JOIN LATERAL (
                 SELECT id, symbol, date,
                        open::float8, close::float8, high::float8,
@@ -110,10 +110,9 @@ class TechnicalCalculator:
                 FROM prices pr
                 WHERE pr.symbol = s.symbol
                 ORDER BY pr.date DESC
-                LIMIT {self.LOOKBACK_ROWS}
+                {limit_clause}
             ) p
         """
-        logger.info("⏳ Loading price history (last %d rows per symbol)...", self.LOOKBACK_ROWS)
         with self.engine.connect() as conn:
             df = pd.read_sql(text(query), conn)
         df['date'] = pd.to_datetime(df['date'])
@@ -425,6 +424,175 @@ class TechnicalCalculator:
                 logger.error(f"❌ Update failed: {e}")
                 raise
 
+    def save_history(self, df):
+        """
+        Saves technical indicators for ALL dates in df using PostgreSQL COPY protocol.
+        Ultra-fast (seconds instead of minutes) via temp table + bulk UPSERT.
+        """
+        import time
+        from io import StringIO
+        import psycopg2
+
+        logger.info(f"💾 Saving full calculated history ({len(df)} rows) via fast COPY protocol...")
+        t0 = time.time()
+
+        # 1. Update prices.change first
+        with self.engine.connect() as conn:
+            trans = conn.begin()
+            try:
+                change_updates = [
+                    {
+                        'change': round(float(row['change']), 2) if pd.notnull(row['change']) else None,
+                        'id': int(row['id'])
+                    }
+                    for _, row in df.iterrows()
+                    if pd.notnull(row.get('id'))
+                ]
+                _n = _bulk_update_prices_change(conn, change_updates)
+                trans.commit()
+                logger.info("✅ prices.change updated: %d rows", _n)
+            except Exception as e:
+                trans.rollback()
+                logger.error(f"❌ prices.change update failed: {e}")
+                raise
+
+        # 2. Build upload DataFrame for stock_indicators
+        si_rows = []
+        for _, row in df.iterrows():
+            def fv(key, r=row):
+                val = r.get(key)
+                return round(float(val), 4) if val is not None and pd.notnull(val) else None
+
+            def pm(a, b, r=row):
+                va, vb = r.get(a), r.get(b)
+                return round(float(va - vb), 4) if va is not None and vb is not None and pd.notnull(va) and pd.notnull(vb) else None
+
+            rec_date = row['date'].strftime('%Y-%m-%d') if hasattr(row['date'], 'strftime') else str(row['date'])
+            si_rows.append({
+                'symbol': row['symbol'],
+                'date': rec_date,
+                'sma_10': fv('sma_10'),
+                'sma_21': fv('sma_21'),
+                'sma_50': fv('sma_50'),
+                'sma_150': fv('sma_150'),
+                'sma_200': fv('sma_200'),
+                'sma_200_1m_ago': fv('sma_200_1m_ago'),
+                'sma_200_2m_ago': fv('sma_200_2m_ago'),
+                'sma_200_3m_ago': fv('sma_200_3m_ago'),
+                'sma_200_4m_ago': fv('sma_200_4m_ago'),
+                'sma_200_5m_ago': fv('sma_200_5m_ago'),
+                'sma_30w': fv('sma_30w'),
+                'sma_40w': fv('sma_40w'),
+                'fifty_two_week_high': fv('fifty_two_week_high'),
+                'fifty_two_week_low': fv('fifty_two_week_low'),
+                'average_volume_50': fv('average_volume_50'),
+                'price_minus_sma_10': pm('close', 'sma_10'),
+                'price_minus_sma_21': pm('close', 'sma_21'),
+                'price_minus_sma_50': pm('close', 'sma_50'),
+                'price_minus_sma_150': pm('close', 'sma_150'),
+                'price_minus_sma_200': pm('close', 'sma_200'),
+                'price_vs_sma_10_percent': fv('price_vs_sma_10_percent'),
+                'price_vs_sma_21_percent': fv('price_vs_sma_21_percent'),
+                'price_vs_sma_50_percent': fv('price_vs_sma_50_percent'),
+                'price_vs_sma_150_percent': fv('price_vs_sma_150_percent'),
+                'price_vs_sma_200_percent': fv('price_vs_sma_200_percent'),
+                'percent_off_52w_high': fv('percent_off_52w_high'),
+                'percent_off_52w_low': fv('percent_off_52w_low'),
+                'vol_diff_50_percent': fv('vol_diff_50_percent'),
+                'percent_change_15d': fv('percent_change_15d'),
+                'percent_change_20d': fv('percent_change_20d'),
+                'percent_change_63d': fv('percent_change_63d'),
+                'percent_change_126d': fv('percent_change_126d'),
+                'beta': fv('beta'),
+            })
+
+        upload_df = pd.DataFrame(si_rows)
+        upload_cols = list(upload_df.columns)
+
+        # 3. Direct psycopg2 connection for COPY
+        db_url = str(settings.DATABASE_URL).replace("postgresql://", "").replace("postgresql+psycopg2://", "")
+        user_pass, host_db = db_url.split("@")
+        user, password = user_pass.split(":", 1)
+        host_port, dbname = host_db.split("/", 1)
+        if "?" in dbname:
+            dbname = dbname.split("?")[0]
+        host, port = (host_port.split(":") + ["5432"])[:2]
+
+        pg_conn = psycopg2.connect(
+            dbname=dbname, user=user, password=password,
+            host=host, port=port, sslmode="require"
+        )
+
+        try:
+            cur = pg_conn.cursor()
+            cur.execute("""
+                CREATE TEMP TABLE tmp_si_backfill (
+                    symbol                   VARCHAR(20),
+                    date                     DATE,
+                    sma_10                   NUMERIC(14, 4),
+                    sma_21                   NUMERIC(14, 4),
+                    sma_50                   NUMERIC(14, 4),
+                    sma_150                  NUMERIC(14, 4),
+                    sma_200                  NUMERIC(14, 4),
+                    sma_200_1m_ago           NUMERIC(14, 4),
+                    sma_200_2m_ago           NUMERIC(14, 4),
+                    sma_200_3m_ago           NUMERIC(14, 4),
+                    sma_200_4m_ago           NUMERIC(14, 4),
+                    sma_200_5m_ago           NUMERIC(14, 4),
+                    sma_30w                  NUMERIC(14, 4),
+                    sma_40w                  NUMERIC(14, 4),
+                    fifty_two_week_high      NUMERIC(14, 4),
+                    fifty_two_week_low       NUMERIC(14, 4),
+                    average_volume_50        NUMERIC(20, 2),
+                    price_minus_sma_10       NUMERIC(14, 4),
+                    price_minus_sma_21       NUMERIC(14, 4),
+                    price_minus_sma_50       NUMERIC(14, 4),
+                    price_minus_sma_150      NUMERIC(14, 4),
+                    price_minus_sma_200      NUMERIC(14, 4),
+                    price_vs_sma_10_percent  NUMERIC(14, 4),
+                    price_vs_sma_21_percent  NUMERIC(14, 4),
+                    price_vs_sma_50_percent  NUMERIC(14, 4),
+                    price_vs_sma_150_percent NUMERIC(14, 4),
+                    price_vs_sma_200_percent NUMERIC(14, 4),
+                    percent_off_52w_high     NUMERIC(14, 4),
+                    percent_off_52w_low      NUMERIC(14, 4),
+                    vol_diff_50_percent      NUMERIC(14, 4),
+                    percent_change_15d       NUMERIC(14, 4),
+                    percent_change_20d       NUMERIC(14, 4),
+                    percent_change_63d       NUMERIC(14, 4),
+                    percent_change_126d      NUMERIC(14, 4),
+                    beta                     NUMERIC(14, 4)
+                );
+            """)
+
+            buf = StringIO()
+            upload_df.to_csv(buf, header=False, index=False, sep='\t', na_rep='\\N')
+            buf.seek(0)
+
+            cur.copy_from(buf, 'tmp_si_backfill', sep='\t', null='\\N', columns=upload_cols)
+            logger.info("   ↳ Fast COPY into temp table done (%d rows).", len(upload_df))
+
+            # Upsert from temp table to stock_indicators in ONE SQL statement
+            # In PostgreSQL ON CONFLICT DO UPDATE, excluded row values are referenced via EXCLUDED
+            set_clauses = ", ".join(f"{c} = EXCLUDED.{c}" for c in upload_cols if c not in ('symbol', 'date'))
+            col_list = ", ".join(upload_cols)
+            val_list = ", ".join(f"t.{c}" for c in upload_cols)
+
+            cur.execute(f"""
+                INSERT INTO stock_indicators ({col_list})
+                SELECT {val_list} FROM tmp_si_backfill t
+                ON CONFLICT (symbol, date) DO UPDATE SET
+                    {set_clauses};
+            """)
+            updated_count = cur.rowcount
+            pg_conn.commit()
+            cur.close()
+
+            elapsed = time.time() - t0
+            logger.info(f"✅ Successfully saved/updated {updated_count} rows in {elapsed:.1f}s via COPY protocol!")
+        finally:
+            pg_conn.close()
+
     def save_change_only_and_return_tech_map(self, df):
         """
         Atomic Pipeline Mode:
@@ -522,7 +690,30 @@ class TechnicalCalculator:
 
 
 if __name__ == "__main__":
+    import argparse
+    parser = argparse.ArgumentParser(description="Calculate Technical Indicators and Market Statistics")
+    parser.add_argument("--symbol", nargs="+", help="Specific symbol(s) to process (e.g. --symbol 6040 or --symbol 6040 4270)")
+    parser.add_argument("--full-history", action="store_true", help="Save indicators for all loaded historical dates (not just the latest date)")
+    parser.add_argument("--lookback", type=int, default=500, help="Number of historical price rows to load per symbol (default: 500)")
+    args = parser.parse_args()
+
     calc = TechnicalCalculator(str(settings.DATABASE_URL))
-    df = calc.load_data()
+
+    # 1. Load data
+    # If --full-history is explicitly set, load ALL history (lookback=None)
+    # If --symbol is set without --lookback, default to 500 (or user-defined lookback)
+    lookback = None if args.full_history else args.lookback
+    df = calc.load_data(symbols=args.symbol, lookback_rows=lookback)
+
+    if df.empty:
+        logger.warning("No price data found for calculation.")
+        sys.exit(0)
+
+    # 2. Compute technicals & SMAs
     df_calc = calc.calculate(df)
-    calc.save_latest(df_calc)
+
+    # 3. Save: either full history or latest date only
+    if args.full_history or args.symbol:
+        calc.save_history(df_calc)
+    else:
+        calc.save_latest(df_calc)

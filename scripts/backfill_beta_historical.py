@@ -142,48 +142,66 @@ def compute_beta_for_batch(stock_df: pd.DataFrame, market_df: pd.DataFrame) -> p
 
 def save_beta_to_db(engine, beta_df: pd.DataFrame, write_chunk: int = 500):
     """
-    Update Beta values in stock_indicators using an ultra-fast bulk update via a temp table.
+    Update Beta values in stock_indicators using ultra-fast COPY protocol via psycopg2.
     """
     if beta_df.empty:
         return 0
 
-    # Ensure date is standard string for the temp table to avoid type issues
-    beta_df = beta_df.copy()
-    if pd.api.types.is_datetime64_any_dtype(beta_df['date']):
-        beta_df['date'] = beta_df['date'].dt.date
-    beta_df['beta'] = beta_df['beta'].round(4)
-    
-    temp_table_name = f"temp_beta_update_{int(time.time())}"
-    
-    with engine.begin() as conn:
-        # Write to a temporary table
-        beta_df[['symbol', 'date', 'beta']].to_sql(
-            temp_table_name, 
-            conn, 
-            if_exists='replace', 
-            index=False,
-            method='multi',
-            chunksize=5000
-        )
+    import io
+
+    # Ensure clean standard string types
+    df_clean = beta_df[['symbol', 'date', 'beta']].copy()
+    if pd.api.types.is_datetime64_any_dtype(df_clean['date']):
+        df_clean['date'] = df_clean['date'].dt.strftime('%Y-%m-%d')
+    else:
+        df_clean['date'] = df_clean['date'].astype(str)
         
-        # Perform a single bulk UPDATE joining the temp table
-        result = conn.execute(text(f"""
+    df_clean['beta'] = df_clean['beta'].round(4)
+    df_clean = df_clean.dropna(subset=['symbol', 'date', 'beta'])
+    if df_clean.empty:
+        return 0
+
+    csv_buf = io.StringIO()
+    df_clean.to_csv(csv_buf, index=False, header=False, sep='\t', na_rep='\\N')
+    csv_buf.seek(0)
+
+    raw_conn = engine.raw_connection()
+    try:
+        cur = raw_conn.cursor()
+        cur.execute("""
+            CREATE TEMP TABLE tmp_beta_update (
+                symbol VARCHAR(20),
+                date DATE,
+                beta NUMERIC(14, 4)
+            ) ON COMMIT DROP;
+        """)
+
+        cur.copy_expert(
+            "COPY tmp_beta_update (symbol, date, beta) FROM STDIN WITH (FORMAT text, DELIMITER '\t', NULL '\\N')",
+            csv_buf
+        )
+
+        cur.execute("""
             UPDATE stock_indicators s
             SET beta = t.beta
-            FROM {temp_table_name} t
-            WHERE s.symbol = t.symbol AND s.date = t.date
-        """))
-        
-        # Drop temp table
-        conn.execute(text(f"DROP TABLE {temp_table_name}"))
-        
-        return result.rowcount
+            FROM tmp_beta_update t
+            WHERE s.symbol = t.symbol AND s.date = t.date;
+        """)
+        updated_count = cur.rowcount
+        raw_conn.commit()
+        return updated_count
+    except Exception as e:
+        raw_conn.rollback()
+        logger.error(f"❌ Error in fast save_beta_to_db: {e}")
+        raise e
+    finally:
+        raw_conn.close()
 
 
 def main():
     parser = argparse.ArgumentParser(description='Backfill historical Beta values')
-    parser.add_argument('--batch-size', type=int, default=50,
-                        help='Number of stocks to process per batch (default: 50)')
+    parser.add_argument('--batch-size', type=int, default=100,
+                        help='Number of stocks to process per batch (default: 100)')
     parser.add_argument('--write-chunk', type=int, default=500,
                         help='Number of rows per DB write chunk (default: 500)')
     args = parser.parse_args()

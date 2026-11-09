@@ -297,13 +297,18 @@ def _counts_for_date_chunk(db: Session, chunk_dates: list[date]) -> dict[str, di
 def backfill_history(
     limit: int = 6000,
     *,
-    chunk_size: int = 60,
+    chunk_size: int = 500,
     verbose: bool = True,
+    force: bool = False,
 ) -> int:
     """
-    Safe backfill: small SQL chunks + commit per chunk + skip existing rows (resumable).
+    Ultra-fast vectorized SQL backfill using single-pass conditional aggregation + COPY protocol.
+    Calculates all screeners (1M, 4M, Wide, Alrayan, Alhussain) across history in seconds.
     """
     import time
+    from io import StringIO
+    import psycopg2
+    from app.core.config import settings
     from app.core.database import SessionLocal
 
     db = SessionLocal()
@@ -320,42 +325,143 @@ def backfill_history(
     finally:
         db.close()
 
-    pending = [d for d in all_dates if d not in existing]
+    pending = all_dates if force else [d for d in all_dates if d not in existing]
     if verbose:
         print(
             f"Backfill: {len(pending)} days to process "
-            f"({len(existing)} already in table, chunk={chunk_size})",
+            f"({len(existing)} already in table, fast SQL mode, force={force})",
             flush=True,
         )
     if not pending:
         return 0
 
-    written = 0
     started = time.time()
-    for start in range(0, len(pending), chunk_size):
-        chunk = pending[start : start + chunk_size]
-        db = SessionLocal()
-        try:
-            maps = _counts_for_date_chunk(db, chunk)
-            for d in chunk:
-                upsert_daily_row(db, d, maps[str(d)])
-            db.commit()
-            written += len(chunk)
-            if verbose:
-                pct = min(100, int(100 * (start + len(chunk)) / len(pending)))
-                print(
-                    f"  chunk {start // chunk_size + 1}: "
-                    f"{start + len(chunk)}/{len(pending)} days ({pct}%) "
-                    f"— {time.time() - started:.0f}s elapsed",
-                    flush=True,
-                )
-        except Exception:
-            db.rollback()
-            raise
-        finally:
-            db.close()
+    min_date = str(pending[0])
+    max_date = str(pending[-1])
 
-    return written
+    # Direct connection for fast query and COPY
+    db_url = str(settings.DATABASE_URL).replace("postgresql://", "").replace("postgresql+psycopg2://", "")
+    user_pass, host_db = db_url.split("@")
+    user, password = user_pass.split(":", 1)
+    host_port, dbname = host_db.split("/", 1)
+    if "?" in dbname:
+        dbname = dbname.split("?")[0]
+    host, port = (host_port.split(":") + ["5432"])[:2]
+
+    pg_conn = psycopg2.connect(
+        dbname=dbname, user=user, password=password,
+        host=host, port=port, sslmode="require"
+    )
+
+    try:
+        cur = pg_conn.cursor()
+        print("⚡ Computing all 5 screeners in parallel directly in PostgreSQL...", flush=True)
+
+        agg_query = f"""
+            SELECT 
+                si.date,
+                COUNT(*) FILTER (WHERE 
+                    r.rs_rating > 69 
+                    AND si.sma_50 > si.sma_150 
+                    AND si.sma_50 > si.sma_200 
+                    AND si.sma_150 > si.sma_200 
+                    AND si.sma_200 > si.sma_200_1m_ago 
+                    AND si.percent_off_52w_low > 30 
+                    AND si.percent_off_52w_high > -25 
+                    AND si.price_vs_sma_50_percent > 0 
+                    AND si.price_vs_sma_150_percent > 0 
+                    AND si.price_vs_sma_200_percent > 0 
+                    AND si.sma_30w IS NOT NULL AND si.close > si.sma_30w 
+                    AND si.sma_40w IS NOT NULL AND si.close > si.sma_40w
+                ) AS trend_1m,
+                COUNT(*) FILTER (WHERE 
+                    r.rs_rating > 69 
+                    AND si.sma_50 > si.sma_150 
+                    AND si.sma_50 > si.sma_200 
+                    AND si.sma_150 > si.sma_200 
+                    AND si.sma_200 > si.sma_200_1m_ago 
+                    AND si.sma_200 > si.sma_200_2m_ago 
+                    AND si.sma_200 > si.sma_200_3m_ago 
+                    AND si.sma_200 > si.sma_200_4m_ago 
+                    AND si.sma_200_1m_ago > si.sma_200_2m_ago 
+                    AND si.sma_200_2m_ago > si.sma_200_3m_ago 
+                    AND si.sma_200_3m_ago > si.sma_200_4m_ago 
+                    AND si.percent_off_52w_high > -25 
+                    AND si.percent_off_52w_low > 30 
+                    AND si.price_vs_sma_50_percent > 0 
+                    AND si.price_vs_sma_150_percent > 0 
+                    AND si.price_vs_sma_200_percent > 0 
+                    AND si.sma_30w IS NOT NULL AND si.close > si.sma_30w 
+                    AND si.sma_40w IS NOT NULL AND si.close > si.sma_40w
+                ) AS trend_4m,
+                COUNT(*) FILTER (WHERE 
+                    si.sma_50 > si.sma_200 
+                    AND si.sma_200 > si.sma_200_5m_ago 
+                    AND si.price_vs_sma_50_percent > 0 
+                    AND si.price_vs_sma_150_percent > 0 
+                    AND si.price_vs_sma_200_percent > 0 
+                    AND si.sma_30w IS NOT NULL AND si.close > si.sma_30w 
+                    AND si.sma_40w IS NOT NULL AND si.close > si.sma_40w
+                ) AS trend_5m_wide,
+                COUNT(*) FILTER (WHERE 
+                    si.trend_signal IS TRUE
+                ) AS alrayan,
+                COUNT(*) FILTER (WHERE 
+                    si.sma_50 > si.sma_150 
+                    AND si.sma_50 > si.sma_200 
+                    AND si.sma_150 > si.sma_200 
+                    AND si.price_vs_sma_50_percent >= 0 
+                    AND si.average_volume_50 >= 100000
+                ) AS alhussain
+            FROM stock_indicators si
+            LEFT JOIN rs_daily_v2 r ON r.symbol = si.symbol AND r.date = si.date
+            WHERE si.date >= '{min_date}' AND si.date <= '{max_date}'
+            GROUP BY si.date
+            ORDER BY si.date ASC;
+        """
+
+        cur.execute(agg_query)
+        rows = cur.fetchall()
+        print(f"📊 Calculated {len(rows)} dates in {time.time() - started:.1f}s. Uploading via COPY...", flush=True)
+
+        buf = StringIO()
+        for r in rows:
+            # date, 1m, 4m, 5m_wide, alrayan, alhussain
+            buf.write(f"{r[0]}\t{r[1]}\t{r[2]}\t{r[3]}\t{r[4]}\t{r[5]}\n")
+        buf.seek(0)
+
+        cur.execute("""
+            CREATE TEMP TABLE tmp_trend_backfill (
+                date DATE PRIMARY KEY,
+                trend_1m INTEGER,
+                trend_4m INTEGER,
+                trend_5m_wide INTEGER,
+                alrayan INTEGER,
+                alhussain INTEGER
+            );
+        """)
+        cur.copy_from(
+            buf, 'tmp_trend_backfill', sep='\t',
+            columns=['date', 'trend_1m', 'trend_4m', 'trend_5m_wide', 'alrayan', 'alhussain']
+        )
+
+        cur.execute("""
+            INSERT INTO screener_daily_trend_counts (date, trend_1m, trend_4m, trend_5m_wide, alrayan, alhussain)
+            SELECT date, trend_1m, trend_4m, trend_5m_wide, alrayan, alhussain FROM tmp_trend_backfill
+            ON CONFLICT (date) DO UPDATE SET
+                trend_1m = EXCLUDED.trend_1m,
+                trend_4m = EXCLUDED.trend_4m,
+                trend_5m_wide = EXCLUDED.trend_5m_wide,
+                alrayan = EXCLUDED.alrayan,
+                alhussain = EXCLUDED.alhussain;
+        """)
+        written = cur.rowcount
+        pg_conn.commit()
+        cur.close()
+        print(f"✅ Fast Backfill complete: updated {written} rows in {time.time() - started:.1f}s!", flush=True)
+        return written
+    finally:
+        pg_conn.close()
 
 
 def bulk_upsert_series(db: Session, series: list[dict[str, Any]], *, batch: int = 200) -> int:

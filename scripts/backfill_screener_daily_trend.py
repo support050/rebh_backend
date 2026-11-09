@@ -31,12 +31,17 @@ async def _refresh_redis_cache(payload: dict) -> None:
 
 
 def main() -> None:
+    import argparse
+    parser = argparse.ArgumentParser(description="Backfill screener daily trend counts")
+    parser.add_argument("--force", action="store_true", help="Force recalculation of all dates even if they exist")
+    args = parser.parse_args()
+
     create_tables()
     started = time.time()
-    print("Backfill (chunked, resumable) — re-run anytime if it stopped mid-way.\n", flush=True)
+    print("Backfill (chunked, safe upsert)...\n", flush=True)
 
-    n = backfill_history(6000, chunk_size=60, verbose=True)
-    print(f"\nWrote {n} new rows in {time.time() - started:.0f}s.", flush=True)
+    n = backfill_history(6000, chunk_size=60, verbose=True, force=args.force)
+    print(f"\nWrote/updated {n} rows in {time.time() - started:.0f}s.", flush=True)
 
     db = SessionLocal()
     try:

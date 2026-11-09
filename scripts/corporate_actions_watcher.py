@@ -277,32 +277,12 @@ def save_new_actions(db, new_rows: List[Dict[str, Any]], mark_processed: bool = 
     db.commit()
 
 
-def trigger_historical_pipeline(symbol: str):
-    """Runs Historical_fetcher.py which updates prices and recalculates indicators"""
-    logger.info(f"🔄 [Auto-Pipeline] Updating historical prices and indicators for {symbol}...")
-    py_exec = sys.executable
-    script_path = str(Path(__file__).resolve().parent / "Historical_fetcher.py")
-    res = subprocess.run([py_exec, script_path, "--symbol", symbol], capture_output=True, text=True)
-    if res.returncode == 0:
-        logger.info(f"✅ Successfully updated historical data & indicators for {symbol}!")
-    else:
-        logger.error(f"❌ Failed to update {symbol}: {res.stderr}")
-
-
-def trigger_rs_and_ibd_recalc():
-    """Recalculates RS ranking and IBD metrics for the market"""
-    logger.info("🔄 [Auto-Pipeline] Recalculating RS Rating for all stocks...")
-    py_exec = sys.executable
-    rs_script = str(Path(__file__).resolve().parent / "recalculate_all_rs.py")
-    ibd_script = str(Path(__file__).resolve().parent / "calculate_ibd_metrics.py")
-    
-    subprocess.run([py_exec, rs_script], check=False)
-    subprocess.run([py_exec, ibd_script], check=False)
-    logger.info("✅ Finished RS & IBD recalculation.")
-
-
 def run_watcher(dry_run: bool = False, init_baseline: bool = False):
-    logger.info(f"🚀 === Corporate Actions Watcher Started ===")
+    """
+    Scrapes Saudi Exchange Corporate Actions page, detects new actions,
+    and logs them into DB without triggering any heavy recalculations.
+    """
+    logger.info("🚀 === Corporate Actions Watcher Started ===")
     ensure_table_exists()
     db = SessionLocal()
 
@@ -319,55 +299,46 @@ def run_watcher(dry_run: bool = False, init_baseline: bool = False):
             if (str(r["symbol"]), str(r["issue_type"]), r["eligibility_date"]) not in known_keys
         ]
 
-        if not new_rows:
-            logger.info("✅ No new corporate actions detected. System is up to date!")
+        # Check existing unprocessed actions from DB as well
+        unprocessed_db_rows = db.query(CorporateAction).filter(CorporateAction.processed == False).all()
+
+        if not new_rows and not unprocessed_db_rows:
+            logger.info("✅ No new or pending corporate actions detected. System is up to date!")
             return all_rows
 
-        logger.info(f"🚨 Found {len(new_rows)} NEW corporate action(s):")
-        for nr in new_rows:
-            logger.info(
-                f"   ↳ {nr['symbol']} ({nr['company_name']}) | {nr['issue_type']} "
-                f"| Date: {nr['eligibility_date']} | Class: {nr['classification']}"
-            )
+        if new_rows:
+            logger.info(f"🚨 Found {len(new_rows)} NEW corporate action(s) from exchange:")
+            for nr in new_rows:
+                logger.info(
+                    f"   ↳ Symbol {nr['symbol']} ({nr['company_name']}) | {nr['issue_type']} "
+                    f"| Eligibility Date: {nr['eligibility_date']} | Class: {nr['classification']}"
+                )
 
-        if dry_run:
-            logger.info("ℹ️ Dry-run mode enabled: skipping DB writes and pipelines.")
-            return all_rows
+            if dry_run:
+                logger.info("ℹ️ Dry-run mode enabled: skipping DB writes.")
+                return all_rows
 
-        # If it's the very first run or --init-baseline is used, seed the past data as processed
-        if is_first_run or init_baseline:
-            logger.info("🌱 Initializing baseline corporate actions table (marking past actions as processed)...")
-            save_new_actions(db, new_rows, mark_processed=True)
-            logger.info(f"✅ Baseline initialized with {len(new_rows)} historical corporate actions.")
-            return all_rows
+            # Save new rows to DB
+            mark_as = True if (is_first_run or init_baseline) else False
+            save_new_actions(db, new_rows, mark_processed=mark_as)
+            logger.info(f"💾 Saved {len(new_rows)} actions to database (processed={mark_as}).")
 
-        save_new_actions(db, new_rows, mark_processed=False)
+        # Fetch current pending (unprocessed) actions to display summary
+        pending_actions = db.query(CorporateAction).filter(CorporateAction.processed == False).all()
+        if pending_actions:
+            auto_symbols = sorted({a.symbol for a in pending_actions if a.classification == "AUTO_ADJUST"})
+            review_symbols = sorted({a.symbol for a in pending_actions if a.classification == "NEEDS_REVIEW"})
 
-        auto_symbols = sorted({
-            r["symbol"] for r in new_rows if r["classification"] == "AUTO_ADJUST"
-        })
-        review_symbols = sorted({
-            r["symbol"] for r in new_rows if r["classification"] == "NEEDS_REVIEW"
-        })
+            logger.info("=" * 60)
+            logger.info(f"📋 PENDING CORPORATE ACTIONS SUMMARY ({len(pending_actions)} total):")
+            if auto_symbols:
+                logger.info(f"   ⚡ Needs Historical Price Adjustments (AUTO_ADJUST): {auto_symbols}")
+            if review_symbols:
+                logger.info(f"   ℹ️ Informational / Needs Review (NEEDS_REVIEW): {review_symbols}")
+            logger.info("=" * 60)
+        else:
+            logger.info("✅ All corporate actions in DB are marked as PROCESSED.")
 
-        if review_symbols:
-            logger.warning(f"⚠️ Flagged for manual review (no price-split needed): {review_symbols}")
-
-        for symbol in auto_symbols:
-            trigger_historical_pipeline(symbol)
-            # Mark processed in DB
-            db.query(CorporateAction).filter(
-                CorporateAction.symbol == symbol,
-                CorporateAction.eligibility_date.in_(
-                    [r["eligibility_date"] for r in new_rows if r["symbol"] == symbol]
-                ),
-            ).update({"processed": True}, synchronize_session=False)
-        db.commit()
-
-        if auto_symbols:
-            trigger_rs_and_ibd_recalc()
-
-        logger.info(f"🎉 Watcher completed successfully! Processed {len(auto_symbols)} stocks.")
         return all_rows
 
     except Exception as e:
@@ -376,10 +347,36 @@ def run_watcher(dry_run: bool = False, init_baseline: bool = False):
         db.close()
 
 
+def mark_symbols_processed(symbols: List[str]):
+    """Helper to mark corporate actions for given symbols as processed."""
+    db = SessionLocal()
+    try:
+        updated = db.query(CorporateAction).filter(
+            CorporateAction.symbol.in_(symbols),
+            CorporateAction.processed == False
+        ).update({"processed": True}, synchronize_session=False)
+        db.commit()
+        logger.info(f"✅ Marked {updated} action(s) for symbols {symbols} as PROCESSED.")
+    finally:
+        db.close()
+
+
 if __name__ == "__main__":
     import argparse
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--dry-run", action="store_true", help="Only check and display without saving/recalculating")
-    parser.add_argument("--init-baseline", action="store_true", help="Initialize and record all historical actions without re-triggering pipelines")
+    parser = argparse.ArgumentParser(description="Corporate Actions Watcher (Detection & Storage Only)")
+    parser.add_argument("--dry-run", action="store_true", help="Only check and display without saving to DB")
+    parser.add_argument("--init-baseline", action="store_true", help="Record all historical actions as already processed")
+    parser.add_argument("--mark-processed", nargs="+", help="Mark specified symbols as processed (e.g. --mark-processed 6040 4270)")
+    parser.add_argument("--mark-all-processed", action="store_true", help="Mark all pending actions in DB as processed")
     args = parser.parse_args()
-    run_watcher(dry_run=args.dry_run, init_baseline=args.init_baseline)
+
+    if args.mark_processed:
+        mark_symbols_processed(args.mark_processed)
+    elif args.mark_all_processed:
+        db = SessionLocal()
+        count = db.query(CorporateAction).filter(CorporateAction.processed == False).update({"processed": True})
+        db.commit()
+        db.close()
+        logger.info(f"✅ Marked all {count} pending actions as PROCESSED.")
+    else:
+        run_watcher(dry_run=args.dry_run, init_baseline=args.init_baseline)

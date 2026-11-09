@@ -23,6 +23,12 @@ from datetime import datetime, date
 import sys
 from pathlib import Path
 
+# Ensure stdout handles emoji/unicode safely when invoked as subprocess
+if hasattr(sys.stdout, 'reconfigure'):
+    sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+if hasattr(sys.stderr, 'reconfigure'):
+    sys.stderr.reconfigure(encoding='utf-8', errors='replace')
+
 # Add project root to path so we can import from app
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 
@@ -30,7 +36,6 @@ from sqlalchemy import text
 from sqlalchemy.dialects.postgresql import insert
 from app.core.database import SessionLocal
 from app.models.price import Price
-from scripts.recalc_full_history import recalculate_full_history_for_symbol
 
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
@@ -180,7 +185,7 @@ def fetch_all_pages(driver, api_url, post_body, symbol, date_from, date_to, mark
     """
     بيجيب كل الصفحات (pagination) لحد ما يخلّص كل الـ recordsTotal.
     """
-    PAGE_SIZE = 100
+    PAGE_SIZE = 500
     all_rows = []
     start = 0
 
@@ -207,7 +212,7 @@ def fetch_all_pages(driver, api_url, post_body, symbol, date_from, date_to, mark
             break
 
         start += PAGE_SIZE
-        time.sleep(0.3)  # Small delay to not hammer the API
+        time.sleep(0.1)  # Minimal delay to keep it fast while safe
 
     return all_rows, records_total
 
@@ -354,10 +359,6 @@ def main():
             db.execute(stmt)
         db.commit()
         logger.info(f"✅ Database prices updated successfully!")
-
-        # Recalculate indicators
-        logger.info(f"🔄 Triggering full indicators recalculation for {args.symbol}...")
-        recalculate_full_history_for_symbol(db, args.symbol)
 
         # Sort by date descending
         try:

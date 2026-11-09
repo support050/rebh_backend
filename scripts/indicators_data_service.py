@@ -263,46 +263,29 @@ class IndicatorsDataService:
         }
     
     @staticmethod
-    def calculate_all_indicators(
-        df: pd.DataFrame,
-        df_weekly: pd.DataFrame,
-        symbol: str,
-        target_date: date = None,
-        idx: int = None,
-        w_idx: int = None
-    ) -> Dict[str, Any]:
+    def prepare_precomputed_components(df: pd.DataFrame, df_weekly: pd.DataFrame, symbol: str) -> Dict[str, Any]:
         """
-        حساب جميع المؤشرات من جميع الملفات الأربعة
+        حساب كل السلاسل الزمنية مرة واحدة فقط بدلاً من حسابها في كل لفة باللوب
         """
-        
-        # دمج البيانات الأسبوعية مع اليومية
         df_merged = IndicatorsDataService.merge_weekly_with_daily(df, df_weekly)
-        
-        # --- البيانات اليومية ---
         closes = df['close'].tolist()
         highs = df['high'].tolist()
         lows = df['low'].tolist()
-        
-        # --- 1. RSI Components ---
+
         rsi_components = calculate_rsi_components(closes)
-        
-        # --- 2. The Number Components ---
         the_number_components = calculate_the_number_full(highs, lows, closes)
         
-        # --- 3. STAMP & CFG Components (محدث) ---
-        # حساب Stamp باستخدام الدالة المحدثة
         rsi14 = calculate_rsi_pinescript(closes, 14)
         rsi3 = calculate_rsi_pinescript(closes, 3)
         sma3_rsi3 = calculate_sma(rsi3, 3)
-        
-        # حساب a = rsi14 - rsi14[9] + sma(rsi3, 3)
+
         a_values = []
         for i in range(len(rsi14)):
             if i < 9 or rsi14[i] is None or rsi14[i-9] is None or sma3_rsi3[i] is None:
                 a_values.append(None)
             else:
                 a_values.append(rsi14[i] - rsi14[i-9] + sma3_rsi3[i])
-        
+
         stamp_components = {
             'sma9_rsi': rsi_components['sma9_rsi'],
             'ema45_rsi': rsi_components['ema45_rsi'],
@@ -316,10 +299,54 @@ class IndicatorsDataService:
             'cfg_sma20': calculate_sma(a_values, 20),
             'cfg_wma45': calculate_wma(a_values, 45),
         }
-        
-        # --- 4. Trend Components (Daily) ---
+
         trend_components = calculate_trend_components(highs, lows, closes, symbol)
-        
+        rsi_14_9days_ago_cfg = calculate_rsi_on_shifted_series(closes, 14, 9)
+
+        return {
+            'df_merged': df_merged,
+            'closes': closes,
+            'highs': highs,
+            'lows': lows,
+            'rsi_components': rsi_components,
+            'the_number_components': the_number_components,
+            'stamp_components': stamp_components,
+            'rsi14': rsi14,
+            'rsi3': rsi3,
+            'sma3_rsi3': sma3_rsi3,
+            'a_values': a_values,
+            'trend_components': trend_components,
+            'rsi_14_9days_ago_cfg': rsi_14_9days_ago_cfg
+        }
+
+    @staticmethod
+    def calculate_all_indicators(
+        df: pd.DataFrame,
+        df_weekly: pd.DataFrame,
+        symbol: str,
+        target_date: date = None,
+        idx: int = None,
+        w_idx: int = None,
+        precomputed: Dict[str, Any] = None
+    ) -> Dict[str, Any]:
+        """
+        حساب جميع المؤشرات من جميع الملفات الأربعة
+        يدعم precomputed لتفادي إعادة الحساب البطيئة لكل بار
+        """
+        if precomputed is None:
+            precomputed = IndicatorsDataService.prepare_precomputed_components(df, df_weekly, symbol)
+            
+        df_merged = precomputed['df_merged']
+        closes = precomputed['closes']
+        rsi_components = precomputed['rsi_components']
+        the_number_components = precomputed['the_number_components']
+        stamp_components = precomputed['stamp_components']
+        rsi14 = precomputed['rsi14']
+        sma3_rsi3 = precomputed['sma3_rsi3']
+        a_values = precomputed['a_values']
+        trend_components = precomputed['trend_components']
+        rsi_14_9days_ago_cfg = precomputed['rsi_14_9days_ago_cfg']
+
         # --- تحديد المؤشر الحالي ---
         if idx is None:
             idx = len(df) - 1
@@ -580,7 +607,7 @@ class IndicatorsDataService:
             'cfg_wma45': current_stamp.get('cfg_wma45', None),
             
             # CFG Components
-            'rsi_14_9days_ago_cfg': calculate_rsi_on_shifted_series(closes, 14, 9),
+            'rsi_14_9days_ago_cfg': rsi_14_9days_ago_cfg,
             'rsi_14_minus_9': (current_rsi['rsi_14'] - current_stamp['rsi_14_9days_ago']) if all(v is not None for v in [current_rsi['rsi_14'], current_stamp['rsi_14_9days_ago']]) else None,
             
             # CFG Conditions

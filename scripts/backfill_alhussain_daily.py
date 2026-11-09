@@ -18,12 +18,10 @@ from app.services.screener_daily_trend_service import backfill_alhussain_only, l
 
 
 def _ensure_columns() -> None:
-    import runpy
-    import os
-    runpy.run_path(
-        os.path.join(os.path.dirname(__file__), "add_screener_trend_columns.py"),
-        run_name="__main__",
-    )
+    migration_file = os.path.join(os.path.dirname(__file__), "add_screener_trend_columns.py")
+    if os.path.exists(migration_file):
+        import runpy
+        runpy.run_path(migration_file, run_name="__main__")
 
 
 def main() -> None:
