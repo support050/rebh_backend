@@ -42,3 +42,11 @@ app/services/breadth_engine/storage/features/
 app/services/breadth_engine/storage/master/
 app/services/breadth_engine/storage/reports/
 app/services/breadth_engine/storage/raw/*.csv
+app/services/breadth_engine/storage/raw/*.parquet
+app/services/breadth_engine/storage/build_meta.json
+
+# Temporary CSV and scratch diagnostic files
+historical_*_direct.csv
+_diag_*.py
+_verify_*.py
+*.parquet
