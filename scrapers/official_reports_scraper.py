@@ -251,10 +251,11 @@ class FinancialReportsScraper:
             return false;
         }}""", text)
 
-    async def _download_file(self, url: str, section: str, year: str, period: str, f_type: str) -> str:
+    async def _download_file(self, url: str, section: str, year: str, period: str, f_type: str, page: Page = None) -> str:
         """
-        Downloads a file by injecting a click on the home page context.
-        This ensures correct Cookies/Origin and forces 'download' attribute to bypass PDF viewer.
+        Fast incremental file downloader:
+        1. Instantly skips if the file already exists locally.
+        2. Streams new files directly using browser cookies via httpx without navigating/opening new tabs.
         """
         try:
             if not url: return None
@@ -278,48 +279,59 @@ class FinancialReportsScraper:
             
             file_path = os.path.join(self.download_base_dir, filename)
             
+            # ⚡ Instant Skip: If file exists and size is valid, don't download
             if os.path.exists(file_path) and os.path.getsize(file_path) > 1000:
-                 return file_path
+                return file_path
             
-            print(f"      ⬇️ Downloading {filename}...")
+            print(f"      ⬇️ Downloading NEW file: {filename}...")
             
-            # Retry download logic
-            for attempt in range(2):
-                page = await self.context.new_page()
-                try:
-                    # 1. Go to the domain root to establish context (Cookies/Origin)
-                    await page.goto("https://www.saudiexchange.sa/wps/portal/saudiexchange/home", 
-                                  wait_until="domcontentloaded", 
-                                  timeout=90000)
-                    
-                    # 2. Setup Listener
-                    async with page.expect_download(timeout=120000) as download_info:
-                        # 3. Inject JS to force download
-                        await page.evaluate(f"""(url) => {{
-                            const a = document.createElement('a');
-                            a.href = url;
-                            a.setAttribute('download', 'file'); 
-                            a.target = '_self'; 
-                            document.body.appendChild(a);
-                            a.click();
-                        }}""", url)
-
-                    download = await download_info.value
-                    await download.save_as(file_path)
-                    
-                    if os.path.exists(file_path) and os.path.getsize(file_path) > 100:
-                        return file_path
+            # Use httpx with browser cookies for lightning-fast direct download
+            try:
+                cookies = await self.context.cookies()
+                cookie_dict = {c['name']: c['value'] for c in cookies}
+                headers = {
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+                    "Accept": "*/*",
+                    "Referer": "https://www.saudiexchange.sa/wps/portal/saudiexchange/home",
+                }
+                
+                import httpx
+                async with httpx.AsyncClient(cookies=cookie_dict, headers=headers, verify=False, timeout=60.0) as client:
+                    resp = await client.get(url, follow_redirects=True)
+                    if resp.status_code == 200 and len(resp.content) > 500:
+                        with open(file_path, "wb") as f:
+                            f.write(resp.content)
+                        if os.path.exists(file_path) and os.path.getsize(file_path) > 500:
+                            print(f"      ✅ Saved: {filename}")
+                            return file_path
                     else:
-                        print(f"      ⚠️ Attempt {attempt+1}: File too small or missing.")
-                        
-                except Exception as e:
-                    print(f"      ⚠️ Attempt {attempt+1} failed: {e}")
-                    if attempt == 1: # Last attempt
-                        print(f"      ❌ Final Download Failure for {filename}")
-                        return None
-                    await asyncio.sleep(2) # Wait before retry
-                finally:
-                    await page.close()
+                        print(f"      ⚠️ Direct download status: {resp.status_code}, size: {len(resp.content)}")
+            except Exception as dl_err:
+                print(f"      ⚠️ Direct download attempt error: {dl_err}. Falling back to browser...")
+
+            # Fallback to browser navigation for download if direct HTTP fails
+            download_page = await self.context.new_page()
+            try:
+                await download_page.goto("https://www.saudiexchange.sa/wps/portal/saudiexchange/home", wait_until="domcontentloaded", timeout=45000)
+                async with download_page.expect_download(timeout=45000) as download_info:
+                    await download_page.evaluate(f"""(url) => {{
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.setAttribute('download', 'file'); 
+                        a.target = '_self'; 
+                        document.body.appendChild(a);
+                        a.click();
+                    }}""", url)
+                download = await download_info.value
+                await download.save_as(file_path)
+                if os.path.exists(file_path) and os.path.getsize(file_path) > 100:
+                    print(f"      ✅ Saved (via browser): {filename}")
+                    return file_path
+            except Exception as fb_err:
+                print(f"      ❌ Download Failure for {filename}: {fb_err}")
+                return None
+            finally:
+                await download_page.close()
             
             return None
 
@@ -487,7 +499,7 @@ class FinancialReportsScraper:
                     # --- DOWNLOAD FILE ---
                     local_path = None
                     if url:
-                        local_path = await self._download_file(url, section, year, period, f_type)
+                        local_path = await self._download_file(url, section, year, period, f_type, page)
                     # ---------------------
 
                     clean_items.append({

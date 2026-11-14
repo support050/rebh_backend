@@ -880,7 +880,7 @@ SYSTEMS: List[Dict[str, Any]] = [
         ],
         "pages": [
             "/economic-indicators", "/economic-indicators/unrate",
-            "/economic-indicators/payems", "/economic-indicators/nfp-change",
+            "/economic-indicators/payems",
             "/economic-indicators/ic4wsa",
             "/bonds/yield-curve", "/bonds/treasury-yield-curve",
             "/bonds/daily-treasury-yield-curve",
@@ -1079,7 +1079,7 @@ SYSTEMS: List[Dict[str, Any]] = [
             _t("economic_indicators", "report_date", 7,
                "fred:UNRATE", note="FRED + GuruFocus series, one row per code per date",
                pages=["/economic-indicators", "/economic-indicators/unrate",
-                      "/economic-indicators/payems", "/economic-indicators/nfp-change",
+                      "/economic-indicators/payems",
                       "/economic-indicators/ic4wsa", "/spread/a-corporate",
                       "/spread/bbb-corporate", "/market/a-effective-yield",
                       "/market/sp500-earnings-yield", "/market/sp500-pe-ratio",
@@ -2413,8 +2413,7 @@ _PAGE_LINEAGE_CACHE: Optional[Dict[str, Dict[str, Any]]] = None
 # pages only, never to the whole table.
 _SERIES_PAGES: Dict[str, List[str]] = {
     "fred:UNRATE": ["/economic-indicators", "/economic-indicators/unrate", "/valuation/economy"],
-    "fred:PAYEMS": ["/economic-indicators", "/economic-indicators/payems",
-                    "/economic-indicators/nfp-change"],
+    "fred:PAYEMS": ["/economic-indicators", "/economic-indicators/payems"],
     "fred:IC4WSA": ["/economic-indicators", "/economic-indicators/ic4wsa"],
     "fred:BAMLC0A3CA": ["/spread/a-corporate"],
     "fred:BAMLC0A4CBBB": ["/spread/bbb-corporate"],

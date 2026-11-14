@@ -1,9 +1,0 @@
-XBRL Import Report
-==================
-Date: 2026-02-10 18:26:09.255191
-Duration: 18.9 seconds
-Symbols processed: 0
-Symbols skipped: 12
-Symbols failed: 0
-Total metrics saved: 0
-Processing rate: 0.0 metrics/sec
