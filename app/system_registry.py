@@ -705,7 +705,7 @@ SYSTEMS: List[Dict[str, Any]] = [
             "/market-reports/historical-reports",
             "/market-pulse", "/market-pulse/settings",
             "/industry-groups",
-            "/valuation", "/valuation/economy", "/valuation/bond",
+            "/valuation", "/valuation/economy",
             "/valuation/treasury-curve", "/valuation/treasury-daily",
             "/valuation/historical-pe", "/valuation/sp500-scenarios",
             "/valuation/market-weight", "/valuation/report",
@@ -906,14 +906,6 @@ SYSTEMS: List[Dict[str, Any]] = [
                "cron monthly, day 10 at 02:00", _MONTHLY, "cron", ["economic_indicators"]),
             _j("fred:PAYEMS", "backend/app/scrapers/fred_scraper.py",
                "cron monthly, day 10 at 02:00", _MONTHLY, "cron", ["economic_indicators"]),
-            _j("fred:SAUCPALTT01GPM", "backend/app/scrapers/fred_scraper.py",
-               "cron monthly, day 10 at 02:00", _MONTHLY, "cron", ["economic_indicators"],
-               note="IMF Saudi Arabia CPI growth rate (YoY %) via FRED. Feeds "
-                    "GET /api/rebh/market-macro -> saudi_macro.inflation_pct as a "
-                    "fallback when saudi_economic_indicators has no 'saudi_inflation_cpi' "
-                    "row. Series ID SAUCPALTT01GPM already carries the growth value; "
-                    "no units=pc1 is applied. First run fetches full history; "
-                    "subsequent runs use 365-day lookback for revisions."),
             _j("sp500_pe", "backend/app/scrapers/sp500_pe_scraper.py",
                "cron monthly, day 10 at 02:00", _MONTHLY, "cron", ["sp500_history"]),
             # sukuk_importer / macro_importer / bank_lines_importer wrapper
@@ -1087,7 +1079,7 @@ SYSTEMS: List[Dict[str, Any]] = [
             _t("treasury_yield_curves", "report_date", 4, "treasury_gov",
                pages=["/bonds/yield-curve", "/bonds/treasury-yield-curve",
                       "/bonds/daily-treasury-yield-curve", "/valuation/treasury-curve",
-                      "/valuation/treasury-daily", "/valuation/bond"]),
+                      "/valuation/treasury-daily"]),
             _t("sp500_history", "trade_date", 4, "sp500",
                pages=["/bonds/yield-curve", "/valuation/sp500-scenarios",
                       "/valuation/historical-pe", "/market/sp500-pe-ratio"]),
@@ -1204,25 +1196,10 @@ SYSTEMS: List[Dict[str, Any]] = [
                        "prefix, buffett fallback into liquidity_condition). It now "
                        "shows an em dash + a small caption for every unresolved "
                        "indicator and surfaces the degraded array in a details block."),
-            _i("note", "2026-10-12 · Saudi inflation is now ingested live. "
-                       "fred_scraper.py gained SAUCPALTT01GPM (IMF Saudi Arabia CPI "
-                       "growth rate, YoY %) under FRED_SERIES_CONFIG and the "
-                       "MONTHLY_REVISED_SERIES set (365-day lookback for revisions). "
-                       "scheduler.py runs it as job key 'fred:SAUCPALTT01GPM' in "
-                       "MONTHLY_SCRAPER_KEYS (day 10 at 02:00 Africa/Cairo). "
-                       "rebh_engine.py:/market-macro reads the latest row from "
-                       "economic_indicators WHERE indicator_code='SAUCPALTT01GPM' "
-                       "as a fallback when saudi_economic_indicators has no "
-                       "saudi_inflation_cpi key, populating inflation_pct and "
-                       "inflation_source='fred:SAUCPALTT01GPM @ <report_date>'. "
-                       "Upsert uses ON CONFLICT (report_date, indicator_code) "
-                       "DO UPDATE via index_elements (NOT the named constraint "
-                       "— see the pitfall watch below). Backfill: "
-                       "`python -m app.scrapers.fred_scraper SAUCPALTT01GPM` "
-                       "(full history on first run) — or admin → System map → "
-                       "macro-scraper → Run now on fred:SAUCPALTT01GPM. Run it "
-                       "once manually after deploy so inflation_pct is populated "
-                       "immediately, without waiting for the day-10 cron."),
+            _i("note", "2026-11-17 · SAUCPALTT01GPM (dead FRED source, stopped Apr 2024) "
+                       "removed from scraper config, scheduler, and rebh_engine fallback. "
+                       "Inflation in /api/rebh/market-macro now relies on SAMA/GaStat "
+                       "saudi_inflation_cpi only."),
             _i("watch", "Pitfall 2026-10-12 · The unique constraint on "
                         "economic_indicators (report_date, indicator_code) is "
                         "declared in app/models/economic_indicators.py as "
@@ -1241,16 +1218,11 @@ SYSTEMS: List[Dict[str, Any]] = [
                         "name='uq_economic_indicator_date_code' is the safe "
                         "path; until then, do NOT reintroduce the named "
                         "reference."),
-            _i("watch", "`saudi_inflation_cpi` is still not written in "
-                        "saudi_economic_indicators by scripts/SAMA&GaStat.py "
-                        "(grep SaudiEconomicIndicator writes: repo_rate / "
-                        "reverse_repo_rate / saibor_3m / saibor_12m / "
-                        "saudi_gdp_annual / saudi_unemployment / "
-                        "saudi_buffett_indicator). The market-macro endpoint "
-                        "prefers the SAMA/GaStat row if it is ever added and "
-                        "falls back to FRED SAUCPALTT01GPM in "
-                        "economic_indicators. Both absent ⇒ degraded adds the "
-                        "run-fred hint."),
+            _i("watch", "`saudi_inflation_cpi` is not yet written by scripts/SAMA&GaStat.py "
+                        "(writes: repo_rate / reverse_repo_rate / saibor_3m / saibor_12m / "
+                        "saudi_gdp_annual / saudi_unemployment / saudi_buffett_indicator). "
+                        "Until SAMA/GaStat publishes this series, inflation_pct will be null "
+                        "in /api/rebh/market-macro and the Monitor will show an em dash."),
             _i("watch", "`saudi_gdp_annual` is a GDP LEVEL in million SAR (unit='M SAR') "
                         "— not a growth rate. The old code put it into gdp_growth_pct and "
                         "compared >= 3.0 for the regime label; that was semantically wrong. "
@@ -1278,7 +1250,7 @@ SYSTEMS: List[Dict[str, Any]] = [
                        "2026-11-01 — it is pure curl_cffi postback replay. The scheduler "
                        "comment says GuruFocus was un-scheduled for RAM/CPU reasons on "
                        "the server. The Admin monthly buttons still call them."),
-            _i("note", "/valuation/economy, /valuation/bond and /valuation/treasury-* "
+            _i("note", "/valuation/economy and /valuation/treasury-* "
                        "render the same tables from the REBH-side valuation service, so a "
                        "macro outage shows up in two different places of the UI."),
         ],

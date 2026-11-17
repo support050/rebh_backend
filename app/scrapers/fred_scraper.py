@@ -64,7 +64,7 @@ MONTHLY_LOOKBACK_DAYS = int(os.getenv("FRED_MONTHLY_LOOKBACK_DAYS", "90"))
 # FRED publication frequency per series (the defaults that need the least
 # re-covering). Anything not listed here is treated as daily.
 MONTHLY_SERIES = {
-    "UNRATE", "PAYEMS", "FEDFUNDS", "CPIAUCSL_PC1", "SAUCPALTT01GPM",
+    "UNRATE", "PAYEMS", "FEDFUNDS", "CPIAUCSL_PC1",
     "M1SL", "M2SL",
 }
 WEEKLY_SERIES = {
@@ -150,16 +150,6 @@ FRED_SERIES_CONFIG: Dict[str, Dict[str, Any]] = {
         "series_id": "CPIAUCSL",
         "params": {"units": "pc1"},
         "description": "Consumer Price Index: All Items (Percent Change from Year Ago)",
-    },
-    # Saudi Arabia CPI growth rate (YoY %) — IMF-sourced, published by FRED.
-    # The 'GPM' suffix already means 'Growth Rate Percent Monthly', so the
-    # value returned by the API is the inflation percentage itself; no
-    # units=pc1 param is needed (and FRED rejects units=pc1 on pre-computed
-    # growth series). Feeds /api/rebh/market-macro -> saudi_macro.inflation_pct
-    # when the SAMA/GaStat 'saudi_inflation_cpi' row is not present.
-    "SAUCPALTT01GPM": {
-        "series_id": "SAUCPALTT01GPM",
-        "description": "Saudi Arabia Consumer Price Index, Growth Rate (YoY %)",
     },
     "TOTLL": {
         "series_id": "TOTLL",
@@ -427,7 +417,7 @@ def fetch_release_schedule(
                 d = datetime.strptime(ds, "%Y-%m-%d").date()
             except ValueError:
                 continue
-            if d >= today:
+            if d > today:
                 candidates.append(d)
         offset += len(rows)
         # Full calendars are < 1000 rows; the guard only trips on a huge release.

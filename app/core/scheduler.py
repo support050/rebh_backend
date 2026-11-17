@@ -184,8 +184,6 @@ DAILY_SCRAPER_KEYS: Tuple[str, ...] = (
 WEEKLY_SCRAPER_KEYS: Tuple[str, ...] = ("fred:IC4WSA",)
 MONTHLY_SCRAPER_KEYS: Tuple[str, ...] = (
     "fred:UNRATE", "fred:PAYEMS",
-    # Saudi CPI growth (YoY %) — IMF via FRED. Feeds market-macro inflation_pct.
-    "fred:SAUCPALTT01GPM",
     "sp500_pe",
 )
 
@@ -583,7 +581,6 @@ JOB_CALLABLES: Dict[str, Callable[[], Any]] = {
     "fred:IC4WSA": _fred("IC4WSA"),
     "fred:UNRATE": _fred("UNRATE"),
     "fred:PAYEMS": _fred("PAYEMS"),
-    "fred:SAUCPALTT01GPM": _fred("SAUCPALTT01GPM"),
     "sp500_pe": _sp500_pe,
     # separately-scheduled jobs
     "market_reports": _market_reports,
@@ -622,7 +619,6 @@ JOB_LABELS: Dict[str, str] = {
     "fred:IC4WSA": "IC4WSA",
     "fred:UNRATE": "FRED:UNRATE",
     "fred:PAYEMS": "FRED:PAYEMS",
-    "fred:SAUCPALTT01GPM": "FRED:SAUCPALTT01GPM (Saudi CPI)",
     "sp500_pe": "SP500 PE (Multpl)",
     "market_reports": "Market Reports (Tadawul)",
     "filings_importer": "Filings Importer",

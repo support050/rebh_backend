@@ -570,10 +570,7 @@ def _macro_read_tx(db: Session, timeout_ms: int = _MACRO_TIMEOUT_MS) -> None:
 def get_rebh_market_macro() -> Dict[str, Any]:
     """
     Get unified live macro and cross-market benchmark metrics:
-    - Saudi Macro: Repo, SAIBOR 3M, Unemployment, Buffett Indicator (SAMA/GaStat/KAPSARC).
-      Inflation prefers a saudi_economic_indicators 'saudi_inflation_cpi' row;
-      if absent, falls back to economic_indicators 'SAUCPALTT01GPM' (IMF Saudi
-      CPI growth rate, ingested by fred:SAUCPALTT01GPM).
+    - Saudi Macro: Repo, SAIBOR 3M, Unemployment, Buffett Indicator, Inflation (SAMA/GaStat only).
     - US Market & Global Benchmarks: S&P 500 Close, P/E Ratio, Earnings Yield (SP500_EY).
     - US Treasury Yield Curve: 10-Year, 2-Year, and 10Y-2Y Spread.
 
@@ -599,9 +596,6 @@ def get_rebh_market_macro() -> Dict[str, Any]:
     # present in saudi_economic_indicators. gdp_growth_source explains the pair.
     gdp_growth_derived: Optional[float] = None
     gdp_growth_source: Optional[str] = None
-    # FRED/IMF Saudi CPI growth (YoY %) — used only when SAMA/GaStat's own
-    # 'saudi_inflation_cpi' row is absent. Written by fred:SAUCPALTT01GPM.
-    fred_saudi_cpi: Optional[Dict[str, Any]] = None
 
     try:
         # 1. Saudi Macro — ONE query, newest observation per indicator_key.
@@ -779,33 +773,7 @@ def get_rebh_market_macro() -> Dict[str, Any]:
             logger.warning("market-macro: GDP YoY derivation failed: %s", e, exc_info=True)
             degraded.append(f"gdp_growth: derivation query failed ({type(e).__name__})")
 
-        # 5. Saudi inflation — FRED/IMF fallback.
-        #    SAMA & GaStat do not publish a monthly headline CPI growth number
-        #    in the sources scripts/SAMA&GaStat.py scrapes, so the
-        #    'saudi_inflation_cpi' key never appears in saudi_economic_indicators.
-        #    app/scrapers/fred_scraper.py ingests FRED 'SAUCPALTT01GPM'
-        #    (Saudi Arabia CPI Growth Rate) into economic_indicators instead.
-        #    Prefer the direct SAMA row if it is ever added later.
-        try:
-            _macro_read_tx(db)
-            sa_cpi_row = (
-                db.query(EconomicIndicator)
-                  .filter(
-                      EconomicIndicator.indicator_code == "SAUCPALTT01GPM",
-                      EconomicIndicator.value.isnot(None),
-                  )
-                  .order_by(EconomicIndicator.report_date.desc())
-                  .first()
-            )
-            if sa_cpi_row is not None and sa_cpi_row.value is not None:
-                fred_saudi_cpi = {
-                    "value": float(sa_cpi_row.value),
-                    "report_date": str(sa_cpi_row.report_date),
-                    "indicator_code": sa_cpi_row.indicator_code,
-                }
-        except Exception as e:
-            logger.warning("market-macro: FRED Saudi CPI read failed: %s", e, exc_info=True)
-            degraded.append(f"inflation: FRED SAUCPALTT01GPM read failed ({type(e).__name__})")
+        # 5. (Inflation comes from SAMA/GaStat only — see _resolve below.)
     finally:
         db.close()
 
@@ -825,13 +793,6 @@ def get_rebh_market_macro() -> Dict[str, Any]:
     inflation_source: Optional[str] = None
     if inflation is not None:
         inflation_source = "direct:saudi_economic_indicators.saudi_inflation_cpi"
-    elif fred_saudi_cpi is not None:
-        inflation = fred_saudi_cpi["value"]
-        is_inflation_fallback = False
-        inflation_source = (
-            f"fred:SAUCPALTT01GPM @ {fred_saudi_cpi['report_date']} "
-            f"(IMF Saudi Arabia CPI growth rate)"
-        )
     else:
         inflation_source = None
 
@@ -850,10 +811,8 @@ def get_rebh_market_macro() -> Dict[str, Any]:
     if inflation is None:
         degraded.append(
             "inflation: saudi_inflation_cpi is not written in "
-            "saudi_economic_indicators AND economic_indicators has no "
-            "SAUCPALTT01GPM row. Run the fred:SAUCPALTT01GPM scraper "
-            "(scheduled monthly, day 10 02:00 Africa/Cairo; or admin Run now) "
-            "to ingest the IMF Saudi CPI growth series from FRED."
+            "saudi_economic_indicators. Run scripts/SAMA&GaStat.py --execute "
+            "to ingest the latest CPI data from SAMA/GaStat."
         )
 
     gdp_obs = observations.get("saudi_gdp_annual")
