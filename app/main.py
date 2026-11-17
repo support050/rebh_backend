@@ -7,7 +7,7 @@ from app.api.routes import rs_line as rs_line_router
 from app.api.routes import mansfield_rs as mansfield_rs_router
 from app.api.routes import sata as sata_router
 from app.api.routes import tasi_settings as tasi_settings_router
-from app.api.routes import market_school as market_school_router
+# from app.api.routes import market_school as market_school_router
 
 # ... (Previous code)
 
@@ -206,7 +206,7 @@ app.include_router(xbrl_financials.router, dependencies=protected_dependencies)
 # Terminal router retired: endpoints moved into the REBH engine router under
 # /api/rebh/terminal/* (see app/api/routes/rebh_engine.py, TERMINAL SUITE section).
 app.include_router(market_pulse_router.router, prefix="/api/market-pulse", tags=["Market Pulse"])
-app.include_router(market_school_router.router, prefix="/api")
+# app.include_router(market_school_router.router, prefix="/api")
 app.include_router(rs_line_router.router, tags=["RS Line Indicators"], dependencies=protected_dependencies)
 app.include_router(mansfield_rs_router.router, prefix="/api/indicators/mansfield-rs", tags=["Indicators"], dependencies=protected_dependencies)
 app.include_router(sata_router.router, prefix="/api/indicators/sata", tags=["SATA & Stage Analysis"], dependencies=protected_dependencies)
