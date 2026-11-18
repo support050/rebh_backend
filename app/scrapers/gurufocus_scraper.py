@@ -98,6 +98,7 @@ LOOKBACK_BUFFER_DAYS = int(os.getenv("GURUFOCUS_LOOKBACK_BUFFER_DAYS", "120"))
 SERIES_TITLE_TOKENS: Dict[str, Tuple[str, ...]] = {
     "SP500_EY": ("earnings yield",),
     "SP500_PE": ("pe ratio",),
+    "SP500_FPE": ("pe ratio", "forward"),
 }
 
 # Fingerprints for the browser-free curl_cffi fallback (candidate #2). chrome120
@@ -557,17 +558,24 @@ def scrape_gurufocus_indicator(url: str, indicator_code: str,
             yoy_val = record.get("yoy")
 
             if yoy_val is None:
+                # GuruFocus YOY: nearest trading day in the prior year.
+                # Search ±7 days around same calendar date (forward first, then
+                # backward) to match the nearest-trading-day convention GuruFocus uses.
                 try:
                     target_date = dt.replace(year=dt.year - 1)
                 except ValueError:
                     target_date = dt.replace(year=dt.year - 1, day=28)
 
                 last_year_value = None
-                for i in range(10):  # holidays/weekends: look back up to 10 days
-                    check_date = target_date - timedelta(days=i)
+                # Build search order: 0, +1, -1, +2, -2, … up to ±7
+                offsets = [0] + [x for n in range(1, 8) for x in (n, -n)]
+                for i in offsets:
+                    check_date = target_date + timedelta(days=i)
                     if check_date in full_history_lookup:
-                        last_year_value = full_history_lookup[check_date]
-                        break
+                        v = full_history_lookup[check_date]
+                        if v is not None:
+                            last_year_value = v
+                            break
 
                 if last_year_value and last_year_value != 0:
                     yoy_val = round(

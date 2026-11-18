@@ -519,6 +519,17 @@ def trigger_scrape_specific(indicator_code: str, mode: str = Query("update", des
         
         _start_tracked("manual:gurufocus", scrape_gurufocus_indicator, url, indicator_code.upper(), guru_mode, max_pages)
         return {"message": f"GuruFocus Scraping started for {indicator_code} in background (mode={guru_mode})"}
+
+    if indicator_code.upper() == "SP500_FPE":
+        from app.scrapers.gurufocus_scraper import scrape_gurufocus_indicator
+
+        url = "https://www.gurufocus.com/economic_indicators/6061/sp-500-pe-ratio-with-forward-estimate"
+
+        guru_mode = "incremental" if mode == "update" else "full"
+        max_pages = 3 if guru_mode == "incremental" else None
+
+        _start_tracked("manual:gurufocus", scrape_gurufocus_indicator, url, indicator_code.upper(), guru_mode, max_pages)
+        return {"message": f"GuruFocus Scraping started for {indicator_code} in background (mode={guru_mode})"}
         
     from app.scrapers.fred_scraper import scrape_fred_indicator
     # tracked under the SAME fred:<CODE> key the cron and Run Now use, so an

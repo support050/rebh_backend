@@ -243,6 +243,13 @@ def job_monthly_scrapers():
     #     indicator_code="SP500_PE",
     #     mode="incremental",
     # ))
+    # _safe("GuruFocus Forward PE", lambda: __import__(
+    #     "app.scrapers.gurufocus_scraper", fromlist=["scrape_gurufocus_indicator"]
+    # ).scrape_gurufocus_indicator(
+    #     url="https://www.gurufocus.com/economic_indicators/6061/sp-500-pe-ratio-with-forward-estimate",
+    #     indicator_code="SP500_FPE",
+    #     mode="incremental",
+    # ))
 
     _clear_cache()
     logger.info("🗓️ [Scheduler] MONTHLY scrapers finished.")
@@ -502,6 +509,7 @@ def _cme_fedwatch():
 _GURUFOCUS_URLS = {
     "SP500_EY": "https://www.gurufocus.com/economic_indicators/151/sp-500-earnings-yield",
     "SP500_PE": "https://www.gurufocus.com/economic_indicators/57/sp-500-pe-ratio",
+    "SP500_FPE": "https://www.gurufocus.com/economic_indicators/6061/sp-500-pe-ratio-with-forward-estimate",
 }
 
 
@@ -626,7 +634,7 @@ JOB_LABELS: Dict[str, str] = {
     "breadth_daily": "Market Breadth Daily Engine",
     "manual:eurodollar": "Eurodollar Futures (Investing.com)",
     "manual:cme_fedwatch": "CME FedWatch (QuikStrike)",
-    "manual:gurufocus": "GuruFocus (SP500 EY + SP500 PE)",
+    "manual:gurufocus": "GuruFocus (SP500 EY + PE + Forward PE)",
     "sukuk_importer": "Sukuk & Bonds (Tadawul)",
     "macro_importer": "SAMA & GaStat Macro + Buffett",
 }

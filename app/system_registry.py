@@ -846,7 +846,7 @@ SYSTEMS: List[Dict[str, Any]] = [
                "futures ladder, the conditional matrix and the 75-cell Dot Plot → "
                "6 tables"),
             _b("scraper", "backend/app/scrapers/gurufocus_scraper.py",
-               "SP500_EY / SP500_PE — Scrapling HTTP + pure-Python __NUXT__ decoder, "
+               "SP500_EY / SP500_PE / SP500_FPE — Scrapling HTTP + pure-Python __NUXT__ decoder, "
                "stealth-browser fallback; Selenium removed 2026-10-23 — exists, not "
                "scheduled (incremental page count comes from the DB's latest date)"),
             _b("service", "backend/app/services/rebh_importers_service.py",
@@ -987,7 +987,11 @@ SYSTEMS: List[Dict[str, Any]] = [
                    {"label": "Refresh SP500_PE (incremental)", "kind": "incremental",
                     "cli": '.\\venv\\Scripts\\python.exe "app/scrapers/gurufocus_scraper.py" '
                            '--url "https://www.gurufocus.com/economic_indicators/57/sp-500-pe-ratio" '
-                           '--code SP500_PE'}],
+                           '--code SP500_PE'},
+                   {"label": "Refresh SP500_FPE (incremental)", "kind": "incremental",
+                    "cli": '.\\venv\\Scripts\\python.exe "app/scrapers/gurufocus_scraper.py" '
+                           '--url "https://www.gurufocus.com/economic_indicators/6061/sp-500-pe-ratio-with-forward-estimate" '
+                           '--code SP500_FPE'}],
                note="GuruFocus (primary) + sp500_ey (alternative) both feed the "
                     "S&P 500 earnings yield (SP500_EY) into economic_indicators; this "
                     "job stays active and is also the sole writer of the SP500_PE key. "
@@ -2242,7 +2246,7 @@ _INDEX: Dict[str, Dict[str, Any]] = {s["id"]: s for s in SYSTEMS}
 # Runbook with one GROUP BY per snapshot (system_map._fetch_series_latest), so
 # covering nine shared-table jobs costs the same one SELECT as covering two.
 SERIES_EVIDENCE: Dict[str, List[str]] = {
-    "manual:gurufocus": ["SP500_EY", "SP500_PE"],
+    "manual:gurufocus": ["SP500_EY", "SP500_PE", "SP500_FPE"],
     "scraper:sp500_ey": ["SP500_EY"],
 }
 
@@ -2391,7 +2395,11 @@ _SERIES_PAGES: Dict[str, List[str]] = {
     "fred:BAMLC0A4CBBB": ["/spread/bbb-corporate"],
     "fred:BAMLC0A3CAEY": ["/market/a-effective-yield"],
     "fred:SAUCPALTT01GPM": ["/rebh/tools"],
-    "manual:gurufocus": ["/market/sp500-earnings-yield", "/market/sp500-pe-ratio"],
+    "manual:gurufocus": [
+        "/market/sp500-earnings-yield",
+        "/market/sp500-pe-ratio",
+        "/market/sp500-pe-ratio-forward-estimate",
+    ],
     "scraper:sp500_ey": ["/market/sp500-earnings-yield"],
 }
 
